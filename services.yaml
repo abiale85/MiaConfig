@@ -1,0 +1,170 @@
+# Dynamic Config - Servizi
+
+set_config:
+  name: Imposta Configurazione Standard
+  description: Imposta una configurazione standard con priorità opzionale
+  fields:
+    setup_name:
+      name: Nome Configurazione
+      description: Nome univoco della configurazione
+      required: true
+      example: "temperatura_target"
+      selector:
+        text:
+    setup_value:
+      name: Valore
+      description: Valore da assegnare alla configurazione
+      required: true
+      example: "22"
+      selector:
+        text:
+    priority:
+      name: Priorità
+      description: Livello di priorità (più basso = maggiore priorità)
+      required: false
+      default: 99
+      example: 10
+      selector:
+        number:
+          min: 1
+          max: 999
+          mode: box
+
+set_time_config:
+  name: Imposta Configurazione a Tempo
+  description: Imposta una configurazione valida in un intervallo di date
+  fields:
+    setup_name:
+      name: Nome Configurazione
+      description: Nome della configurazione
+      required: true
+      example: "temperatura_target"
+      selector:
+        text:
+    setup_value:
+      name: Valore
+      description: Valore da assegnare alla configurazione
+      required: true
+      example: "18"
+      selector:
+        text:
+    valid_from:
+      name: Valido Da
+      description: Data e ora di inizio validità
+      required: true
+      example: "2025-12-01 00:00:00"
+      selector:
+        datetime:
+    valid_to:
+      name: Valido Fino
+      description: Data e ora di fine validità
+      required: true
+      example: "2025-12-31 23:59:59"
+      selector:
+        datetime:
+
+set_schedule_config:
+  name: Imposta Configurazione a Orario
+  description: Imposta una configurazione valida in una fascia oraria giornaliera
+  fields:
+    setup_name:
+      name: Nome Configurazione
+      description: Nome della configurazione
+      required: true
+      example: "temperatura_target"
+      selector:
+        text:
+    setup_value:
+      name: Valore
+      description: Valore da assegnare alla configurazione
+      required: true
+      example: "20"
+      selector:
+        text:
+    valid_from_ora:
+      name: Ora Inizio
+      description: Orario di inizio in formato HH.MM (es. 8.30 per 08:30)
+      required: true
+      example: 8.30
+      selector:
+        number:
+          min: 0
+          max: 23.59
+          step: 0.01
+          mode: box
+    valid_to_ora:
+      name: Ora Fine
+      description: Orario di fine in formato HH.MM (es. 18.00 per 18:00)
+      required: true
+      example: 18.00
+      selector:
+        number:
+          min: 0
+          max: 23.59
+          step: 0.01
+          mode: box
+    days_of_week:
+      name: Giorni della Settimana
+      description: Giorni di validità (0=Lunedì, 6=Domenica)
+      required: false
+      default: "0,1,2,3,4,5,6"
+      example: "0,1,2,3,4"
+      selector:
+        select:
+          multiple: true
+          options:
+            - label: "Lunedì"
+              value: "0"
+            - label: "Martedì"
+              value: "1"
+            - label: "Mercoledì"
+              value: "2"
+            - label: "Giovedì"
+              value: "3"
+            - label: "Venerdì"
+              value: "4"
+            - label: "Sabato"
+              value: "5"
+            - label: "Domenica"
+              value: "6"
+
+delete_config:
+  name: Elimina Configurazione
+  description: Elimina una configurazione esistente
+  fields:
+    setup_name:
+      name: Nome Configurazione
+      description: Nome della configurazione da eliminare
+      required: true
+      example: "temperatura_target"
+      selector:
+        text:
+    config_type:
+      name: Tipo Configurazione
+      description: Tipo di configurazione da eliminare
+      required: false
+      default: "all"
+      example: "all"
+      selector:
+        select:
+          options:
+            - label: "Tutte"
+              value: "all"
+            - label: "Standard"
+              value: "standard"
+            - label: "A Tempo"
+              value: "time"
+            - label: "A Orario"
+              value: "schedule"
+
+get_configurations:
+  name: Ottieni Configurazioni
+  description: Recupera le configurazioni esistenti
+  fields:
+    setup_name:
+      name: Nome Configurazione
+      description: Nome della configurazione (lascia vuoto per tutte)
+      required: false
+      example: "temperatura_target"
+      selector:
+        text:

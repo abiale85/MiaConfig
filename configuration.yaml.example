@@ -1,0 +1,10 @@
+# Esempio di configurazione per Dynamic Config
+
+# Aggiungi questo nel tuo configuration.yaml
+dynamic_config:
+  # Percorso del database SQLite (opzionale)
+  db_path: "config/dynamic_config.db"
+  
+  # Intervallo di scansione in secondi (opzionale)
+  # Controlla ogni 60 secondi se i valori devono cambiare
+  scan_interval: 60

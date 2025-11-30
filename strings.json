@@ -1,0 +1,31 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configura Mia Config",
+        "description": "Configura l'integrazione Mia Config per gestire configurazioni dinamiche basate su tempo e orario.",
+        "data": {
+          "scan_interval": "Intervallo di scansione (secondi)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossibile connettersi al database",
+      "unknown": "Errore sconosciuto"
+    },
+    "abort": {
+      "already_configured": "L'integrazione è già configurata"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opzioni Mia Config",
+        "description": "Configura le opzioni per Mia Config",
+        "data": {
+          "scan_interval": "Intervallo di scansione (secondi)"
+        }
+      }
+    }
+  }
+}

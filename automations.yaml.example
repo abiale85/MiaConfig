@@ -1,0 +1,119 @@
+# Esempi di automazioni con Dynamic Config
+
+# Esempio 1: Regola automaticamente la temperatura del climatizzatore
+automation temperatura_automatica:
+  alias: "Temperatura Automatica da Configurazione"
+  description: "Imposta la temperatura del clima in base alla configurazione dinamica"
+  trigger:
+    - platform: state
+      entity_id: sensor.dynamic_config_temperatura_clima
+    - platform: homeassistant
+      event: start
+  action:
+    - service: climate.set_temperature
+      target:
+        entity_id: climate.condizionatore_soggiorno
+      data:
+        temperature: "{{ states('sensor.dynamic_config_temperatura_clima') | float }}"
+
+# Esempio 2: Regola la luminosità delle luci
+automation brightness_automatica:
+  alias: "Brightness Automatica da Configurazione"
+  description: "Regola la luminosità in base all'orario"
+  trigger:
+    - platform: state
+      entity_id: sensor.dynamic_config_brightness_soggiorno
+    - platform: state
+      entity_id: light.soggiorno
+      to: "on"
+  condition:
+    - condition: state
+      entity_id: light.soggiorno
+      state: "on"
+  action:
+    - service: light.turn_on
+      target:
+        entity_id: light.soggiorno
+      data:
+        brightness_pct: "{{ states('sensor.dynamic_config_brightness_soggiorno') | int }}"
+
+# Esempio 3: Notifica quando cambia una configurazione
+automation notifica_cambio_config:
+  alias: "Notifica Cambio Configurazione"
+  description: "Invia una notifica quando una configurazione importante cambia"
+  trigger:
+    - platform: state
+      entity_id: sensor.dynamic_config_temperatura_clima
+  action:
+    - service: notify.mobile_app
+      data:
+        title: "Configurazione Cambiata"
+        message: >
+          La temperatura target è cambiata da {{ trigger.from_state.state }}°C 
+          a {{ trigger.to_state.state }}°C
+          Fonte: {{ state_attr('sensor.dynamic_config_temperatura_clima', 'source') }}
+
+# Esempio 4: Script per impostare configurazioni predefinite
+script:
+  setup_configurazioni_inverno:
+    alias: "Setup Configurazioni Inverno"
+    sequence:
+      # Temperatura standard diurna
+      - service: dynamic_config.set_config
+        data:
+          setup_name: "temperatura_clima"
+          setup_value: "21"
+          priority: 50
+      
+      # Temperatura ridotta notturna giorni feriali (22:00 - 06:00)
+      - service: dynamic_config.set_schedule_config
+        data:
+          setup_name: "temperatura_clima"
+          setup_value: "18"
+          valid_from_ora: 22.00
+          valid_to_ora: 6.00
+          days_of_week: ["0", "1", "2", "3", "4"]  # Lun-Ven
+      
+      # Temperatura ridotta tutto il giorno weekend
+      - service: dynamic_config.set_schedule_config
+        data:
+          setup_name: "temperatura_clima"
+          setup_value: "19"
+          valid_from_ora: 0.00
+          valid_to_ora: 23.59
+          days_of_week: ["5", "6"]  # Sab-Dom
+      
+      # Temperatura economica durante assenza (esempio vacanze)
+      - service: dynamic_config.set_time_config
+        data:
+          setup_name: "temperatura_clima"
+          setup_value: "16"
+          valid_from: "2025-12-20 00:00:00"
+          valid_to: "2026-01-10 23:59:59"
+
+  setup_configurazioni_estate:
+    alias: "Setup Configurazioni Estate"
+    sequence:
+      # Temperatura standard
+      - service: dynamic_config.set_config
+        data:
+          setup_name: "temperatura_clima"
+          setup_value: "25"
+          priority: 50
+      
+      # Temperatura più fresca di notte (tutti i giorni)
+      - service: dynamic_config.set_schedule_config
+        data:
+          setup_name: "temperatura_clima"
+          setup_value: "23"
+          valid_from_ora: 22.00
+          valid_to_ora: 7.00
+          days_of_week: ["0", "1", "2", "3", "4", "5", "6"]  # Tutti i giorni
+
+  reset_configurazione:
+    alias: "Reset Configurazione"
+    sequence:
+      - service: dynamic_config.delete_config
+        data:
+          setup_name: "{{ config_name }}"
+          config_type: "all"
