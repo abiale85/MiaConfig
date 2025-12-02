@@ -5,7 +5,24 @@
         "title": "Configura Mia Config",
         "description": "Configura l'integrazione Mia Config per gestire configurazioni dinamiche basate su tempo e orario.",
         "data": {
-          "scan_interval": "Intervallo di scansione (secondi)"
+          "db_name": "Nome Database",
+          "scan_interval": "Intervallo scansione (secondi)",
+          "lookahead_hours": "Ore previsione futura",
+          "lookback_hours": "Ore storico passato",
+          "cleanup_days": "Giorni eliminazione config scadute",
+          "retention_days": "Giorni ritenzione storico",
+          "max_history_per_name": "Max entry storico",
+          "min_history_per_name": "Min entry storico"
+        },
+        "data_description": {
+          "db_name": "Nome del file database (es. 'mia_config' o 'casa_vacanze')",
+          "scan_interval": "Frequenza aggiornamento sensori in secondi",
+          "lookahead_hours": "Quante ore guardare avanti per prevedere prossimi cambiamenti",
+          "lookback_hours": "Quante ore guardare indietro per lo storico",
+          "cleanup_days": "Dopo quanti giorni eliminare le configurazioni temporali scadute",
+          "retention_days": "Elimina entry storico più vecchie di questi giorni",
+          "max_history_per_name": "Mantieni al massimo questo numero di entry per ogni configurazione",
+          "min_history_per_name": "Mantieni sempre almeno questo numero di entry recenti"
         }
       }
     },
@@ -14,16 +31,31 @@
       "unknown": "Errore sconosciuto"
     },
     "abort": {
-      "already_configured": "L'integrazione è già configurata"
+      "already_configured": "Istanza già configurata"
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Opzioni Mia Config",
-        "description": "Configura le opzioni per Mia Config",
+        "description": "Configura le opzioni avanzate",
         "data": {
-          "scan_interval": "Intervallo di scansione (secondi)"
+          "scan_interval": "Intervallo scansione (secondi)",
+          "lookahead_hours": "Ore previsione futura",
+          "lookback_hours": "Ore storico passato",
+          "cleanup_days": "Giorni eliminazione config scadute",
+          "retention_days": "Giorni ritenzione storico",
+          "max_history_per_name": "Max entry storico",
+          "min_history_per_name": "Min entry storico"
+        },
+        "data_description": {
+          "scan_interval": "Frequenza aggiornamento sensori in secondi",
+          "lookahead_hours": "Quante ore guardare avanti per prevedere prossimi cambiamenti",
+          "lookback_hours": "Quante ore guardare indietro per lo storico",
+          "cleanup_days": "Dopo quanti giorni eliminare le configurazioni temporali scadute",
+          "retention_days": "Elimina entry storico più vecchie di questi giorni",
+          "max_history_per_name": "Mantieni al massimo questo numero di entry per ogni configurazione",
+          "min_history_per_name": "Mantieni sempre almeno questo numero di entry recenti"
         }
       }
     }

@@ -1,6 +1,112 @@
-# 📋 Changelog - Dynamic Config v1.0.0
+# 📋 Changelog - Mia Config
 
-## ✨ Nuove Funzionalità
+## v1.3.1 - 2 Dicembre 2025 🔧
+
+### 🐛 Bug Fixes Critici
+- **Fix Multi-Istanza**: Risolto bug che causava la chiusura del database sbagliato quando si cancellava un'istanza
+  - Ora `async_unload_entry` chiude solo il database specifico dell'istanza usando `entry.entry_id`
+  - Rimozione istanza non impatta più altre istanze attive
+- **Fix Validazione Orari**: Corretto validatore per formato HH.MM
+  - Nuovo validatore `validate_time_format()` controlla ore (0-23) e minuti (0-59) separatamente
+  - Ora 23.55, 23.59, 14.30 sono tutti validi
+  - Prima 23.55 veniva confrontato come float (23,55 > 23,59) e rifiutato
+- **Fix Filtro Sensori**: Il sensore principale non appare più nella lista "Valori Correnti"
+  - Card filtra sensori con attributo `total_configs` nella funzione `loadDashboard()`
+  - Solo i sensori delle configurazioni effettive vengono mostrati
+
+### ✨ Miglioramenti
+- **Isolamento Database**: Ogni istanza opera sul proprio database senza interferenze
+- **Cleanup Automatico**: Il file database viene cancellato automaticamente quando si rimuove un'istanza
+  - Implementato `async_remove_entry()` che elimina il file `.db` dal filesystem
+  - Log dettagliati delle operazioni di cancellazione
+
+### 🔧 Modifiche Tecniche
+- Aggiunto validatore personalizzato `validate_time_format()` in `__init__.py`
+- Aggiornato `async_unload_entry()` per chiudere solo database specifico istanza
+- Aggiunto `async_remove_entry()` per cleanup file database
+- Filtro `!entity.attributes.total_configs` in `loadDashboard()` della card
+
+---
+
+## v1.3.0 - 1 Dicembre 2025 ⭐
+
+### ✨ Multi-Istanza
+- **Supporto Multi-Istanza Completo**:
+  - Crea più istanze con database separati (es. casa principale, seconda casa)
+  - Ogni istanza ha database SQLite isolato
+  - Sensore principale per istanza mostra totale configurazioni
+  - Parametro `entity_id` opzionale in tutti i servizi per selezionare istanza
+- **Sensore Principale per Istanza**:
+  - `MiaConfigMainSensor` sempre creato anche con database vuoto
+  - Entity ID formato: `sensor.mia_config_{db_name}`
+  - Attributi: `total_configs`, `config_names`, `db_name`, `integration`
+  - Non appare nella lista "Valori Correnti" della card
+
+### 🎨 UI Ridisegnata
+- **Dashboard Separato**: Tab dedicato per valori correnti e prossimi eventi
+- **Tab Configura Unificato**: Unico form per tutti i tipi (Standard/Orario/Tempo)
+- **Campo Descrizione**: Documentazione personalizzata (solo per configurazioni standard)
+- **Supporto Multi-Istanza Card**:
+  - Parametro `entity_id` opzionale per selezionare istanza
+  - Auto-detect database dal sensore principale
+
+### ⚡ Attributi Predittivi Avanzati
+- **Attributi Predittivi** nei sensori:
+  - `next_value`: Prossimo valore programmato
+  - `next_change_in_minutes`: Countdown al prossimo cambio
+  - `upcoming_changes`: Lista completa prossimi 5 eventi
+  - `upcoming_text`: Descrizioni leggibili es. "pre_sveglia tra 2h 30min"
+- **Durata Stato Corrente**:
+  - `current_value_since_minutes`: Minuti dall'attivazione
+  - `current_value_since_text`: Formato leggibile es. "2h 15min"
+
+### 🎨 Miglioramenti UI
+- **Vista Settimanale Ridisegnata**:
+  - Barre continue senza celle (1 pixel = 1 minuto, scala perfetta)
+  - Allineamento preciso ore/minuti
+  - Tooltip intelligenti con posizionamento automatico (4 direzioni)
+- **Dashboard Interattiva**:
+  - Entità clickabili per aprire dettagli (hass-more-info)
+  - Lista eventi futuri con countdown visibile
+  - Visualizzazione durata stato attivo
+
+### ⚡ Ottimizzazioni Performance
+- **Cache Intelligente**:
+  - Query database solo quando necessario (cambio valore/evento imminente)
+  - Ricalcolo periodico ogni ora per eventi futuri lontani
+  - Calcolo incrementale durata stato (no query ripetute)
+- **Opzioni Configurabili**:
+  - `lookahead_hours` (default 24): Ore future per previsione eventi
+  - `lookback_hours` (default 24): Limite ore passate per durata stato
+  - `cleanup_days` (default 30): Auto-elimina eventi scaduti
+  - `scan_interval` (default 60): Frequenza aggiornamento
+
+### 🔧 Correzioni
+- Risolto: Entità cancellate rimanevano nel registry
+- Risolto: Deprecation warning config_flow per HA 2025.12
+- Risolto: Accesso dati coordinator in property icon/available
+- Aggiunto: Cleanup automatico eventi scaduti all'avvio
+
+### 📚 Documentazione
+- Repository GitHub: https://github.com/abiale85/MiaConfig
+- README aggiornato con nuove funzionalità
+- Esempi automazioni con attributi predittivi
+
+---
+
+## v1.1.0 - 30 Novembre 2025
+
+### ✨ Installazione tramite UI
+- Config Flow completo - non serve più configuration.yaml
+- Aggiunta integrazione dall'interfaccia HA
+- Opzioni modificabili senza riavvio
+- Traduzioni IT/EN
+
+---
+
+## v1.0.0 - Versione Iniziale
+
+### ✨ Nuove Funzionalità
 
 ### 🗓️ Selezione Giorni della Settimana
 - Aggiunto supporto per selezionare i giorni della settimana nelle configurazioni a orario

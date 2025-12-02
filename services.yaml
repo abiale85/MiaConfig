@@ -4,6 +4,14 @@ set_config:
   name: Imposta Configurazione Standard
   description: Imposta una configurazione standard con priorità opzionale
   fields:
+    entity_id:
+      name: Entità
+      description: Entità sensor.mia_config_* dell'istanza da utilizzare (opzionale, usa l'istanza di default se non specificato)
+      required: false
+      example: "sensor.mia_config_temperatura_target"
+      selector:
+        entity:
+          integration: mia_config
     setup_name:
       name: Nome Configurazione
       description: Nome univoco della configurazione
@@ -29,11 +37,72 @@ set_config:
           min: 1
           max: 999
           mode: box
+    description:
+      name: Descrizione
+      description: Descrizione opzionale della configurazione
+      required: false
+      example: "Temperatura normale giorno"
+      selector:
+        text:
+
+update_standard_config:
+  name: Aggiorna Configurazione Standard
+  description: Aggiorna una configurazione standard esistente (valore, priorità e descrizione)
+  fields:
+    entity_id:
+      name: Entità
+      description: Entità sensor.mia_config_* dell'istanza da utilizzare (opzionale, usa l'istanza di default se non specificato)
+      required: false
+      example: "sensor.mia_config_temperatura_target"
+      selector:
+        entity:
+          integration: mia_config
+    config_id:
+      name: ID Configurazione
+      description: ID della configurazione da aggiornare
+      required: true
+      example: 1
+      selector:
+        number:
+          min: 1
+          mode: box
+    setup_value:
+      name: Valore
+      description: Nuovo valore da assegnare
+      required: true
+      example: "22"
+      selector:
+        text:
+    priority:
+      name: Priorità
+      description: Nuovo livello di priorità (più basso = maggiore priorità)
+      required: true
+      example: 10
+      selector:
+        number:
+          min: 1
+          max: 999
+          mode: box
+    description:
+      name: Descrizione
+      description: Nuova descrizione opzionale
+      required: false
+      example: "Temperatura aggiornata"
+      selector:
+        text:
 
 set_time_config:
   name: Imposta Configurazione a Tempo
   description: Imposta una configurazione valida in un intervallo di date
   fields:
+    entity_id:
+      name: Entità
+      description: Entità sensor.mia_config_* dell'istanza da utilizzare (opzionale, usa l'istanza di default se non specificato)
+      required: false
+      example: "sensor.mia_config_temperatura_target"
+      selector:
+        entity:
+          integration: mia_config
     setup_name:
       name: Nome Configurazione
       description: Nome della configurazione
@@ -62,11 +131,59 @@ set_time_config:
       example: "2025-12-31 23:59:59"
       selector:
         datetime:
+    priority:
+      name: Priorità
+      description: Livello di priorità (più basso = maggiore priorità, 1 massima)
+      required: false
+      default: 99
+      example: 10
+      selector:
+        number:
+          min: 1
+          max: 999
+          mode: box
+    valid_from_ora:
+      name: Ora Inizio (opzionale)
+      description: Ora di inizio validità giornaliera (es. 8.30 per 08:30)
+      required: false
+      example: 8.00
+      selector:
+        number:
+          min: 0
+          max: 23.59
+          step: 0.01
+          mode: box
+    valid_to_ora:
+      name: Ora Fine (opzionale)
+      description: Ora di fine validità giornaliera (es. 22.30 per 22:30)
+      required: false
+      example: 22.00
+      selector:
+        number:
+          min: 0
+          max: 23.59
+          step: 0.01
+          mode: box
+    days_of_week:
+      name: Giorni della Settimana (opzionale)
+      description: Giorni validi (0=Lun, 6=Dom), es. "0,1,2,3,4" per Lun-Ven
+      required: false
+      example: "0,1,2,3,4"
+      selector:
+        text:
 
 set_schedule_config:
   name: Imposta Configurazione a Orario
   description: Imposta una configurazione valida in una fascia oraria giornaliera
   fields:
+    entity_id:
+      name: Entità
+      description: Entità sensor.mia_config_* dell'istanza da utilizzare (opzionale, usa l'istanza di default se non specificato)
+      required: false
+      example: "sensor.mia_config_temperatura_target"
+      selector:
+        entity:
+          integration: mia_config
     setup_name:
       name: Nome Configurazione
       description: Nome della configurazione
@@ -127,11 +244,30 @@ set_schedule_config:
               value: "5"
             - label: "Domenica"
               value: "6"
+    priority:
+      name: Priorità
+      description: Livello di priorità (più basso = maggiore priorità, 1 massima)
+      required: false
+      default: 99
+      example: 10
+      selector:
+        number:
+          min: 1
+          max: 999
+          mode: box
 
 delete_config:
   name: Elimina Configurazione
   description: Elimina una configurazione esistente
   fields:
+    entity_id:
+      name: Entità
+      description: Entità sensor.mia_config_* dell'istanza da utilizzare (opzionale, usa l'istanza di default se non specificato)
+      required: false
+      example: "sensor.mia_config_temperatura_target"
+      selector:
+        entity:
+          integration: mia_config
     setup_name:
       name: Nome Configurazione
       description: Nome della configurazione da eliminare
@@ -161,6 +297,14 @@ get_configurations:
   name: Ottieni Configurazioni
   description: Recupera le configurazioni esistenti
   fields:
+    entity_id:
+      name: Entità
+      description: Entità sensor.mia_config_* dell'istanza da utilizzare (opzionale, usa l'istanza di default se non specificato)
+      required: false
+      example: "sensor.mia_config_temperatura_target"
+      selector:
+        entity:
+          integration: mia_config
     setup_name:
       name: Nome Configurazione
       description: Nome della configurazione (lascia vuoto per tutte)
@@ -168,3 +312,87 @@ get_configurations:
       example: "temperatura_target"
       selector:
         text:
+
+get_history:
+  name: Ottieni Storico
+  description: Recupera lo storico delle modifiche alle configurazioni
+  fields:
+    entity_id:
+      name: Entità
+      description: Entità sensor.mia_config_* dell'istanza da utilizzare (opzionale, usa l'istanza di default se non specificato)
+      required: false
+      example: "sensor.mia_config_temperatura_target"
+      selector:
+        entity:
+          integration: mia_config
+    setup_name:
+      name: Nome Configurazione
+      description: Nome della configurazione (lascia vuoto per tutte)
+      required: false
+      example: "temperatura_target"
+      selector:
+        text:
+    limit:
+      name: Limite Record
+      description: Numero massimo di record da restituire
+      required: false
+      default: 50
+      example: 100
+      selector:
+        number:
+          min: 1
+          max: 1000
+          mode: box
+
+cleanup_history:
+  name: Pulisci Storico
+  description: Elimina record vecchi dallo storico e limita il numero di entry per configurazione
+  fields:
+    entity_id:
+      name: Entità
+      description: Entità sensor.mia_config_* dell'istanza da utilizzare (opzionale, usa l'istanza di default se non specificato)
+      required: false
+      example: "sensor.mia_config_temperatura_target"
+      selector:
+        entity:
+          integration: mia_config
+    setup_name:
+      name: Nome Configurazione
+      description: Nome della configurazione (lascia vuoto per pulire tutte)
+      required: false
+      example: "temperatura_target"
+      selector:
+        text:
+    retention_days:
+      name: Giorni di Ritenzione
+      description: Elimina record più vecchi di questo numero di giorni (ma mantieni sempre almeno min_entries_per_name)
+      required: false
+      default: 730
+      example: 365
+      selector:
+        number:
+          min: 1
+          max: 3650
+          mode: box
+    max_entries_per_name:
+      name: Massimo Entry per Nome
+      description: Mantieni solo questo numero di entry più recenti per ogni configurazione
+      required: false
+      default: 100
+      example: 50
+      selector:
+        number:
+          min: 1
+          max: 1000
+          mode: box
+    min_entries_per_name:
+      name: Minimo Entry per Nome
+      description: Mantieni sempre almeno questo numero di entry più recenti (anche se oltre retention_days)
+      required: false
+      default: 10
+      example: 20
+      selector:
+        number:
+          min: 1
+          max: 500
+          mode: box

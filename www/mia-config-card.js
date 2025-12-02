@@ -1,4 +1,4 @@
-// Version 1.0.4 - Weekly view and midnight crossing - 20251130150000
+// Version 1.3.1 - Multi-instance fixes and time validation - 20251202120000
 class MiaConfigCard extends HTMLElement {
     set hass(hass) {
         this._hass = hass;
@@ -11,12 +11,17 @@ class MiaConfigCard extends HTMLElement {
                 </ha-card>
             `;
             this.content = this.querySelector("#dynamic-config-ui");
+            this.configuredEntityId = null; // Entity ID configurato via YAML
             this.render();
         }
     }
 
     setConfig(config) {
         this._config = config;
+        // Leggi entity_id dalla configurazione YAML della card
+        if (config.entity_id) {
+            this.configuredEntityId = config.entity_id;
+        }
     }
 
     generateHourOptions(min, max) {
@@ -169,6 +174,206 @@ class MiaConfigCard extends HTMLElement {
                     cursor: pointer;
                     color: var(--primary-text-color);
                 }
+                .dc-weekly-tooltip {
+                    position: relative;
+                    cursor: help;
+                }
+                .dc-weekly-tooltip .dc-tooltip-text {
+                    visibility: hidden;
+                    opacity: 0;
+                    width: 300px;
+                    max-width: 90vw;
+                    background-color: rgba(0, 0, 0, 0.95);
+                    color: #fff;
+                    text-align: left;
+                    border-radius: 6px;
+                    padding: 12px;
+                    position: absolute;
+                    z-index: 999999;
+                    left: 50%;
+                    bottom: 100%;
+                    transform: translateX(-50%);
+                    margin-bottom: 8px;
+                    font-size: 12px;
+                    line-height: 1.5;
+                    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+                    pointer-events: none;
+                    transition: opacity 0.2s, visibility 0.2s;
+                    white-space: normal;
+                }
+                /* Tooltip a sinistra: sposta a destra */
+                .dc-weekly-day-column:first-child .dc-weekly-tooltip .dc-tooltip-text,
+                .dc-weekly-day-column:nth-child(2) .dc-weekly-tooltip .dc-tooltip-text {
+                    left: 0;
+                    transform: translateX(0);
+                }
+                /* Tooltip a destra: sposta a sinistra */
+                .dc-weekly-day-column:last-child .dc-weekly-tooltip .dc-tooltip-text,
+                .dc-weekly-day-column:nth-last-child(2) .dc-weekly-tooltip .dc-tooltip-text {
+                    left: auto;
+                    right: 0;
+                    transform: translateX(0);
+                }
+                .dc-weekly-tooltip .dc-tooltip-text::after {
+                    content: "";
+                    position: absolute;
+                    top: 100%;
+                    left: 50%;
+                    margin-left: -6px;
+                    border-width: 6px;
+                    border-style: solid;
+                    border-color: rgba(0, 0, 0, 0.95) transparent transparent transparent;
+                }
+                /* Freccia spostata per tooltip a sinistra */
+                .dc-weekly-day-column:first-child .dc-weekly-tooltip .dc-tooltip-text::after,
+                .dc-weekly-day-column:nth-child(2) .dc-weekly-tooltip .dc-tooltip-text::after {
+                    left: 20px;
+                }
+                /* Freccia spostata per tooltip a destra */
+                .dc-weekly-day-column:last-child .dc-weekly-tooltip .dc-tooltip-text::after,
+                .dc-weekly-day-column:nth-last-child(2) .dc-weekly-tooltip .dc-tooltip-text::after {
+                    left: auto;
+                    right: 20px;
+                    margin-left: 0;
+                    margin-right: -6px;
+                }
+                /* Tooltip in alto: mostra sotto invece che sopra (gestito via JS) */
+                .dc-weekly-tooltip.tooltip-below .dc-tooltip-text {
+                    bottom: auto;
+                    top: 100%;
+                    margin-bottom: 0;
+                    margin-top: 8px;
+                }
+                .dc-weekly-tooltip.tooltip-below .dc-tooltip-text::after {
+                    top: auto;
+                    bottom: 100%;
+                    border-color: transparent transparent rgba(0, 0, 0, 0.95) transparent;
+                }
+                .dc-weekly-tooltip:hover .dc-tooltip-text {
+                    visibility: visible;
+                    opacity: 1;
+                }
+                .dc-weekly-container {
+                    overflow-x: auto;
+                    margin: 15px 0;
+                    position: relative;
+                }
+                .dc-weekly-grid {
+                    display: flex;
+                    min-width: 1000px;
+                    border: 1px solid var(--divider-color);
+                    border-radius: 4px;
+                    background: var(--card-background-color);
+                    position: relative;
+                    overflow: visible;
+                }
+                .dc-weekly-time-column {
+                    width: 60px;
+                    flex-shrink: 0;
+                    border-right: 2px solid var(--divider-color);
+                    background: var(--primary-color);
+                    color: white;
+                }
+                .dc-weekly-time-slot {
+                    height: 60px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 11px;
+                    font-weight: bold;
+                    box-sizing: border-box;
+                    border-bottom: 1px solid rgba(255,255,255,0.1);
+                }
+                .dc-weekly-days {
+                    display: flex;
+                    flex: 1;
+                }
+                .dc-weekly-day-column {
+                    flex: 1;
+                    position: relative;
+                    border-right: 1px solid var(--divider-color);
+                    background: #f9f9f9;
+                    overflow: visible;
+                    min-height: 1490px;
+                }
+                .dc-weekly-day-column:last-child {
+                    border-right: none;
+                }
+                .dc-weekly-day-header {
+                    height: 50px;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    background: var(--primary-color);
+                    color: white;
+                    border-bottom: 2px solid var(--divider-color);
+                    font-weight: bold;
+                    font-size: 12px;
+                    position: sticky;
+                    top: 0;
+                    z-index: 10;
+                }
+                .dc-weekly-day-content {
+                    position: relative;
+                    height: 1440px;
+                    min-height: 1440px;
+                    overflow: visible;
+                }
+                .dc-weekly-hour-line {
+                    position: absolute;
+                    left: 0;
+                    right: 0;
+                    height: 1px;
+                    background: var(--divider-color);
+                    pointer-events: none;
+                }
+                .dc-weekly-bar {
+                    position: absolute;
+                    left: 2px;
+                    right: 2px;
+                    border-radius: 2px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 10px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    overflow: visible;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    padding: 0 4px;
+                    box-sizing: border-box;
+                    border-top: 2px solid rgba(0,0,0,0.3);
+                    border-bottom: 2px solid rgba(0,0,0,0.3);
+                    z-index: 1;
+                }
+                .dc-weekly-bar:hover {
+                    left: 0;
+                    right: 0;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+                    z-index: 9999 !important;
+                    transform: scaleY(1.05);
+                }
+                .dc-weekly-bar-time {
+                    background: #2196f3;
+                    color: white;
+                    border-left: 3px solid #0d47a1;
+                    border-right: 3px solid #0d47a1;
+                }
+                .dc-weekly-bar-schedule {
+                    background: #ff9800;
+                    color: white;
+                    border-left: 3px solid #e65100;
+                    border-right: 3px solid #e65100;
+                }
+                .dc-weekly-bar-standard {
+                    background: #4caf50;
+                    color: white;
+                    border-left: 3px solid #1b5e20;
+                    border-right: 3px solid #1b5e20;
+                }
                 .dc-btn {
                     background-color: var(--primary-color);
                     color: var(--text-primary-color, white);
@@ -228,19 +433,29 @@ class MiaConfigCard extends HTMLElement {
             </style>
 
             <div class="dc-tabs">
-                <button class="dc-tab" onclick="window.dcSwitchTab('list', event)">📋 Lista</button>
-                <button class="dc-tab" onclick="window.dcSwitchTab('standard', event)">⚙️ Standard</button>
-                <button class="dc-tab" onclick="window.dcSwitchTab('schedule', event)">🕐 Orario</button>
-                <button class="dc-tab" onclick="window.dcSwitchTab('time', event)">⏰ Tempo</button>
-                <button class="dc-tab" onclick="window.dcSwitchTab('weekly', event)">📊 Vista Settimanale</button>
+                <button class="dc-tab" onclick="window.dcSwitchTab('dashboard', event)">📊 Dashboard</button>
+                <button class="dc-tab" onclick="window.dcSwitchTab('config', event)">⚙️ Configura</button>
+                <button class="dc-tab" onclick="window.dcSwitchTab('weekly', event)">📅 Vista Settimanale</button>
                 <button class="dc-tab" onclick="window.dcSwitchTab('history', event)">📜 Storico</button>
             </div>
 
-            <div id="dc-tab-list" class="dc-tab-content active">
-                <div id="dc-config-list">Caricamento...</div>
+            <div id="dc-tab-dashboard" class="dc-tab-content active">
+                <div id="dc-dashboard-content">Caricamento...</div>
             </div>
 
-            <div id="dc-tab-standard" class="dc-tab-content">
+            <div id="dc-tab-config" class="dc-tab-content">
+                <h3>➕ Inserisci Nuova Configurazione</h3>
+                
+                <div class="dc-form-group">
+                    <label>Tipo di Configurazione:</label>
+                    <select id="config-type-selector" onchange="window.dcShowConfigForm(this.value)">
+                        <option value="standard">⚙️ Standard</option>
+                        <option value="schedule">🕐 Override Orario</option>
+                        <option value="time">⏰ Override Temporale</option>
+                    </select>
+                </div>
+
+                <div id="dc-form-container-standard" class="dc-form-container" style="display: block;">
                 <form id="dc-form-standard">
                     <div class="dc-form-group">
                         <label>Nome Configurazione:</label>
@@ -254,11 +469,15 @@ class MiaConfigCard extends HTMLElement {
                         <label>Priorità (1-999):</label>
                         <input type="number" name="priority" min="1" max="999" value="99">
                     </div>
+                    <div class="dc-form-group">
+                        <label>Descrizione (opzionale):</label>
+                        <input type="text" name="description" placeholder="Descrizione della configurazione">
+                    </div>
                     <button type="submit" class="dc-btn">Salva</button>
                 </form>
-            </div>
+                </div>
 
-            <div id="dc-tab-schedule" class="dc-tab-content">
+                <div id="dc-form-container-schedule" class="dc-form-container" style="display: none;">
                 <form id="dc-form-schedule">
                     <div class="dc-form-group">
                         <label>Configurazione da Override:</label>
@@ -330,11 +549,16 @@ class MiaConfigCard extends HTMLElement {
                             </label>
                         </div>
                     </div>
+                    <div class="dc-form-group">
+                        <label>Priorità (1-999):</label>
+                        <input type="number" name="priority" min="1" max="999" value="99">
+                        <small style="color: var(--secondary-text-color);">Più basso = più prioritario (1 = massima)</small>
+                    </div>
                     <button type="submit" class="dc-btn">Aggiungi Override Orario</button>
                 </form>
-            </div>
+                </div>
 
-            <div id="dc-tab-time" class="dc-tab-content">
+                <div id="dc-form-container-time" class="dc-form-container" style="display: none;">
                 <form id="dc-form-time">
                     <div class="dc-form-group">
                         <label>Configurazione da Override:</label>
@@ -355,8 +579,92 @@ class MiaConfigCard extends HTMLElement {
                         <label>Data/Ora Fine:</label>
                         <input type="datetime-local" name="valid_to" required>
                     </div>
+                    <div class="dc-form-group">
+                        <label>Priorità (1-999):</label>
+                        <input type="number" name="priority" min="1" max="999" value="99">
+                        <small style="color: var(--secondary-text-color);">Più basso = più prioritario (1 = massima)</small>
+                    </div>
+                    
+                    <hr style="margin: 15px 0; border: none; border-top: 1px solid var(--divider-color);">
+                    <h4 style="margin: 10px 0; font-size: 14px;">🎯 Filtri Opzionali</h4>
+                    <small style="color: var(--secondary-text-color); display: block; margin-bottom: 10px;">
+                        Puoi limitare l'override solo a certi orari o giorni della settimana
+                    </small>
+                    
+                    <div class="dc-form-group">
+                        <label>
+                            <input type="checkbox" id="time-enable-hours"> Limita a fascia oraria
+                        </label>
+                        <div id="time-hours-container" style="display: none; margin-top: 10px;">
+                            <div class="dc-time-picker">
+                                <div>
+                                    <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
+                                    <div class="dc-time-input">
+                                        <select id="time-from-hour">
+                                            ${this.generateHourOptions(0, 23)}
+                                        </select>
+                                        <span class="dc-time-separator">:</span>
+                                        <select id="time-from-minute">
+                                            ${this.generateMinuteOptions()}
+                                        </select>
+                                    </div>
+                                </div>
+                                <span style="font-size: 18px; align-self: flex-end; padding-bottom: 8px;">→</span>
+                                <div>
+                                    <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
+                                    <div class="dc-time-input">
+                                        <select id="time-to-hour">
+                                            ${this.generateHourOptions(0, 23)}
+                                        </select>
+                                        <span class="dc-time-separator">:</span>
+                                        <select id="time-to-minute">
+                                            ${this.generateMinuteOptions()}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="dc-form-group">
+                        <label>
+                            <input type="checkbox" id="time-enable-days"> Limita a giorni specifici
+                        </label>
+                        <div id="time-days-container" style="display: none; margin-top: 10px;">
+                            <div class="dc-checkbox-group">
+                                <label class="dc-checkbox-label">
+                                    <input type="checkbox" name="time-days" value="0" checked> Lun
+                                </label>
+                                <label class="dc-checkbox-label">
+                                    <input type="checkbox" name="time-days" value="1" checked> Mar
+                                </label>
+                                <label class="dc-checkbox-label">
+                                    <input type="checkbox" name="time-days" value="2" checked> Mer
+                                </label>
+                                <label class="dc-checkbox-label">
+                                    <input type="checkbox" name="time-days" value="3" checked> Gio
+                                </label>
+                                <label class="dc-checkbox-label">
+                                    <input type="checkbox" name="time-days" value="4" checked> Ven
+                                </label>
+                                <label class="dc-checkbox-label">
+                                    <input type="checkbox" name="time-days" value="5" checked> Sab
+                                </label>
+                                <label class="dc-checkbox-label">
+                                    <input type="checkbox" name="time-days" value="6" checked> Dom
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <button type="submit" class="dc-btn">Aggiungi Override Temporale</button>
                 </form>
+                </div>
+                
+                <hr style="margin: 30px 0; border: none; border-top: 2px solid var(--divider-color);">
+                
+                <h3>🗂️ Configurazioni Database</h3>
+                <div id="dc-config-list">Caricamento...</div>
             </div>
             
             <div id="dc-tab-weekly" class="dc-tab-content">
@@ -396,6 +704,20 @@ class MiaConfigCard extends HTMLElement {
         this.setDefaultTimeValues();
     }
     
+    getSelectedEntityId() {
+        // Ritorna l'entity_id configurato nel dashboard, o null per usare l'istanza di default
+        return this.configuredEntityId || null;
+    }
+    
+    async callMiaConfigService(serviceName, serviceData) {
+        // Wrapper per chiamare servizi mia_config con entity_id automatico
+        const entityId = this.getSelectedEntityId();
+        if (entityId) {
+            serviceData.entity_id = entityId;
+        }
+        return await this._hass.callService('mia_config', serviceName, serviceData);
+    }
+    
     setDefaultTimeValues() {
         // Imposta valori di default per data/ora nelle configurazioni a tempo
         const now = new Date();
@@ -429,11 +751,19 @@ class MiaConfigCard extends HTMLElement {
             const form = e.target;
             const formData = new FormData(form);
             try {
-                await this._hass.callService('mia_config', 'set_config', {
+                const serviceData = {
                     setup_name: formData.get('setup_name'),
                     setup_value: formData.get('setup_value'),
                     priority: parseInt(formData.get('priority'))
-                });
+                };
+                
+                // Aggiungi descrizione solo se presente
+                const description = formData.get('description');
+                if (description && description.trim()) {
+                    serviceData.description = description.trim();
+                }
+                
+                await this.callMiaConfigService('set_config', serviceData);
                 form.reset();
                 this.showToast('Configurazione salvata!');
                 setTimeout(() => this.loadConfigurations(), 500);
@@ -461,12 +791,13 @@ class MiaConfigCard extends HTMLElement {
             const validToOra = this.timeSelectorsToDecimal(toHour, toMinute);
             
             try {
-                await this._hass.callService('mia_config', 'set_schedule_config', {
+                await this.callMiaConfigService('set_schedule_config', {
                     setup_name: formData.get('setup_name'),
                     setup_value: formData.get('setup_value'),
                     valid_from_ora: validFromOra,
                     valid_to_ora: validToOra,
-                    days_of_week: days
+                    days_of_week: days,
+                    priority: parseInt(formData.get('priority'))
                 });
                 form.reset();
                 // Reset selettori a valori di default
@@ -491,12 +822,35 @@ class MiaConfigCard extends HTMLElement {
             const formatDateTime = (dt) => dt.replace('T', ' ') + ':00';
             
             try {
-                await this._hass.callService('mia_config', 'set_time_config', {
+                const serviceData = {
                     setup_name: formData.get('setup_name'),
                     setup_value: formData.get('setup_value'),
                     valid_from: formatDateTime(formData.get('valid_from')),
-                    valid_to: formatDateTime(formData.get('valid_to'))
-                });
+                    valid_to: formatDateTime(formData.get('valid_to')),
+                    priority: parseInt(formData.get('priority'))
+                };
+                
+                // Aggiungi filtro orario se abilitato
+                const enableHours = this.content.querySelector('#time-enable-hours').checked;
+                if (enableHours) {
+                    const fromHour = parseInt(this.content.querySelector('#time-from-hour').value);
+                    const fromMinute = parseInt(this.content.querySelector('#time-from-minute').value);
+                    const toHour = parseInt(this.content.querySelector('#time-to-hour').value);
+                    const toMinute = parseInt(this.content.querySelector('#time-to-minute').value);
+                    
+                    serviceData.valid_from_ora = this.timeSelectorsToDecimal(fromHour, fromMinute);
+                    serviceData.valid_to_ora = this.timeSelectorsToDecimal(toHour, toMinute);
+                }
+                
+                // Aggiungi filtro giorni se abilitato
+                const enableDays = this.content.querySelector('#time-enable-days').checked;
+                if (enableDays) {
+                    const days = Array.from(this.content.querySelectorAll('#dc-form-time input[name="time-days"]:checked'))
+                        .map(cb => parseInt(cb.value));
+                    serviceData.days_of_week = days.join(',');
+                }
+                
+                await this.callMiaConfigService('set_time_config', serviceData);
                 form.reset();
                 this.showToast('Configurazione salvata!');
                 setTimeout(() => this.loadConfigurations(), 500);
@@ -504,6 +858,17 @@ class MiaConfigCard extends HTMLElement {
                 console.error('Errore salvataggio:', err);
                 this.showToast('Errore: ' + err.message, true);
             }
+        });
+        
+        // Toggle per filtri opzionali nel form Time
+        this.content.querySelector('#time-enable-hours').addEventListener('change', (e) => {
+            const container = this.content.querySelector('#time-hours-container');
+            container.style.display = e.target.checked ? 'block' : 'none';
+        });
+        
+        this.content.querySelector('#time-enable-days').addEventListener('change', (e) => {
+            const container = this.content.querySelector('#time-days-container');
+            container.style.display = e.target.checked ? 'block' : 'none';
         });
 
         // Switch Tab Function
@@ -514,30 +879,52 @@ class MiaConfigCard extends HTMLElement {
             event.target.classList.add('active');
             this.content.querySelector(`#dc-tab-${tabName}`).classList.add('active');
             
-            if (tabName === 'list') {
+            if (tabName === 'dashboard') {
+                this.loadDashboard();
+            } else if (tabName === 'config') {
                 this.loadConfigurations();
-            } else if (tabName === 'schedule' || tabName === 'time') {
                 this.loadStandardConfigsForSelect();
-                if (tabName === 'time') {
-                    // Reimposta i valori di default quando si apre la tab tempo
-                    this.setDefaultTimeValues();
-                }
             } else if (tabName === 'weekly') {
                 this.loadConfigsForWeeklyView();
             } else if (tabName === 'history') {
-                // Carica automaticamente lo storico quando si apre la tab
                 window.dcLoadHistory();
+            }
+        };
+        
+        window.dcShowConfigForm = (formType) => {
+            // Nascondi tutti i form
+            this.content.querySelectorAll('.dc-form-container').forEach(container => {
+                container.style.display = 'none';
+            });
+            
+            // Mostra il form selezionato
+            const container = this.content.querySelector(`#dc-form-container-${formType}`);
+            if (container) {
+                container.style.display = 'block';
+                
+                // Carica le configurazioni standard per i select (schedule e time)
+                if (formType === 'schedule' || formType === 'time') {
+                    this.loadStandardConfigsForSelect();
+                }
+                
+                // Reimposta valori di default per il form time
+                if (formType === 'time') {
+                    this.setDefaultTimeValues();
+                }
             }
         };
     }
 
     async loadStandardConfigsForSelect() {
         try {
+            const entityId = this.getSelectedEntityId();
+            const serviceData = entityId ? { entity_id: entityId } : {};
+            
             const result = await this._hass.callWS({
                 type: 'call_service',
                 domain: 'mia_config',
                 service: 'get_configurations',
-                service_data: {},
+                service_data: serviceData,
                 return_response: true
             });
             console.log('Risultato per select:', result);
@@ -583,16 +970,92 @@ class MiaConfigCard extends HTMLElement {
         }
     }
 
+    async loadDashboard() {
+        const container = this.content.querySelector('#dc-dashboard-content');
+        container.innerHTML = 'Caricamento...';
+        
+        try {
+            // Ottieni tutti i sensori mia_config, escludendo il sensore principale
+            const sensors = Object.keys(this._hass.states)
+                .filter(id => {
+                    if (!id.startsWith('sensor.mia_config_')) return false;
+                    
+                    // Escludi il sensore principale (quello che ha total_configs negli attributi)
+                    const entity = this._hass.states[id];
+                    return !entity.attributes.total_configs;
+                })
+                .map(id => ({
+                    id,
+                    entity: this._hass.states[id],
+                    name: id.replace('sensor.mia_config_', '').replace(/_/g, ' ')
+                }));
+            
+            if (sensors.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: var(--secondary-text-color);">Nessun sensore disponibile</p>';
+                return;
+            }
+            
+            let html = '<h3>📊 Valori Correnti</h3>';
+            html += '<div style="margin-bottom: 20px;">';
+            
+            for (const sensor of sensors) {
+                const value = sensor.entity.state;
+                const attrs = sensor.entity.attributes;
+                const source = attrs.source || 'unknown';
+                const entityId = sensor.id;
+                const description = attrs.description || '';
+                
+                const typeLabel = source === 'time' ? '⏰ Tempo' :
+                                 source === 'schedule' ? '📅 Orario' :
+                                 source === 'standard' ? '⚙️ Standard' : '❌ Nessuna';
+                
+                // Prossimi eventi
+                const upcomingText = attrs.upcoming_text || [];
+                
+                let upcomingHtml = '';
+                if (upcomingText && upcomingText.length > 0) {
+                    upcomingHtml = '<div style="margin-top: 8px; padding: 8px; background: var(--secondary-background-color); border-radius: 4px;">';
+                    upcomingHtml += '<strong>📅 Prossimi valori:</strong><br>';
+                    upcomingText.forEach((text, idx) => {
+                        upcomingHtml += `<small>${idx + 1}. ${text}</small><br>`;
+                    });
+                    upcomingHtml += '</div>';
+                }
+                
+                html += `
+                    <div class="dc-config-item" onclick="window.dcOpenEntity('${entityId}')" style="background: var(--card-background-color); border-left: 4px solid var(--primary-color); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.backgroundColor='var(--secondary-background-color)'" onmouseout="this.style.backgroundColor='var(--card-background-color)'">
+                        <div>
+                            <strong>🎯 ${sensor.name}</strong><br>
+                            ${description ? `<small style="color: var(--secondary-text-color); font-style: italic;">📝 ${description}</small><br>` : ''}
+                            <span style="font-size: 1.4em; color: var(--primary-color); font-weight: bold;">${value}</span><br>
+                            <small>Origine: ${typeLabel}</small>
+                            ${upcomingHtml}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            html += '</div>';
+            container.innerHTML = html;
+        } catch (err) {
+            console.error('Errore caricamento dashboard:', err);
+            container.innerHTML = '<p style="color: red;">Errore caricamento dati</p>';
+        }
+    }
+
     async loadConfigurations() {
         const container = this.content.querySelector('#dc-config-list');
         container.innerHTML = 'Caricamento...';
         
         try {
+            const entityId = this.getSelectedEntityId();
+            const serviceData = entityId ? { entity_id: entityId } : {};
+            
             const result = await this._hass.callWS({
                 type: 'call_service',
                 domain: 'mia_config',
                 service: 'get_configurations',
-                service_data: {},
+                service_data: serviceData,
                 return_response: true
             });
             console.log('Risposta get_configurations:', result);
@@ -604,57 +1067,70 @@ class MiaConfigCard extends HTMLElement {
             const configs = result.response || result.configurations || {};
             console.log('Configurazioni trovate:', Object.keys(configs).length, configs);
             
-            // Ottieni tutti i sensori mia_config
-            const sensors = Object.keys(this._hass.states)
-                .filter(id => id.startsWith('sensor.mia_config_'))
-                .map(id => ({
-                    id,
-                    entity: this._hass.states[id],
-                    name: id.replace('sensor.mia_config_', '')
-                }));
+            // Filtra configurazioni vuote o sensori principali (che hanno array vuoto)
+            const validConfigs = Object.entries(configs).filter(([name, configsList]) => {
+                return Array.isArray(configsList) && configsList.length > 0 && configsList[0].id !== undefined;
+            });
             
-            if (Object.keys(configs).length === 0 && sensors.length === 0) {
+            if (validConfigs.length === 0) {
                 container.innerHTML = '<p style="text-align: center; color: var(--secondary-text-color);">Nessuna configurazione presente</p>';
                 return;
             }
             
-            let html = '<h3>📊 Valori Correnti</h3>';
-            
-            // Sezione sensori attivi
-            if (sensors.length > 0) {
-                html += '<div style="margin-bottom: 20px;">';
-                for (const sensor of sensors) {
-                    const value = sensor.entity.state;
-                    const attrs = sensor.entity.attributes;
-                    const activeType = attrs.active_config_type || 'nessuna';
-                    const priority = attrs.priority || '-';
-                    
-                    const typeLabel = activeType === 'time' ? '⏰ Tempo' :
-                                     activeType === 'schedule' ? '📅 Orario' :
-                                     activeType === 'standard' ? '⚙️ Standard' : '❌ Nessuna';
-                    
-                    html += `
-                        <div class="dc-config-item" style="background: var(--card-background-color); border-left: 4px solid var(--primary-color);">
-                            <div>
-                                <strong>🎯 ${sensor.name}</strong><br>
-                                <span style="font-size: 1.2em; color: var(--primary-color);">${value}</span><br>
-                                <small>Tipo attivo: ${typeLabel} | Priorità: ${priority}</small>
-                            </div>
-                        </div>
-                    `;
-                }
-                html += '</div>';
-            }
+            let html = '';
             
             // Sezione configurazioni nel database
-            html += '<h3>🗂️ Configurazioni Database</h3>';
-            
-            if (Object.keys(configs).length === 0) {
-                html += '<p style="text-align: center; color: var(--secondary-text-color);">Nessuna configurazione salvata</p>';
-            } else {
-                for (const [name, configsList] of Object.entries(configs)) {
-                    // configsList è un array di configurazioni per questo nome
-                    if (!Array.isArray(configsList) || configsList.length === 0) continue;
+            for (const [name, configsList] of validConfigs) {
+                // configsList è un array di configurazioni per questo nome
+                if (!Array.isArray(configsList) || configsList.length === 0) continue;
+                    
+                    // Ordina le configurazioni:
+                    // 1. Tempo future (valid_to_date > now) - ordinate per valid_from_date
+                    // 2. Orario - ordinate per valid_from_ora
+                    // 3. Standard
+                    // 4. Tempo passate (valid_to_date <= now) - ordinate per valid_to_date desc
+                    const now = new Date();
+                    const sortedConfigs = configsList.slice().sort((a, b) => {
+                        const typeOrder = {
+                            'time_future': 1,
+                            'schedule': 2,
+                            'standard': 3,
+                            'time_past': 4
+                        };
+                        
+                        // Determina categoria per a
+                        let categoryA = a.type;
+                        if (a.type === 'time') {
+                            const toDate = new Date(a.valid_to_date);
+                            categoryA = toDate > now ? 'time_future' : 'time_past';
+                        }
+                        
+                        // Determina categoria per b
+                        let categoryB = b.type;
+                        if (b.type === 'time') {
+                            const toDate = new Date(b.valid_to_date);
+                            categoryB = toDate > now ? 'time_future' : 'time_past';
+                        }
+                        
+                        // Ordina per categoria
+                        if (typeOrder[categoryA] !== typeOrder[categoryB]) {
+                            return typeOrder[categoryA] - typeOrder[categoryB];
+                        }
+                        
+                        // All'interno della stessa categoria
+                        if (categoryA === 'time_future') {
+                            // Ordina per data inizio (prima le più vicine)
+                            return new Date(a.valid_from_date) - new Date(b.valid_from_date);
+                        } else if (categoryA === 'time_past') {
+                            // Ordina per data fine (prima le più recenti)
+                            return new Date(b.valid_to_date) - new Date(a.valid_to_date);
+                        } else if (categoryA === 'schedule') {
+                            // Ordina per orario di inizio
+                            return a.valid_from_ora - b.valid_from_ora;
+                        }
+                        
+                        return 0;
+                    });
                     
                     html += `<div style="margin-bottom: 15px; padding: 10px; border: 1px solid var(--divider-color); border-radius: 8px;">`;
                     html += `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">`;
@@ -662,7 +1138,7 @@ class MiaConfigCard extends HTMLElement {
                     html += `<button class="dc-btn-delete" onclick="window.dcDeleteConfig('${name}')">Elimina Tutto</button>`;
                     html += `</div>`;
                     
-                    for (const cfg of configsList) {
+                    for (const cfg of sortedConfigs) {
                         const type = cfg.type || 'standard';
                         const badgeClass = type === 'time' ? 'dc-badge-time' : 
                                           type === 'schedule' ? 'dc-badge-schedule' : 'dc-badge-standard';
@@ -674,11 +1150,24 @@ class MiaConfigCard extends HTMLElement {
                             extra = `Priorità: ${cfg.priority}`;
                         } else if (type === 'time') {
                             extra = `Da ${cfg.valid_from_date} a ${cfg.valid_to_date}`;
+                            
+                            // Aggiungi filtri opzionali se presenti
+                            if (cfg.valid_from_ora !== undefined && cfg.valid_to_ora !== undefined) {
+                                const fromTime = this.formatTimeDisplay(cfg.valid_from_ora);
+                                const toTime = this.formatTimeDisplay(cfg.valid_to_ora);
+                                extra += ` | ⏰ ${fromTime} → ${toTime}`;
+                            }
+                            if (cfg.days_of_week !== undefined) {
+                                const days = cfg.days_of_week.map(d => ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'][d]).join(', ');
+                                extra += ` | 📅 ${days}`;
+                            }
+                            
+                            extra += ` | Priorità: ${cfg.priority}`;
                         } else if (type === 'schedule') {
                             const days = cfg.days_of_week.map(d => ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'][d]).join(', ');
                             const fromTime = this.formatTimeDisplay(cfg.valid_from_ora);
                             const toTime = this.formatTimeDisplay(cfg.valid_to_ora);
-                            extra = `${fromTime} → ${toTime} | ${days}`;
+                            extra = `${fromTime} → ${toTime} | ${days} | Priorità: ${cfg.priority}`;
                         }
                         
                         // ID per eliminazione: per standard usa il nome, per altri usa l'id
@@ -704,7 +1193,6 @@ class MiaConfigCard extends HTMLElement {
                     
                     html += `</div>`;
                 }
-            }
             
             container.innerHTML = html;
         } catch (error) {
@@ -714,7 +1202,7 @@ class MiaConfigCard extends HTMLElement {
 
         window.dcDeleteConfig = async (name) => {
             if (confirm(`Eliminare tutte le configurazioni di "${name}"?`)) {
-                await this._hass.callService('mia_config', 'delete_config', {
+                await this.callMiaConfigService('delete_config', {
                     setup_name: name,
                     config_type: 'all'
                 });
@@ -723,12 +1211,21 @@ class MiaConfigCard extends HTMLElement {
             }
         };
         
+        window.dcOpenEntity = (entityId) => {
+            const event = new Event('hass-more-info', {
+                bubbles: true,
+                composed: true,
+            });
+            event.detail = { entityId };
+            this.dispatchEvent(event);
+        };
+        
         window.dcDeleteSingleConfig = async (type, id) => {
             if (confirm(`Eliminare questa configurazione ${type}?`)) {
                 try {
-                    await this._hass.callService('mia_config', 'delete_single_config', {
+                    await this.callMiaConfigService('delete_single_config', {
                         config_type: type,
-                        config_id: id.toString()
+                        config_id: parseInt(id)
                     });
                     this.showToast('Configurazione eliminata!');
                     setTimeout(() => this.loadConfigurations(), 500);
@@ -760,6 +1257,11 @@ class MiaConfigCard extends HTMLElement {
                         <div class="dc-form-group">
                             <label>Priorità:</label>
                             <input type="number" name="priority" value="${cfg.priority || 99}" required>
+                            <small style="color: var(--secondary-text-color);">Più basso = più prioritario</small>
+                        </div>
+                        <div class="dc-form-group">
+                            <label>Descrizione:</label>
+                            <input type="text" name="description" value="${cfg.description || ''}" placeholder="Descrizione opzionale">
                         </div>
                         <div style="display: flex; gap: 10px; margin-top: 20px;">
                             <button type="submit" class="dc-btn">Salva</button>
@@ -770,6 +1272,128 @@ class MiaConfigCard extends HTMLElement {
             } else if (type === 'time') {
                 // Converti il formato datetime per datetime-local
                 const formatForInput = (dt) => dt.replace(' ', 'T').substring(0, 16);
+                
+                // Verifica se ci sono filtri opzionali
+                const hasTimeFilter = cfg.valid_from_ora !== undefined && cfg.valid_to_ora !== undefined;
+                const hasDaysFilter = cfg.days_of_week !== undefined;
+                
+                let timeFilterHtml = '';
+                if (hasTimeFilter) {
+                    const fromHour = Math.floor(cfg.valid_from_ora);
+                    const fromMinute = Math.round((cfg.valid_from_ora - fromHour) * 60);
+                    const toHour = Math.floor(cfg.valid_to_ora);
+                    const toMinute = Math.round((cfg.valid_to_ora - toHour) * 60);
+                    
+                    timeFilterHtml = `
+                        <div class="dc-form-group">
+                            <label>
+                                <input type="checkbox" id="edit-time-enable-hours" checked> Limita a fascia oraria
+                            </label>
+                            <div id="edit-time-hours-container" style="margin-top: 10px;">
+                                <div class="dc-time-picker">
+                                    <div>
+                                        <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
+                                        <div class="dc-time-input">
+                                            <select id="edit-time-from-hour">
+                                                ${this.generateHourOptions(0, 23)}
+                                            </select>
+                                            <span class="dc-time-separator">:</span>
+                                            <select id="edit-time-from-minute">
+                                                ${this.generateMinuteOptions()}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <span style="font-size: 18px; align-self: flex-end; padding-bottom: 8px;">→</span>
+                                    <div>
+                                        <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
+                                        <div class="dc-time-input">
+                                            <select id="edit-time-to-hour">
+                                                ${this.generateHourOptions(0, 23)}
+                                            </select>
+                                            <span class="dc-time-separator">:</span>
+                                            <select id="edit-time-to-minute">
+                                                ${this.generateMinuteOptions()}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    timeFilterHtml = `
+                        <div class="dc-form-group">
+                            <label>
+                                <input type="checkbox" id="edit-time-enable-hours"> Limita a fascia oraria
+                            </label>
+                            <div id="edit-time-hours-container" style="display: none; margin-top: 10px;">
+                                <div class="dc-time-picker">
+                                    <div>
+                                        <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
+                                        <div class="dc-time-input">
+                                            <select id="edit-time-from-hour">
+                                                ${this.generateHourOptions(0, 23)}
+                                            </select>
+                                            <span class="dc-time-separator">:</span>
+                                            <select id="edit-time-from-minute">
+                                                ${this.generateMinuteOptions()}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <span style="font-size: 18px; align-self: flex-end; padding-bottom: 8px;">→</span>
+                                    <div>
+                                        <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
+                                        <div class="dc-time-input">
+                                            <select id="edit-time-to-hour">
+                                                ${this.generateHourOptions(0, 23)}
+                                            </select>
+                                            <span class="dc-time-separator">:</span>
+                                            <select id="edit-time-to-minute">
+                                                ${this.generateMinuteOptions()}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                let daysFilterHtml = '';
+                const daysOfWeek = cfg.days_of_week || [];
+                const dayCheckboxes = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'].map((day, i) => 
+                    `<label class="dc-checkbox-label">
+                        <input type="checkbox" name="edit-time-days" value="${i}" ${daysOfWeek.includes(i) ? 'checked' : ''}> ${day}
+                    </label>`
+                ).join('');
+                
+                if (hasDaysFilter) {
+                    daysFilterHtml = `
+                        <div class="dc-form-group">
+                            <label>
+                                <input type="checkbox" id="edit-time-enable-days" checked> Limita a giorni specifici
+                            </label>
+                            <div id="edit-time-days-container" style="margin-top: 10px;">
+                                <div class="dc-checkbox-group">
+                                    ${dayCheckboxes}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    daysFilterHtml = `
+                        <div class="dc-form-group">
+                            <label>
+                                <input type="checkbox" id="edit-time-enable-days"> Limita a giorni specifici
+                            </label>
+                            <div id="edit-time-days-container" style="display: none; margin-top: 10px;">
+                                <div class="dc-checkbox-group">
+                                    ${dayCheckboxes}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
                 
                 formHtml = `
                     <form id="dc-edit-form">
@@ -789,12 +1413,34 @@ class MiaConfigCard extends HTMLElement {
                             <label>Data/Ora Fine:</label>
                             <input type="datetime-local" name="valid_to" value="${formatForInput(cfg.valid_to_date)}" required>
                         </div>
+                        <div class="dc-form-group">
+                            <label>Priorità:</label>
+                            <input type="number" name="priority" value="${cfg.priority || 99}" required>
+                            <small style="color: var(--secondary-text-color);">Più basso = più prioritario</small>
+                        </div>
+                        ${timeFilterHtml}
+                        ${daysFilterHtml}
                         <div style="display: flex; gap: 10px; margin-top: 20px;">
                             <button type="submit" class="dc-btn">Salva</button>
                             <button type="button" class="dc-btn" onclick="window.dcCloseEditModal()" style="background: #666;">Annulla</button>
                         </div>
                     </form>
                 `;
+                
+                // Dopo aver mostrato il modal, imposta i valori dei selettori se presenti
+                if (hasTimeFilter) {
+                    setTimeout(() => {
+                        const fromHour = Math.floor(cfg.valid_from_ora);
+                        const fromMinute = Math.round((cfg.valid_from_ora - fromHour) * 60);
+                        const toHour = Math.floor(cfg.valid_to_ora);
+                        const toMinute = Math.round((cfg.valid_to_ora - toHour) * 60);
+                        
+                        this.content.querySelector('#edit-time-from-hour').value = fromHour;
+                        this.content.querySelector('#edit-time-from-minute').value = fromMinute;
+                        this.content.querySelector('#edit-time-to-hour').value = toHour;
+                        this.content.querySelector('#edit-time-to-minute').value = toMinute;
+                    }, 10);
+                }
             } else if (type === 'schedule') {
                 // Converti ore decimali a ore e minuti per i selettori
                 const fromHour = Math.floor(cfg.valid_from_ora);
@@ -855,6 +1501,11 @@ class MiaConfigCard extends HTMLElement {
                                 ${dayCheckboxes}
                             </div>
                         </div>
+                        <div class="dc-form-group">
+                            <label>Priorità:</label>
+                            <input type="number" name="priority" value="${cfg.priority || 99}" required>
+                            <small style="color: var(--secondary-text-color);">Più basso = più prioritario</small>
+                        </div>
                         <div style="display: flex; gap: 10px; margin-top: 20px;">
                             <button type="submit" class="dc-btn">Salva</button>
                             <button type="button" class="dc-btn" onclick="window.dcCloseEditModal()" style="background: #666;">Annulla</button>
@@ -874,6 +1525,30 @@ class MiaConfigCard extends HTMLElement {
             modalBody.innerHTML = formHtml;
             modal.classList.add('active');
             
+            // Aggiungi event listener per i checkbox toggle se è una config a tempo
+            if (type === 'time') {
+                const enableHoursCheckbox = this.content.querySelector('#edit-time-enable-hours');
+                const enableDaysCheckbox = this.content.querySelector('#edit-time-enable-days');
+                
+                if (enableHoursCheckbox) {
+                    enableHoursCheckbox.addEventListener('change', (e) => {
+                        const container = this.content.querySelector('#edit-time-hours-container');
+                        if (container) {
+                            container.style.display = e.target.checked ? 'block' : 'none';
+                        }
+                    });
+                }
+                
+                if (enableDaysCheckbox) {
+                    enableDaysCheckbox.addEventListener('change', (e) => {
+                        const container = this.content.querySelector('#edit-time-days-container');
+                        if (container) {
+                            container.style.display = e.target.checked ? 'block' : 'none';
+                        }
+                    });
+                }
+            }
+            
             // Gestione submit del form
             this.content.querySelector('#dc-edit-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -881,31 +1556,63 @@ class MiaConfigCard extends HTMLElement {
                 
                 try {
                     if (type === 'standard') {
-                        await this._hass.callService('mia_config', 'set_config', {
-                            setup_name: name,
+                        // Usa update_standard_config per aggiornare configurazioni esistenti
+                        const serviceData = {
+                            config_id: parseInt(id),
                             setup_value: formData.get('setup_value'),
                             priority: parseInt(formData.get('priority'))
-                        });
+                        };
+                        
+                        // Aggiungi descrizione se presente
+                        const description = formData.get('description');
+                        if (description && description.trim()) {
+                            serviceData.description = description.trim();
+                        }
+                        
+                        await this.callMiaConfigService('update_standard_config', serviceData);
                     } else if (type === 'time') {
                         // Prima elimina la vecchia configurazione
-                        await this._hass.callService('mia_config', 'delete_single_config', {
+                        await this.callMiaConfigService('delete_single_config', {
                             config_type: 'time',
-                            config_id: id
+                            config_id: parseInt(id)
                         });
                         
                         // Poi crea la nuova
                         const formatDateTime = (dt) => dt.replace('T', ' ') + ':00';
-                        await this._hass.callService('mia_config', 'set_time_config', {
+                        const serviceData = {
                             setup_name: name,
                             setup_value: formData.get('setup_value'),
                             valid_from: formatDateTime(formData.get('valid_from')),
-                            valid_to: formatDateTime(formData.get('valid_to'))
-                        });
+                            valid_to: formatDateTime(formData.get('valid_to')),
+                            priority: parseInt(formData.get('priority'))
+                        };
+                        
+                        // Aggiungi filtro orario se abilitato
+                        const enableHours = this.content.querySelector('#edit-time-enable-hours');
+                        if (enableHours && enableHours.checked) {
+                            const fromHour = parseInt(this.content.querySelector('#edit-time-from-hour').value);
+                            const fromMinute = parseInt(this.content.querySelector('#edit-time-from-minute').value);
+                            const toHour = parseInt(this.content.querySelector('#edit-time-to-hour').value);
+                            const toMinute = parseInt(this.content.querySelector('#edit-time-to-minute').value);
+                            
+                            serviceData.valid_from_ora = this.timeSelectorsToDecimal(fromHour, fromMinute);
+                            serviceData.valid_to_ora = this.timeSelectorsToDecimal(toHour, toMinute);
+                        }
+                        
+                        // Aggiungi filtro giorni se abilitato
+                        const enableDays = this.content.querySelector('#edit-time-enable-days');
+                        if (enableDays && enableDays.checked) {
+                            const days = Array.from(this.content.querySelectorAll('#dc-edit-form input[name="edit-time-days"]:checked'))
+                                .map(cb => parseInt(cb.value));
+                            serviceData.days_of_week = days.join(',');
+                        }
+                        
+                        await this.callMiaConfigService('set_time_config', serviceData);
                     } else if (type === 'schedule') {
                         // Prima elimina la vecchia configurazione
-                        await this._hass.callService('mia_config', 'delete_single_config', {
+                        await this.callMiaConfigService('delete_single_config', {
                             config_type: 'schedule',
-                            config_id: id
+                            config_id: parseInt(id)
                         });
                         
                         // Poi crea la nuova
@@ -917,12 +1624,13 @@ class MiaConfigCard extends HTMLElement {
                         const toHour = parseInt(this.content.querySelector('#edit-to-hour').value);
                         const toMinute = parseInt(this.content.querySelector('#edit-to-minute').value);
                         
-                        await this._hass.callService('mia_config', 'set_schedule_config', {
+                        await this.callMiaConfigService('set_schedule_config', {
                             setup_name: name,
                             setup_value: formData.get('setup_value'),
                             valid_from_ora: this.timeSelectorsToDecimal(fromHour, fromMinute),
                             valid_to_ora: this.timeSelectorsToDecimal(toHour, toMinute),
-                            days_of_week: days
+                            days_of_week: days,
+                            priority: parseInt(formData.get('priority'))
                         });
                     }
                     
@@ -949,14 +1657,20 @@ class MiaConfigCard extends HTMLElement {
             container.innerHTML = 'Caricamento storico...';
             
             try {
+                const entityId = this.getSelectedEntityId();
+                const serviceData = {
+                    setup_name: setupName || undefined,
+                    limit: 100
+                };
+                if (entityId) {
+                    serviceData.entity_id = entityId;
+                }
+                
                 const result = await this._hass.callWS({
                     type: 'call_service',
                     domain: 'mia_config',
                     service: 'get_history',
-                    service_data: {
-                        setup_name: setupName || undefined,
-                        limit: 100
-                    },
+                    service_data: serviceData,
                     return_response: true
                 });
                 
@@ -1027,11 +1741,17 @@ class MiaConfigCard extends HTMLElement {
             
             try {
                 // Recupera i dettagli dalla storia
+                const entityId = this.getSelectedEntityId();
+                const serviceData = { limit: 1000 };
+                if (entityId) {
+                    serviceData.entity_id = entityId;
+                }
+                
                 const result = await this._hass.callWS({
                     type: 'call_service',
                     domain: 'mia_config',
                     service: 'get_history',
-                    service_data: { limit: 1000 },
+                    service_data: serviceData,
                     return_response: true
                 });
                 
@@ -1045,13 +1765,13 @@ class MiaConfigCard extends HTMLElement {
                 
                 // Ricrea la configurazione in base al tipo
                 if (entry.config_type === 'standard') {
-                    await this._hass.callService('mia_config', 'set_config', {
+                    await this.callMiaConfigService('set_config', {
                         setup_name: entry.setup_name,
                         setup_value: entry.setup_value,
                         priority: entry.priority || 99
                     });
                 } else if (entry.config_type === 'schedule') {
-                    await this._hass.callService('mia_config', 'set_schedule_config', {
+                    await this.callMiaConfigService('set_schedule_config', {
                         setup_name: entry.setup_name,
                         setup_value: entry.setup_value,
                         valid_from_ora: parseFloat(entry.valid_from_ora),
@@ -1059,7 +1779,7 @@ class MiaConfigCard extends HTMLElement {
                         days_of_week: entry.days_of_week ? entry.days_of_week.split(',').map(d => parseInt(d)) : [0,1,2,3,4,5,6]
                     });
                 } else if (entry.config_type === 'time') {
-                    await this._hass.callService('mia_config', 'set_time_config', {
+                    await this.callMiaConfigService('set_time_config', {
                         setup_name: entry.setup_name,
                         setup_value: entry.setup_value,
                         valid_from: entry.valid_from_date,
@@ -1082,11 +1802,14 @@ class MiaConfigCard extends HTMLElement {
 
     async loadConfigsForWeeklyView() {
         try {
+            const entityId = this.getSelectedEntityId();
+            const serviceData = entityId ? { entity_id: entityId } : {};
+            
             const result = await this._hass.callWS({
                 type: 'call_service',
                 domain: 'mia_config',
                 service: 'get_configurations',
-                service_data: {},
+                service_data: serviceData,
                 return_response: true
             });
             
@@ -1114,11 +1837,14 @@ class MiaConfigCard extends HTMLElement {
             }
             
             try {
+                const entityId = this.getSelectedEntityId();
+                const serviceData = entityId ? { entity_id: entityId } : {};
+                
                 const result = await this._hass.callWS({
                     type: 'call_service',
                     domain: 'mia_config',
                     service: 'get_configurations',
-                    service_data: {},
+                    service_data: serviceData,
                     return_response: true
                 });
                 
@@ -1151,52 +1877,530 @@ class MiaConfigCard extends HTMLElement {
             days.push(date);
         }
         
-        // Calcola valore per ogni ora di ogni giorno
-        const hoursInDay = Array.from({length: 24}, (_, i) => i);
+        // Pre-calcola i segmenti per ogni giorno
+        const daySegments = days.map(day => this.calculateDaySegments(day, standardConfig, timeConfigs, scheduleConfigs));
         
         let html = `<h3>📊 Vista Settimanale: ${setupName}</h3>`;
-        html += '<div style="overflow-x: auto;">';
-        html += '<table style="width: 100%; border-collapse: collapse; font-size: 11px;">';
+        html += '<div class="dc-weekly-container">';
+        html += '<div class="dc-weekly-grid">';
         
-        // Header con giorni
-        html += '<thead><tr style="background: var(--primary-color); color: white;">';
-        html += '<th style="padding: 8px; border: 1px solid var(--divider-color); position: sticky; left: 0; background: var(--primary-color);">Ora</th>';
-        days.forEach(day => {
-            const dayOfWeekJS = day.getDay(); // 0=Dom, 1=Lun, ... 6=Sab in JavaScript
-            const dayOfWeekPython = dayOfWeekJS === 0 ? 6 : dayOfWeekJS - 1; // Converti a 0=Lun, 6=Dom
+        // Colonna orari
+        html += '<div class="dc-weekly-time-column">';
+        html += '<div style="height: 50px; display: flex; align-items: center; justify-content: center; border-bottom: 2px solid rgba(255,255,255,0.3);">Ora</div>';
+        for (let hour = 0; hour < 24; hour++) {
+            html += `<div class="dc-weekly-time-slot">${String(hour).padStart(2, '0')}:00</div>`;
+        }
+        html += '</div>';
+        
+        // Contenitore giorni
+        html += '<div class="dc-weekly-days">';
+        
+        // Colonna per ogni giorno
+        days.forEach((day, dayIdx) => {
+            const dayOfWeekJS = day.getDay();
+            const dayOfWeekPython = dayOfWeekJS === 0 ? 6 : dayOfWeekJS - 1;
             const dayName = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'][dayOfWeekPython];
             const dateStr = `${day.getDate()}/${day.getMonth() + 1}`;
-            html += `<th style="padding: 8px; border: 1px solid var(--divider-color);">${dayName}<br>${dateStr}</th>`;
-        });
-        html += '</tr></thead><tbody>';
-        
-        // Righe per ogni ora
-        hoursInDay.forEach(hour => {
-            html += '<tr>';
-            html += `<td style="padding: 4px 8px; border: 1px solid var(--divider-color); font-weight: bold; position: sticky; left: 0; background: var(--card-background-color);">${String(hour).padStart(2, '0')}:00</td>`;
             
-            days.forEach(day => {
-                const value = this.calculateValueForDateTime(day, hour, standardConfig, timeConfigs, scheduleConfigs);
-                const cellStyle = this.getWeeklyCellStyle(value, standardConfig);
-                html += `<td style="padding: 4px; border: 1px solid var(--divider-color); text-align: center; ${cellStyle}">${value}</td>`;
+            html += '<div class="dc-weekly-day-column">';
+            html += `<div class="dc-weekly-day-header"><div>${dayName}</div><div style="font-size: 11px; font-weight: normal;">${dateStr}</div></div>`;
+            html += '<div class="dc-weekly-day-content">';
+            
+            // Linee orizzontali per le ore (0, 60, 120, ..., 1440)
+            for (let hour = 0; hour < 24; hour++) {
+                const topPosition = hour * 60;
+                html += `<div class="dc-weekly-hour-line" style="top: ${topPosition}px;"></div>`;
+            }
+            // Linea finale a 1440px (24:00)
+            html += `<div class="dc-weekly-hour-line" style="top: 1440px; border-top: 2px solid var(--divider-color);"></div>`;
+            
+            // Renderizza i segmenti per questo giorno
+            const segments = daySegments[dayIdx];
+            segments.forEach((seg, segIdx) => {
+                const topPos = seg.startTime;
+                const height = seg.endTime - seg.startTime; // endTime è già esclusivo
+                
+                const tooltip = this.generateSegmentTooltip(seg);
+                const barClass = `dc-weekly-bar dc-weekly-bar-${seg.type}`;
+                
+                // Calcola quante barre ci sono in sovrapposizione
+                const overlapping = segments.filter(s => 
+                    (s.startTime < seg.endTime && s.endTime > seg.startTime)
+                ).length;
+                
+                // Se ci sono sovrapposizioni, restringi la larghezza e sposta orizzontalmente
+                const widthPercent = overlapping > 1 ? (100 / overlapping) : 100;
+                const leftPercent = overlapping > 1 ? (segIdx % overlapping) * widthPercent : 0;
+                
+                html += `<div class="${barClass} dc-weekly-tooltip" style="top: ${topPos}px; height: ${height}px; left: ${leftPercent}%; width: ${widthPercent}%;">`;
+                if (height > 20) {
+                    html += seg.value;
+                }
+                html += `<span class="dc-tooltip-text">${tooltip}</span>`;
+                html += `</div>`;
             });
             
-            html += '</tr>';
+            html += '</div></div>';
         });
         
-        html += '</tbody></table></div>';
+        html += '</div></div></div>';
         
         // Legenda
         html += '<div style="margin-top: 15px; padding: 10px; background: var(--card-background-color); border-radius: 4px;">';
         html += '<strong>Legenda:</strong><br>';
-        if (standardConfig) {
-            html += `<span style="display: inline-block; width: 20px; height: 20px; background: #e8f5e9; border: 1px solid #4caf50; margin-right: 5px;"></span> Valore standard: ${standardConfig.value}<br>`;
-        }
-        html += '<span style="display: inline-block; width: 20px; height: 20px; background: #fff3e0; border: 1px solid #ff9800; margin-right: 5px;"></span> Override orario<br>';
-        html += '<span style="display: inline-block; width: 20px; height: 20px; background: #e3f2fd; border: 1px solid #2196f3; margin-right: 5px;"></span> Override temporale<br>';
+        html += '<span style="display: inline-block; width: 30px; height: 20px; background: #4caf50; border: 1px solid #388e3c; margin-right: 5px; vertical-align: middle; border-radius: 3px;"></span> Valore standard<br>';
+        html += '<span style="display: inline-block; width: 30px; height: 20px; background: #ff9800; border: 1px solid #f57c00; margin-right: 5px; vertical-align: middle; border-radius: 3px;"></span> Override orario (🕐)<br>';
+        html += '<span style="display: inline-block; width: 30px; height: 20px; background: #2196f3; border: 1px solid #1976d2; margin-right: 5px; vertical-align: middle; border-radius: 3px;"></span> Override temporale (⏰)<br>';
+        html += '<small style="color: var(--secondary-text-color); display: block; margin-top: 8px;">💡 Le barre mostrano la durata esatta con posizionamento continuo</small>';
+        html += '<small style="color: var(--secondary-text-color); display: block; margin-top: 4px;">📌 Configurazioni sovrapposte vengono visualizzate affiancate</small>';
         html += '</div>';
         
         container.innerHTML = html;
+        
+        // Gestione dinamica posizione tooltip
+        setTimeout(() => {
+            const bars = container.querySelectorAll('.dc-weekly-tooltip');
+            bars.forEach(bar => {
+                bar.addEventListener('mouseenter', function(e) {
+                    const rect = this.getBoundingClientRect();
+                    const tooltipHeight = 200; // Altezza stimata del tooltip + margine
+                    const headerHeight = 100; // Spazio per header Home Assistant
+                    
+                    // Calcola lo spazio disponibile sopra la barra
+                    const spaceAbove = rect.top - headerHeight;
+                    
+                    // Se non c'è abbastanza spazio sopra, mostra sotto
+                    if (spaceAbove < tooltipHeight) {
+                        this.classList.add('tooltip-below');
+                    } else {
+                        this.classList.remove('tooltip-below');
+                    }
+                });
+            });
+        }, 100);
+    }
+
+    calculateDaySegments(date, standardConfig, timeConfigs, scheduleConfigs) {
+        const dayOfWeek = date.getDay();
+        const adjustedDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        const segments = [];
+        
+        // Crea una mappa di minuti (0-1439) con i valori attivi
+        const minuteMap = new Array(1440).fill(null);
+        
+        // Prima passa: configurazione standard (priorità più bassa)
+        if (standardConfig) {
+            for (let i = 0; i < 1440; i++) {
+                minuteMap[i] = {
+                    type: 'standard',
+                    value: standardConfig.value,
+                    priority: standardConfig.priority || 99,
+                    level: 0
+                };
+            }
+        }
+        
+        // Seconda passa: override orari (priorità media)
+        for (const schedConfig of scheduleConfigs) {
+            const validDays = schedConfig.days_of_week || [0,1,2,3,4,5,6];
+            if (!validDays.includes(adjustedDay)) continue;
+            
+            const validFrom = schedConfig.valid_from_ora;
+            const validTo = schedConfig.valid_to_ora;
+            
+            const fromMin = Math.floor(validFrom * 60);
+            const toMin = Math.floor(validTo * 60);
+            
+            if (validTo < validFrom) {
+                // Attraversa mezzanotte
+                for (let i = fromMin; i < 1440; i++) {
+                    minuteMap[i] = {
+                        type: 'schedule',
+                        value: schedConfig.value,
+                        validFrom: validFrom,
+                        validTo: validTo,
+                        days: validDays,
+                        level: 1
+                    };
+                }
+                for (let i = 0; i <= toMin; i++) {
+                    minuteMap[i] = {
+                        type: 'schedule',
+                        value: schedConfig.value,
+                        validFrom: validFrom,
+                        validTo: validTo,
+                        days: validDays,
+                        level: 1
+                    };
+                }
+            } else {
+                // Range normale
+                for (let i = fromMin; i <= toMin && i < 1440; i++) {
+                    minuteMap[i] = {
+                        type: 'schedule',
+                        value: schedConfig.value,
+                        validFrom: validFrom,
+                        validTo: validTo,
+                        days: validDays,
+                        level: 1
+                    };
+                }
+            }
+        }
+        
+        // Terza passa: override temporali (priorità massima)
+        for (const timeConfig of timeConfigs) {
+            const from = new Date(timeConfig.valid_from_date);
+            const to = new Date(timeConfig.valid_to_date);
+            
+            const dayStart = new Date(date);
+            dayStart.setHours(0, 0, 0, 0);
+            const dayEnd = new Date(date);
+            dayEnd.setHours(23, 59, 59, 999);
+            
+            // Verifica sovrapposizione
+            if (dayEnd >= from && dayStart <= to) {
+                const startMin = from <= dayStart ? 0 : (from.getHours() * 60 + from.getMinutes());
+                const endMin = to >= dayEnd ? 1439 : (to.getHours() * 60 + to.getMinutes());
+                
+                for (let i = startMin; i <= endMin && i < 1440; i++) {
+                    minuteMap[i] = {
+                        type: 'time',
+                        value: timeConfig.value,
+                        from: from,
+                        to: to,
+                        level: 2
+                    };
+                }
+            }
+        }
+        
+        // Converti la mappa in segmenti continui
+        let currentSegment = null;
+        for (let i = 0; i < 1440; i++) {
+            const current = minuteMap[i];
+            
+            if (!current) {
+                if (currentSegment) {
+                    segments.push(currentSegment);
+                    currentSegment = null;
+                }
+                continue;
+            }
+            
+            // Verifica se è lo stesso tipo e valore del segmento corrente
+            const isSame = currentSegment && 
+                          currentSegment.type === current.type &&
+                          currentSegment.value === current.value;
+            
+            if (isSame) {
+                // Estendi il segmento corrente (endTime è il primo minuto NON incluso)
+                currentSegment.endTime = i + 1;
+            } else {
+                // Salva il segmento precedente e inizia uno nuovo
+                if (currentSegment) {
+                    segments.push(currentSegment);
+                }
+                currentSegment = {
+                    type: current.type,
+                    value: current.value,
+                    startTime: i,
+                    endTime: i + 1,
+                    level: current.level,
+                    ...current
+                };
+            }
+        }
+        
+        // Salva l'ultimo segmento
+        if (currentSegment) {
+            segments.push(currentSegment);
+        }
+        
+        return segments;
+    }
+
+    generateSegmentTooltip(segment) {
+        const startHour = Math.floor(segment.startTime / 60);
+        const startMin = segment.startTime % 60;
+        const endHour = Math.floor(segment.endTime / 60);
+        const endMin = segment.endTime % 60;
+        
+        let tooltip = `<strong>Valore: ${segment.value}</strong><br><br>`;
+        tooltip += `<strong>Orario:</strong> ${String(startHour).padStart(2,'0')}:${String(startMin).padStart(2,'0')} - ${String(endHour).padStart(2,'0')}:${String(endMin).padStart(2,'0')}<br><br>`;
+        
+        if (segment.type === 'time') {
+            const fromStr = `${segment.from.getDate()}/${segment.from.getMonth()+1} ${String(segment.from.getHours()).padStart(2,'0')}:${String(segment.from.getMinutes()).padStart(2,'0')}`;
+            const toStr = `${segment.to.getDate()}/${segment.to.getMonth()+1} ${String(segment.to.getHours()).padStart(2,'0')}:${String(segment.to.getMinutes()).padStart(2,'0')}`;
+            tooltip += `<strong>⏰ Override Temporale</strong><br>`;
+            tooltip += `Periodo completo:<br>${fromStr} - ${toStr}`;
+        } else if (segment.type === 'schedule') {
+            const daysStr = segment.days.map(d => ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'][d]).join(', ');
+            const fromHour = Math.floor(segment.validFrom);
+            const fromMin = Math.round((segment.validFrom - fromHour) * 60);
+            const toHour = Math.floor(segment.validTo);
+            const toMin = Math.round((segment.validTo - toHour) * 60);
+            
+            tooltip += `<strong>🕐 Override Orario</strong><br>`;
+            tooltip += `Fascia configurata: ${String(fromHour).padStart(2,'0')}:${String(fromMin).padStart(2,'0')} - ${String(toHour).padStart(2,'0')}:${String(toMin).padStart(2,'0')}<br>`;
+            tooltip += `Giorni: ${daysStr}`;
+            
+            if (segment.validTo < segment.validFrom) {
+                tooltip += '<br><small>(attraversa la mezzanotte)</small>';
+            }
+        } else if (segment.type === 'standard') {
+            tooltip += `<strong>⚙️ Valore Standard</strong><br>`;
+            tooltip += `Priorità: ${segment.priority}`;
+        }
+        
+        return tooltip;
+    }
+
+    calculateBarsForHour(date, hour, standardConfig, timeConfigs, scheduleConfigs) {
+        const dayOfWeek = date.getDay();
+        const adjustedDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        const bars = [];
+        let layer = 0;
+        
+        // Controlla override temporali (massima priorità)
+        for (const timeConfig of timeConfigs) {
+            const from = new Date(timeConfig.valid_from_date);
+            const to = new Date(timeConfig.valid_to_date);
+            
+            const hourStart = new Date(date);
+            hourStart.setHours(hour, 0, 0, 0);
+            const hourEnd = new Date(date);
+            hourEnd.setHours(hour, 59, 59, 999);
+            
+            // Verifica sovrapposizione
+            if (hourEnd >= from && hourStart <= to) {
+                // Calcola inizio e fine della barra all'interno dell'ora
+                const barStart = from > hourStart ? from : hourStart;
+                const barEnd = to < hourEnd ? to : hourEnd;
+                
+                // Converti in percentuali (0-100% dell'ora)
+                const startMinutes = barStart.getMinutes() + barStart.getSeconds() / 60;
+                const endMinutes = barEnd.getMinutes() + barEnd.getSeconds() / 60;
+                
+                const startPercent = (startMinutes / 60) * 100;
+                const widthPercent = ((endMinutes - startMinutes) / 60) * 100;
+                
+                bars.push({
+                    type: 'time',
+                    value: timeConfig.value,
+                    startPercent: startPercent,
+                    widthPercent: widthPercent,
+                    layer: layer++,
+                    from: from,
+                    to: to
+                });
+            }
+        }
+        
+        // Controlla override orari
+        for (const schedConfig of scheduleConfigs) {
+            const validDays = schedConfig.days_of_week || [0,1,2,3,4,5,6];
+            if (!validDays.includes(adjustedDay)) continue;
+            
+            const validFrom = schedConfig.valid_from_ora;
+            const validTo = schedConfig.valid_to_ora;
+            
+            const fromHour = Math.floor(validFrom);
+            const fromMin = (validFrom - fromHour) * 60;
+            const toHour = Math.floor(validTo);
+            const toMin = (validTo - toHour) * 60;
+            
+            let barStart = null;
+            let barEnd = null;
+            
+            // Gestisce orari a cavallo di mezzanotte
+            if (validTo < validFrom) {
+                // Attraversa mezzanotte
+                if (hour >= fromHour) {
+                    // Parte dalla config o dall'inizio dell'ora
+                    barStart = hour === fromHour ? fromMin : 0;
+                    barEnd = 60;
+                } else if (hour <= toHour) {
+                    barStart = 0;
+                    barEnd = hour === toHour ? toMin : 60;
+                }
+            } else {
+                // Range normale
+                if (hour >= fromHour && hour <= toHour) {
+                    barStart = hour === fromHour ? fromMin : 0;
+                    barEnd = hour === toHour ? toMin : 60;
+                }
+            }
+            
+            if (barStart !== null) {
+                const startPercent = (barStart / 60) * 100;
+                const widthPercent = ((barEnd - barStart) / 60) * 100;
+                
+                bars.push({
+                    type: 'schedule',
+                    value: schedConfig.value,
+                    startPercent: startPercent,
+                    widthPercent: widthPercent,
+                    layer: layer++,
+                    validFrom: validFrom,
+                    validTo: validTo,
+                    days: validDays
+                });
+            }
+        }
+        
+        // Se non ci sono override e c'è un valore standard, mostra la barra standard
+        if (bars.length === 0 && standardConfig) {
+            bars.push({
+                type: 'standard',
+                value: standardConfig.value,
+                startPercent: 0,
+                widthPercent: 100,
+                layer: 0,
+                priority: standardConfig.priority
+            });
+        }
+        
+        return bars;
+    }
+
+    generateBarTooltip(bar) {
+        let tooltip = `<strong>Valore: ${bar.value}</strong><br><br>`;
+        
+        if (bar.type === 'time') {
+            const fromStr = `${bar.from.getDate()}/${bar.from.getMonth()+1} ${String(bar.from.getHours()).padStart(2,'0')}:${String(bar.from.getMinutes()).padStart(2,'0')}`;
+            const toStr = `${bar.to.getDate()}/${bar.to.getMonth()+1} ${String(bar.to.getHours()).padStart(2,'0')}:${String(bar.to.getMinutes()).padStart(2,'0')}`;
+            tooltip += `<strong>⏰ Override Temporale</strong><br>`;
+            tooltip += `Da: ${fromStr}<br>`;
+            tooltip += `A: ${toStr}`;
+        } else if (bar.type === 'schedule') {
+            const fromHour = Math.floor(bar.validFrom);
+            const fromMin = Math.round((bar.validFrom - fromHour) * 60);
+            const toHour = Math.floor(bar.validTo);
+            const toMin = Math.round((bar.validTo - toHour) * 60);
+            const daysStr = bar.days.map(d => ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'][d]).join(', ');
+            
+            tooltip += `<strong>🕐 Override Orario</strong><br>`;
+            tooltip += `Orario: ${String(fromHour).padStart(2,'0')}:${String(fromMin).padStart(2,'0')} - ${String(toHour).padStart(2,'0')}:${String(toMin).padStart(2,'0')}<br>`;
+            tooltip += `Giorni: ${daysStr}`;
+            
+            if (bar.validTo < bar.validFrom) {
+                tooltip += '<br><small>(attraversa la mezzanotte)</small>';
+            }
+        } else if (bar.type === 'standard') {
+            tooltip += `<strong>⚙️ Valore Standard</strong><br>`;
+            tooltip += `Priorità: ${bar.priority || 99}`;
+        }
+        
+        return tooltip;
+    }
+
+    calculateValueForDateTimeDetailed(date, hour, standardConfig, timeConfigs, scheduleConfigs) {
+        const dayOfWeek = date.getDay();
+        const adjustedDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        
+        // Range dell'ora corrente: da hour.00 a hour.59
+        const hourStart = hour + 0.0;
+        const hourEnd = hour + 0.99;
+        
+        let activeOverrides = [];
+        
+        // Controlla override temporali (massima priorità)
+        for (const timeConfig of timeConfigs) {
+            const from = new Date(timeConfig.valid_from_date);
+            const to = new Date(timeConfig.valid_to_date);
+            
+            // Controlla se c'è sovrapposizione con l'ora corrente
+            const checkDateStart = new Date(date);
+            checkDateStart.setHours(hour, 0, 0, 0);
+            const checkDateEnd = new Date(date);
+            checkDateEnd.setHours(hour, 59, 59, 999);
+            
+            if (checkDateEnd >= from && checkDateStart <= to) {
+                const fromStr = `${from.getDate()}/${from.getMonth()+1} ${String(from.getHours()).padStart(2,'0')}:${String(from.getMinutes()).padStart(2,'0')}`;
+                const toStr = `${to.getDate()}/${to.getMonth()+1} ${String(to.getHours()).padStart(2,'0')}:${String(to.getMinutes()).padStart(2,'0')}`;
+                
+                // Calcola se è attivo per tutta l'ora o solo parzialmente
+                const isFullHour = checkDateStart >= from && checkDateEnd <= to;
+                const partial = isFullHour ? '' : ' (parziale)';
+                
+                return {
+                    displayValue: timeConfig.value + ' ⏰' + partial,
+                    type: 'time',
+                    value: timeConfig.value,
+                    details: `Override Temporale${partial}\nValido: ${fromStr} - ${toStr}`,
+                    partial: !isFullHour
+                };
+            }
+        }
+        
+        // Controlla override orari
+        for (const schedConfig of scheduleConfigs) {
+            const validDays = schedConfig.days_of_week || [0,1,2,3,4,5,6];
+            
+            if (!validDays.includes(adjustedDay)) continue;
+            
+            const validFrom = schedConfig.valid_from_ora;
+            const validTo = schedConfig.valid_to_ora;
+            
+            const fromHour = Math.floor(validFrom);
+            const fromMin = Math.round((validFrom - fromHour) * 60);
+            const toHour = Math.floor(validTo);
+            const toMin = Math.round((validTo - toHour) * 60);
+            
+            // Gestisce orari a cavallo di mezzanotte
+            let hasOverlap = false;
+            let timeDetails = '';
+            
+            if (validTo < validFrom) {
+                // Attraversa mezzanotte: attivo se hour >= fromHour OR hour <= toHour
+                // Ma dobbiamo verificare la sovrapposizione con i minuti
+                if (hour > fromHour || hour < toHour) {
+                    hasOverlap = true;
+                } else if (hour === fromHour && hourEnd >= validFrom) {
+                    hasOverlap = true;
+                } else if (hour === toHour && hourStart <= validTo) {
+                    hasOverlap = true;
+                }
+                timeDetails = `Fascia Oraria: ${String(fromHour).padStart(2,'0')}:${String(fromMin).padStart(2,'0')} - ${String(toHour).padStart(2,'0')}:${String(toMin).padStart(2,'0')} (attraversa mezzanotte)`;
+            } else {
+                // Range normale: verifica sovrapposizione
+                if (hour > fromHour && hour < toHour) {
+                    hasOverlap = true;
+                } else if (hour === fromHour && hourEnd >= validFrom) {
+                    hasOverlap = true;
+                } else if (hour === toHour && hourStart <= validTo) {
+                    hasOverlap = true;
+                }
+                timeDetails = `Fascia Oraria: ${String(fromHour).padStart(2,'0')}:${String(fromMin).padStart(2,'0')} - ${String(toHour).padStart(2,'0')}:${String(toMin).padStart(2,'0')}`;
+            }
+            
+            if (hasOverlap) {
+                const daysStr = validDays.map(d => ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'][d]).join(', ');
+                
+                // Verifica se l'override copre tutta l'ora o solo una parte
+                const isFullHour = (validFrom <= hourStart && validTo >= hourEnd) || 
+                                   (validTo < validFrom && (validFrom <= hourStart || validTo >= hourEnd));
+                const partial = isFullHour ? '' : ' (parziale)';
+                
+                return {
+                    displayValue: schedConfig.value + ' 🕐' + partial,
+                    type: 'schedule',
+                    value: schedConfig.value,
+                    details: `Override Orario${partial}\n${timeDetails}\nGiorni: ${daysStr}`,
+                    partial: !isFullHour
+                };
+            }
+        }
+        
+        // Valore standard
+        return {
+            displayValue: standardConfig ? standardConfig.value : '-',
+            type: 'standard',
+            value: standardConfig ? standardConfig.value : '-',
+            details: standardConfig ? `Valore Standard\nPriorità: ${standardConfig.priority || 99}` : 'Nessuna configurazione',
+            partial: false
+        };
     }
 
     calculateValueForDateTime(date, hour, standardConfig, timeConfigs, scheduleConfigs) {
@@ -1242,11 +2446,28 @@ class MiaConfigCard extends HTMLElement {
         return standardConfig ? standardConfig.value : '-';
     }
 
-    getWeeklyCellStyle(value, standardConfig) {
+    generateTooltip(result, hour) {
+        const hourStr = `${String(hour).padStart(2, '0')}:00 - ${String(hour).padStart(2, '0')}:59`;
+        let tooltip = `<strong>⏰ Ora: ${hourStr}</strong><br><br>`;
+        tooltip += `<strong>Valore: ${result.value}</strong><br><br>`;
+        tooltip += result.details.replace(/\n/g, '<br>');
+        
+        if (result.type === 'schedule') {
+            tooltip += '<br><br><small>💡 Questo override è basato sull\'orario e i giorni della settimana</small>';
+        } else if (result.type === 'time') {
+            tooltip += '<br><br><small>💡 Questo override è basato su un periodo di tempo specifico</small>';
+        }
+        
+        return tooltip;
+    }
+
+    getWeeklyCellStyle(value, standardConfig, isPartial = false) {
+        const partialStyle = isPartial ? 'background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.3) 10px, rgba(255,255,255,0.3) 20px);' : '';
+        
         if (value.includes('⏰')) {
-            return 'background: #e3f2fd; font-weight: bold;';
+            return `background: #e3f2fd; font-weight: bold; ${partialStyle}`;
         } else if (value.includes('🕐')) {
-            return 'background: #fff3e0; font-weight: bold;';
+            return `background: #fff3e0; font-weight: bold; ${partialStyle}`;
         } else if (standardConfig && value === standardConfig.value) {
             return 'background: #e8f5e9;';
         }
