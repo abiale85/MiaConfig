@@ -1,10 +1,14 @@
-// Version 1.3.1 - Multi-instance fixes and time validation - 20251202120000
+// Version 1.3.2 - Icon and UI improvements - 20251202230000
 class MiaConfigCard extends HTMLElement {
     set hass(hass) {
+        const firstLoad = !this._hass;
         this._hass = hass;
         if (!this.content) {
+            // Determina il nome dell'istanza dal primo sensore disponibile
+            const instanceName = this.getInstanceName();
+            
             this.innerHTML = `
-                <ha-card header="Mia Config Manager">
+                <ha-card header="${instanceName}">
                     <div class="card-content">
                         <div id="dynamic-config-ui"></div>
                     </div>
@@ -13,7 +17,38 @@ class MiaConfigCard extends HTMLElement {
             this.content = this.querySelector("#dynamic-config-ui");
             this.configuredEntityId = null; // Entity ID configurato via YAML
             this.render();
+        } else if (firstLoad && this.content) {
+            // Prima volta che _hass diventa disponibile e content già esiste
+            // Carica dashboard se è il tab attivo
+            const dashboardTab = this.content.querySelector('#dc-tab-dashboard');
+            if (dashboardTab && dashboardTab.classList.contains('active')) {
+                this.loadDashboard();
+            }
         }
+    }
+    
+    getInstanceName() {
+        if (!this._hass) return "Mia Config";
+        
+        // Cerca entity_id configurato via YAML
+        if (this._config && this._config.entity_id) {
+            const entity = this._hass.states[this._config.entity_id];
+            if (entity && entity.attributes.db_name) {
+                return entity.attributes.db_name;
+            }
+        }
+        
+        // Cerca il primo sensore mia_config disponibile
+        for (const entityId in this._hass.states) {
+            if (entityId.includes('_main') && entityId.startsWith('sensor.')) {
+                const entity = this._hass.states[entityId];
+                if (entity.attributes.integration === 'mia_config' && entity.attributes.db_name) {
+                    return entity.attributes.db_name;
+                }
+            }
+        }
+        
+        return "Mia Config";
     }
 
     setConfig(config) {
@@ -913,6 +948,11 @@ class MiaConfigCard extends HTMLElement {
                 }
             }
         };
+        
+        // Carica dashboard iniziale se _hass è disponibile
+        if (this._hass) {
+            this.loadDashboard();
+        }
     }
 
     async loadStandardConfigsForSelect() {
@@ -1009,19 +1049,6 @@ class MiaConfigCard extends HTMLElement {
                                  source === 'schedule' ? '📅 Orario' :
                                  source === 'standard' ? '⚙️ Standard' : '❌ Nessuna';
                 
-                // Prossimi eventi
-                const upcomingText = attrs.upcoming_text || [];
-                
-                let upcomingHtml = '';
-                if (upcomingText && upcomingText.length > 0) {
-                    upcomingHtml = '<div style="margin-top: 8px; padding: 8px; background: var(--secondary-background-color); border-radius: 4px;">';
-                    upcomingHtml += '<strong>📅 Prossimi valori:</strong><br>';
-                    upcomingText.forEach((text, idx) => {
-                        upcomingHtml += `<small>${idx + 1}. ${text}</small><br>`;
-                    });
-                    upcomingHtml += '</div>';
-                }
-                
                 html += `
                     <div class="dc-config-item" onclick="window.dcOpenEntity('${entityId}')" style="background: var(--card-background-color); border-left: 4px solid var(--primary-color); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.backgroundColor='var(--secondary-background-color)'" onmouseout="this.style.backgroundColor='var(--card-background-color)'">
                         <div>
@@ -1029,7 +1056,6 @@ class MiaConfigCard extends HTMLElement {
                             ${description ? `<small style="color: var(--secondary-text-color); font-style: italic;">📝 ${description}</small><br>` : ''}
                             <span style="font-size: 1.4em; color: var(--primary-color); font-weight: bold;">${value}</span><br>
                             <small>Origine: ${typeLabel}</small>
-                            ${upcomingHtml}
                         </div>
                     </div>
                 `;
@@ -1167,31 +1193,29 @@ class MiaConfigCard extends HTMLElement {
                             const days = cfg.days_of_week.map(d => ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'][d]).join(', ');
                             const fromTime = this.formatTimeDisplay(cfg.valid_from_ora);
                             const toTime = this.formatTimeDisplay(cfg.valid_to_ora);
-                            extra = `${fromTime} → ${toTime} | ${days} | Priorità: ${cfg.priority}`;
-                        }
-                        
-                        // ID per eliminazione: per standard usa il nome, per altri usa l'id
-                        const deleteId = type === 'standard' ? name : cfg.id;
-                        
-                        // Serializza i dati della configurazione per passarli alla funzione di edit
-                        const cfgData = encodeURIComponent(JSON.stringify(cfg));
-                        
-                        html += `
-                            <div class="dc-config-item" style="margin: 5px 0; padding: 8px; background: var(--card-background-color); display: flex; justify-content: space-between; align-items: center;">
-                                <div style="flex: 1;">
-                                    <span class="dc-badge ${badgeClass}">${sourceLabel}</span>
-                                    Valore: <strong>${cfg.value}</strong><br>
-                                    <small>${extra}</small>
-                                </div>
-                                <div style="display: flex; gap: 5px;">
-                                    <button class="dc-btn" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcEditConfig('${name}', '${type}', '${deleteId}', '${cfgData}')">✏️</button>
-                                    <button class="dc-btn-delete" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcDeleteSingleConfig('${type}', '${deleteId}')">🗑️</button>
-                                </div>
-                            </div>
-                        `;
+                        extra = `${fromTime} → ${toTime} | ${days} | Priorità: ${cfg.priority}`;
                     }
                     
-                    html += `</div>`;
+                    // ID per operazioni: sempre usa cfg.id (numerico)
+                    const configId = cfg.id;
+                    
+                    // Serializza i dati della configurazione per passarli alla funzione di edit
+                    const cfgData = encodeURIComponent(JSON.stringify(cfg));
+                    
+                    html += `
+                        <div class="dc-config-item" style="margin: 5px 0; padding: 8px; background: var(--card-background-color); display: flex; justify-content: space-between; align-items: center;">
+                            <div style="flex: 1;">
+                                <span class="dc-badge ${badgeClass}">${sourceLabel}</span>
+                                Valore: <strong>${cfg.value}</strong><br>
+                                <small>${extra}</small>
+                            </div>
+                            <div style="display: flex; gap: 5px;">
+                                <button class="dc-btn" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcEditConfig('${name}', '${type}', ${configId}, '${cfgData}')">✏️</button>
+                                <button class="dc-btn-delete" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcDeleteSingleConfig('${type}', ${configId})">🗑️</button>
+                            </div>
+                        </div>
+                    `;
+                }                    html += `</div>`;
                 }
             
             container.innerHTML = html;
@@ -1649,10 +1673,13 @@ class MiaConfigCard extends HTMLElement {
             modal.classList.remove('active');
         };
         
-        window.dcLoadHistory = async () => {
+        window.dcLoadHistory = async (page = 1) => {
             const container = this.content.querySelector('#dc-history-list');
             const filterInput = this.content.querySelector('#history-filter');
             const setupName = filterInput ? filterInput.value.trim() : '';
+            
+            const itemsPerPage = 20;
+            const offset = (page - 1) * itemsPerPage;
             
             container.innerHTML = 'Caricamento storico...';
             
@@ -1660,7 +1687,8 @@ class MiaConfigCard extends HTMLElement {
                 const entityId = this.getSelectedEntityId();
                 const serviceData = {
                     setup_name: setupName || undefined,
-                    limit: 100
+                    limit: itemsPerPage,
+                    offset: offset
                 };
                 if (entityId) {
                     serviceData.entity_id = entityId;
@@ -1675,12 +1703,15 @@ class MiaConfigCard extends HTMLElement {
                 });
                 
                 const history = result.response?.history || result.response || [];
-                console.log('Storico caricato:', history);
+                const total = result.response?.total || history.length;
+                console.log('Storico caricato:', history, 'Totale:', total);
                 
                 if (!Array.isArray(history) || history.length === 0) {
                     container.innerHTML = '<p style="text-align: center; color: var(--secondary-text-color);">Nessuna voce nello storico</p>';
                     return;
                 }
+                
+                const totalPages = Math.ceil(total / itemsPerPage);
                 
                 let html = '<div style="overflow-x: auto;">';
                 html += '<table style="width: 100%; border-collapse: collapse; font-size: 13px;">';
@@ -1700,9 +1731,9 @@ class MiaConfigCard extends HTMLElement {
                                      entry.config_type === 'schedule' ? '📅 Orario' : '⚙️ Standard';
                     
                     let details = entry.setup_value || '-';
-                    if (entry.config_type === 'schedule' && entry.valid_from_ora) {
-                        const fromTime = this.formatTimeDisplay(entry.valid_from_ora);
-                        const toTime = this.formatTimeDisplay(entry.valid_to_ora);
+                    if (entry.config_type === 'schedule' && entry.valid_from_ora != null) {
+                        const fromTime = String(entry.valid_from_ora).replace('.', ':');
+                        const toTime = String(entry.valid_to_ora).replace('.', ':');
                         details += ` (${fromTime} → ${toTime})`;
                     } else if (entry.config_type === 'time' && entry.valid_from_date) {
                         details += ` (${entry.valid_from_date} - ${entry.valid_to_date})`;
@@ -1728,6 +1759,29 @@ class MiaConfigCard extends HTMLElement {
                 }
                 
                 html += '</tbody></table></div>';
+                
+                // Paginazione
+                if (totalPages > 1) {
+                    html += '<div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px; padding: 10px;">';
+                    
+                    // Pulsante Prima pagina
+                    if (page > 1) {
+                        html += `<button class="dc-btn" onclick="window.dcLoadHistory(1)" style="padding: 5px 10px;">« Prima</button>`;
+                        html += `<button class="dc-btn" onclick="window.dcLoadHistory(${page - 1})" style="padding: 5px 10px;">‹ Precedente</button>`;
+                    }
+                    
+                    // Info pagina
+                    html += `<span style="margin: 0 10px; color: var(--primary-text-color);">Pagina ${page} di ${totalPages} (${total} elementi)</span>`;
+                    
+                    // Pulsante Prossima pagina
+                    if (page < totalPages) {
+                        html += `<button class="dc-btn" onclick="window.dcLoadHistory(${page + 1})" style="padding: 5px 10px;">Successiva ›</button>`;
+                        html += `<button class="dc-btn" onclick="window.dcLoadHistory(${totalPages})" style="padding: 5px 10px;">Ultima »</button>`;
+                    }
+                    
+                    html += '</div>';
+                }
+                
                 container.innerHTML = html;
                 
             } catch (err) {
@@ -1988,70 +2042,90 @@ class MiaConfigCard extends HTMLElement {
         // Crea una mappa di minuti (0-1439) con i valori attivi
         const minuteMap = new Array(1440).fill(null);
         
-        // Prima passa: configurazione standard (priorità più bassa)
+        // Prima passa: configurazione standard (base)
         if (standardConfig) {
             for (let i = 0; i < 1440; i++) {
                 minuteMap[i] = {
                     type: 'standard',
                     value: standardConfig.value,
                     priority: standardConfig.priority || 99,
-                    level: 0
+                    sourceOrder: 3 // standard ha source_order più alto
                 };
             }
         }
         
-        // Seconda passa: override orari (priorità media)
+        // Seconda passa: override orari - considera priorità
         for (const schedConfig of scheduleConfigs) {
             const validDays = schedConfig.days_of_week || [0,1,2,3,4,5,6];
             if (!validDays.includes(adjustedDay)) continue;
             
             const validFrom = schedConfig.valid_from_ora;
             const validTo = schedConfig.valid_to_ora;
+            const priority = schedConfig.priority || 99;
             
             const fromMin = Math.floor(validFrom * 60);
             const toMin = Math.floor(validTo * 60);
             
+            const shouldOverride = (existing) => {
+                if (!existing) return true;
+                // Confronta priorità (1 = massima), poi sourceOrder (1 = massima)
+                if (priority < existing.priority) return true;
+                if (priority > existing.priority) return false;
+                // A parità di priorità, schedule (2) batte standard (3)
+                return 2 < existing.sourceOrder;
+            };
+            
             if (validTo < validFrom) {
                 // Attraversa mezzanotte
                 for (let i = fromMin; i < 1440; i++) {
-                    minuteMap[i] = {
-                        type: 'schedule',
-                        value: schedConfig.value,
-                        validFrom: validFrom,
-                        validTo: validTo,
-                        days: validDays,
-                        level: 1
-                    };
+                    if (shouldOverride(minuteMap[i])) {
+                        minuteMap[i] = {
+                            type: 'schedule',
+                            value: schedConfig.value,
+                            priority: priority,
+                            sourceOrder: 2,
+                            validFrom: validFrom,
+                            validTo: validTo,
+                            days: validDays
+                        };
+                    }
                 }
                 for (let i = 0; i <= toMin; i++) {
-                    minuteMap[i] = {
-                        type: 'schedule',
-                        value: schedConfig.value,
-                        validFrom: validFrom,
-                        validTo: validTo,
-                        days: validDays,
-                        level: 1
-                    };
+                    if (shouldOverride(minuteMap[i])) {
+                        minuteMap[i] = {
+                            type: 'schedule',
+                            value: schedConfig.value,
+                            priority: priority,
+                            sourceOrder: 2,
+                            validFrom: validFrom,
+                            validTo: validTo,
+                            days: validDays
+                        };
+                    }
                 }
             } else {
                 // Range normale
                 for (let i = fromMin; i <= toMin && i < 1440; i++) {
-                    minuteMap[i] = {
-                        type: 'schedule',
-                        value: schedConfig.value,
-                        validFrom: validFrom,
-                        validTo: validTo,
-                        days: validDays,
-                        level: 1
-                    };
+                    if (shouldOverride(minuteMap[i])) {
+                        minuteMap[i] = {
+                            type: 'schedule',
+                            value: schedConfig.value,
+                            priority: priority,
+                            sourceOrder: 2,
+                            validFrom: validFrom,
+                            validTo: validTo,
+                            days: validDays
+                        };
+                    }
                 }
             }
         }
         
-        // Terza passa: override temporali (priorità massima)
+        // Terza passa: override temporali - considera priorità
         for (const timeConfig of timeConfigs) {
             const from = new Date(timeConfig.valid_from_date);
             const to = new Date(timeConfig.valid_to_date);
+            const priority = timeConfig.priority || 99;
             
             const dayStart = new Date(date);
             dayStart.setHours(0, 0, 0, 0);
@@ -2063,14 +2137,26 @@ class MiaConfigCard extends HTMLElement {
                 const startMin = from <= dayStart ? 0 : (from.getHours() * 60 + from.getMinutes());
                 const endMin = to >= dayEnd ? 1439 : (to.getHours() * 60 + to.getMinutes());
                 
+                const shouldOverride = (existing) => {
+                    if (!existing) return true;
+                    // Confronta priorità (1 = massima), poi sourceOrder (1 = massima)
+                    if (priority < existing.priority) return true;
+                    if (priority > existing.priority) return false;
+                    // A parità di priorità, time (1) batte schedule (2) e standard (3)
+                    return 1 < existing.sourceOrder;
+                };
+                
                 for (let i = startMin; i <= endMin && i < 1440; i++) {
-                    minuteMap[i] = {
-                        type: 'time',
-                        value: timeConfig.value,
-                        from: from,
-                        to: to,
-                        level: 2
-                    };
+                    if (shouldOverride(minuteMap[i])) {
+                        minuteMap[i] = {
+                            type: 'time',
+                            value: timeConfig.value,
+                            priority: priority,
+                            sourceOrder: 1,
+                            from: from,
+                            to: to
+                        };
+                    }
                 }
             }
         }

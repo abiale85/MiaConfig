@@ -427,14 +427,20 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         
         setup_name = call.data.get("setup_name")
         limit = call.data.get("limit", 50)
+        offset = call.data.get("offset", 0)
         
         history = await hass.async_add_executor_job(
-            db.get_history, setup_name, limit
+            db.get_history, setup_name, limit, offset
         )
         
-        _LOGGER.info(f"get_history chiamato, risultati: {len(history)} record")
+        # Ottieni il conteggio totale per la paginazione
+        total = await hass.async_add_executor_job(
+            db.get_history_count, setup_name
+        )
         
-        return {"history": history}
+        _LOGGER.info(f"get_history chiamato, risultati: {len(history)} record (totale: {total})")
+        
+        return {"history": history, "total": total}
     
     async def handle_cleanup_history(call: ServiceCall) -> None:
         """Gestisce il servizio per pulire lo storico delle configurazioni."""
@@ -513,6 +519,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     get_history_schema = vol.Schema({
         vol.Optional("setup_name"): cv.string,
         vol.Optional("limit", default=50): cv.positive_int,
+        vol.Optional("offset", default=0): cv.positive_int,
     })
     
     cleanup_history_schema = vol.Schema({

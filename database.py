@@ -560,8 +560,8 @@ class ConfigDatabase:
         ))
         self.conn.commit()
     
-    def get_history(self, setup_name: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
-        """Ottiene lo storico delle configurazioni."""
+    def get_history(self, setup_name: Optional[str] = None, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+        """Ottiene lo storico delle configurazioni con paginazione."""
         cursor = self.conn.cursor()
         
         if setup_name:
@@ -569,16 +569,33 @@ class ConfigDatabase:
                 SELECT * FROM configurazioni_storico 
                 WHERE setup_name = ?
                 ORDER BY timestamp DESC
-                LIMIT ?
-            """, (setup_name, limit))
+                LIMIT ? OFFSET ?
+            """, (setup_name, limit, offset))
         else:
             cursor.execute("""
                 SELECT * FROM configurazioni_storico 
                 ORDER BY timestamp DESC
-                LIMIT ?
-            """, (limit,))
+                LIMIT ? OFFSET ?
+            """, (limit, offset))
         
         return [dict(row) for row in cursor.fetchall()]
+    
+    def get_history_count(self, setup_name: Optional[str] = None) -> int:
+        """Ottiene il numero totale di record nello storico."""
+        cursor = self.conn.cursor()
+        
+        if setup_name:
+            cursor.execute("""
+                SELECT COUNT(*) as count FROM configurazioni_storico 
+                WHERE setup_name = ?
+            """, (setup_name,))
+        else:
+            cursor.execute("""
+                SELECT COUNT(*) as count FROM configurazioni_storico
+            """)
+        
+        result = cursor.fetchone()
+        return result['count'] if result else 0
     
     def _save_to_history(self, setup_name: str, config_type: str, config_data: Dict[str, Any], operation: str) -> None:
         """Salva una configurazione nello storico."""
@@ -713,107 +730,203 @@ class ConfigDatabase:
     def get_next_changes(self, setup_name: str, limit_hours: int = 24) -> List[Dict[str, Any]]:
         """
         Calcola i prossimi cambiamenti di valore per una configurazione.
-        Include eventi di INIZIO (time/schedule) e FINE (ritorno al default).
-        Restituisce una lista di eventi futuri nelle prossime limit_hours ore.
+        Considera le priorità e le sovrapposizioni tra configurazioni.
+        Restituisce una lista di eventi futuri con il valore effettivo che sarà attivo.
         """
         cursor = self.conn.cursor()
         now = datetime.now()
+        limit_time = now + timedelta(hours=limit_hours)
         
-        # Ottieni il valore default (standard config)
+        # Ottieni il valore attuale
+        current_config = self.get_all_configurations()
+        current_value = current_config.get(setup_name, {}).get('value')
+        
+        # Ottieni valore default (standard)
         cursor.execute("""
-            SELECT setup_value
+            SELECT setup_value, priority
             FROM configurazioni
             WHERE setup_name = ?
         """, (setup_name,))
         default_row = cursor.fetchone()
         default_value = default_row['setup_value'] if default_row else None
+        default_priority = default_row['priority'] if default_row else 99
         
-        events = []
+        # Raccogli tutti i timestamp di eventi (inizio/fine) con le configurazioni attive in quel momento
+        event_times = set()
         
-        # Eventi da configurazioni a tempo
+        # Configurazioni a tempo
         cursor.execute("""
-            SELECT setup_value, valid_from_date, valid_to_date
+            SELECT setup_value, priority, valid_from_date, valid_to_date, 
+                   valid_from_ora, valid_to_ora, days_of_week
             FROM configurazioni_a_tempo
-            WHERE setup_name = ? AND datetime(valid_from_date) > datetime('now', 'localtime')
-            AND datetime(valid_from_date) <= datetime('now', 'localtime', '+' || ? || ' hours')
-            ORDER BY valid_from_date
-        """, (setup_name, limit_hours))
+            WHERE setup_name = ?
+        """, (setup_name,))
         
+        time_configs = []
         for row in cursor.fetchall():
             valid_from = datetime.fromisoformat(row['valid_from_date'])
             valid_to = datetime.fromisoformat(row['valid_to_date']) if row['valid_to_date'] else None
-            minutes_until = int((valid_from - now).total_seconds() / 60)
             
-            # Evento INIZIO config a tempo
-            events.append({
-                'value': row['setup_value'],
-                'minutes_until': minutes_until,
-                'type': 'time'
-            })
-            
-            # Evento FINE config a tempo (ritorno al default)
-            if valid_to and default_value:
-                minutes_until_end = int((valid_to - now).total_seconds() / 60)
-                if minutes_until_end <= limit_hours * 60:
-                    events.append({
-                        'value': default_value,
-                        'minutes_until': minutes_until_end,
-                        'type': 'time_end'
-                    })
+            if valid_from <= limit_time:
+                if valid_from > now:
+                    event_times.add(valid_from)
+                time_configs.append({
+                    'value': row['setup_value'],
+                    'priority': row['priority'],
+                    'valid_from': valid_from,
+                    'valid_to': valid_to,
+                    'valid_from_ora': row['valid_from_ora'],
+                    'valid_to_ora': row['valid_to_ora'],
+                    'days_of_week': row['days_of_week']
+                })
+                
+                if valid_to and valid_to <= limit_time and valid_to > now:
+                    event_times.add(valid_to)
         
-        # Eventi da configurazioni a orario (prossime 24 ore)
+        # Configurazioni a orario
         cursor.execute("""
-            SELECT setup_value, valid_from_ora, valid_to_ora, days_of_week
+            SELECT setup_value, priority, valid_from_ora, valid_to_ora, days_of_week
             FROM configurazioni_a_orario
             WHERE setup_name = ?
         """, (setup_name,))
         
+        schedule_configs = []
         for row in cursor.fetchall():
             days_list = [int(d) for d in row['days_of_week'].split(',')]
-            valid_from_decimal = row['valid_from_ora']
-            valid_to_decimal = row['valid_to_ora']
             
-            # Controlla oggi e domani
-            for day_offset in range(2):
+            # Controlla oggi, domani e dopodomani
+            for day_offset in range(3):
                 check_date = now + timedelta(days=day_offset)
-                weekday = check_date.weekday()  # 0=Monday
+                weekday = check_date.weekday()
                 
                 if weekday in days_list:
-                    # Evento INIZIO
-                    from_hour = int(valid_from_decimal)
-                    from_min = int((valid_from_decimal - from_hour) * 60)
-                    event_time = check_date.replace(hour=from_hour, minute=from_min, second=0, microsecond=0)
+                    from_decimal = row['valid_from_ora']
+                    to_decimal = row['valid_to_ora']
                     
-                    if event_time > now and (event_time - now).total_seconds() <= limit_hours * 3600:
-                        minutes_until = int((event_time - now).total_seconds() / 60)
-                        events.append({
+                    from_hour = int(from_decimal)
+                    from_min = int((from_decimal - from_hour) * 60)
+                    event_from = check_date.replace(hour=from_hour, minute=from_min, second=0, microsecond=0)
+                    
+                    to_hour = int(to_decimal)
+                    to_min = int((to_decimal - to_hour) * 60)
+                    
+                    # Gestisce attraversamento mezzanotte
+                    if to_decimal < from_decimal:
+                        event_to = (check_date + timedelta(days=1)).replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
+                    else:
+                        event_to = check_date.replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
+                    
+                    if event_from <= limit_time:
+                        if event_from > now:
+                            event_times.add(event_from)
+                        schedule_configs.append({
                             'value': row['setup_value'],
-                            'minutes_until': minutes_until,
-                            'type': 'schedule'
+                            'priority': row['priority'],
+                            'valid_from': event_from,
+                            'valid_to': event_to,
+                            'days_of_week': days_list
                         })
-                    
-                    # Evento FINE (ritorno al default)
-                    if valid_to_decimal and default_value:
-                        to_hour = int(valid_to_decimal)
-                        to_min = int((valid_to_decimal - to_hour) * 60)
                         
-                        # Gestisce attraversamento mezzanotte
-                        if valid_to_decimal < valid_from_decimal:
-                            # Fine è il giorno dopo
-                            end_time = (check_date + timedelta(days=1)).replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
-                        else:
-                            end_time = check_date.replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
-                        
-                        if end_time > now and (end_time - now).total_seconds() <= limit_hours * 3600:
-                            minutes_until_end = int((end_time - now).total_seconds() / 60)
-                            events.append({
-                                'value': default_value,
-                                'minutes_until': minutes_until_end,
-                                'type': 'schedule_end'
-                            })
+                        if event_to <= limit_time and event_to > now:
+                            event_times.add(event_to)
         
-        # Ordina per tempo
-        events.sort(key=lambda x: x['minutes_until'])
+        # Funzione helper per calcolare il valore attivo a un dato momento
+        def get_value_at_time(check_time):
+            """Calcola quale valore sarà attivo a un dato momento considerando priorità."""
+            active_configs = []
+            
+            # Config a tempo attive
+            for cfg in time_configs:
+                if cfg['valid_from'] <= check_time:
+                    if cfg['valid_to'] is None or check_time < cfg['valid_to']:
+                        # Verifica filtri opzionali orari e giorni
+                        is_valid = True
+                        
+                        if cfg['valid_from_ora'] is not None and cfg['valid_to_ora'] is not None:
+                            current_time = float(check_time.strftime('%H.%M'))
+                            from_ora = cfg['valid_from_ora']
+                            to_ora = cfg['valid_to_ora']
+                            
+                            if to_ora < from_ora:
+                                is_valid = (current_time >= from_ora or current_time < to_ora)
+                            else:
+                                is_valid = (from_ora <= current_time < to_ora)
+                        
+                        if is_valid and cfg['days_of_week']:
+                            valid_days = [int(d) for d in cfg['days_of_week'].split(',')]
+                            if check_time.weekday() not in valid_days:
+                                is_valid = False
+                        
+                        if is_valid:
+                            active_configs.append({
+                                'value': cfg['value'],
+                                'priority': cfg['priority'],
+                                'source_order': 1
+                            })
+            
+            # Config a orario attive
+            for cfg in schedule_configs:
+                if cfg['valid_from'] <= check_time < cfg['valid_to']:
+                    if check_time.weekday() in cfg['days_of_week']:
+                        active_configs.append({
+                            'value': cfg['value'],
+                            'priority': cfg['priority'],
+                            'source_order': 2
+                        })
+            
+            # Config standard sempre attiva
+            if default_value:
+                active_configs.append({
+                    'value': default_value,
+                    'priority': default_priority,
+                    'source_order': 3
+                })
+            
+            # Ordina per priorità (crescente) e source_order
+            active_configs.sort(key=lambda x: (x['priority'], x['source_order']))
+            
+            return active_configs[0]['value'] if active_configs else None
+        
+        # Calcola i cambiamenti di valore
+        changes = []
+        last_value = current_value
+        
+        for event_time in sorted(event_times):
+            new_value = get_value_at_time(event_time)
+            
+            # Aggiungi solo se il valore cambia effettivamente
+            if new_value != last_value and new_value is not None:
+                minutes_until = int((event_time - now).total_seconds() / 60)
+                
+                # Determina il tipo di evento
+                event_type = 'unknown'
+                for cfg in time_configs:
+                    if cfg['valid_from'] == event_time and cfg['value'] == new_value:
+                        event_type = 'time'
+                        break
+                    if cfg['valid_to'] == event_time:
+                        event_type = 'time_end'
+                        break
+                
+                if event_type == 'unknown':
+                    for cfg in schedule_configs:
+                        if cfg['valid_from'] == event_time and cfg['value'] == new_value:
+                            event_type = 'schedule'
+                            break
+                        if cfg['valid_to'] == event_time:
+                            event_type = 'schedule_end'
+                            break
+                
+                changes.append({
+                    'value': new_value,
+                    'minutes_until': minutes_until,
+                    'timestamp': event_time.isoformat(),
+                    'type': event_type
+                })
+                
+                last_value = new_value
+        
+        return changes[:5]  # Max 5 eventi
         
         return events[:5]  # Max 5 eventi
     

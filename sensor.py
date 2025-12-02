@@ -303,54 +303,65 @@ class DynamicConfigSensor(CoordinatorEntity, SensorEntity):
         next_changes = predictive.get('next_changes', [])
         minutes_active = predictive.get('minutes_active')
         
+        # Importa datetime per la formattazione
+        from datetime import datetime
+        
         if next_changes:
             # Prossimo cambiamento
             next_change = next_changes[0]
+            
             attributes['next_value'] = next_change['value']
-            attributes['next_change_in_minutes'] = next_change['minutes_until']
             attributes['next_change_type'] = next_change['type']
             
-            # Lista di tutti i prossimi cambiamenti (max 5)
+            # Timestamp del prossimo evento (se disponibile)
+            if 'timestamp' in next_change:
+                attributes['next_change_at'] = next_change['timestamp']
+            
+            # Lista di tutti i prossimi cambiamenti con timestamp
             upcoming_events = []
             for event in next_changes:
-                upcoming_events.append({
+                event_data = {
                     'value': event['value'],
-                    'in_minutes': event['minutes_until'],
                     'type': event['type']
-                })
+                }
+                if 'timestamp' in event:
+                    event_data['at'] = event['timestamp']
+                upcoming_events.append(event_data)
+            
             attributes['upcoming_changes'] = upcoming_events
             
-            # Testo descrittivo dei prossimi eventi
+            # Testo descrittivo con data/ora
             upcoming_text = []
-            for event in next_changes:
-                hours = event['minutes_until'] // 60
-                mins = event['minutes_until'] % 60
-                if hours > 0:
-                    time_str = f"{hours}h {mins}min"
+            for event in upcoming_events:
+                if 'at' in event:
+                    try:
+                        event_time = datetime.fromisoformat(event['at'])
+                        time_str = event_time.strftime('%d/%m %H:%M')
+                    except:
+                        time_str = event['at']
+                    upcoming_text.append(f"{event['value']} il {time_str}")
                 else:
-                    time_str = f"{mins}min"
-                upcoming_text.append(f"{event['value']} tra {time_str}")
-            attributes['upcoming_text'] = upcoming_text
+                    upcoming_text.append(f"{event['value']}")
             
-            # Attributi dinamici per ogni valore futuro (per automazioni)
-            # Traccia quale valore appare per primo (per evitare duplicati)
+            attributes['upcoming_text'] = ', '.join(upcoming_text) if upcoming_text else ''
+            
+            # Attributi dinamici per ogni valore futuro (per automazioni) - con timestamp
             value_first_occurrence = {}
-            for event in next_changes:
+            for event in upcoming_events:
                 value = event['value']
-                minutes = event['minutes_until']
                 
                 # Usa solo la prima occorrenza di ogni valore
-                if value not in value_first_occurrence:
-                    value_first_occurrence[value] = minutes
-                    # Crea attributo: next_<valore>_in_minutes
-                    # Il valore è già validato dal database (solo alfanumerici e underscore)
-                    attr_name = f"next_{value}_in_minutes"
-                    attributes[attr_name] = minutes
+                if value not in value_first_occurrence and 'at' in event:
+                    value_first_occurrence[value] = event['at']
+                    # Crea attributo: next_<valore>_at
+                    attr_name = f"next_{value}_at"
+                    attributes[attr_name] = event['at']
         else:
             attributes['next_value'] = None
-            attributes['next_change_in_minutes'] = None
+            attributes['next_change_at'] = None
+            attributes['next_change_type'] = None
             attributes['upcoming_changes'] = []
-            attributes['upcoming_text'] = []
+            attributes['upcoming_text'] = ''
         
         # Durata valore corrente
         if minutes_active is not None:
@@ -387,34 +398,3 @@ class DynamicConfigSensor(CoordinatorEntity, SensorEntity):
         """Restituisce se il sensore è disponibile."""
         configs = self.coordinator.data.get('configs', {})
         return self._setup_name in configs
-    
-    async def async_will_remove_from_hass(self) -> None:
-        """Chiamato quando l'entità sta per essere rimossa da Home Assistant.
-        
-        Cancella automaticamente tutte le configurazioni associate dal database.
-        """
-        await super().async_will_remove_from_hass()
-        
-        _LOGGER.info(f"Removing entity {self._attr_unique_id}, deleting all configurations for setup_name: {self._setup_name}")
-        
-        # Cancella tutte le configurazioni per questo setup_name dal database
-        try:
-            # Ottieni tutti i config_id per questo setup_name
-            configs = await self.hass.async_add_executor_job(
-                self._db.get_all_configurations_by_name,
-                self._setup_name
-            )
-            
-            # Cancella ogni configurazione
-            for config in configs:
-                config_id = config.get('id')
-                if config_id:
-                    await self.hass.async_add_executor_job(
-                        self._db.delete_single_config,
-                        config_id
-                    )
-                    _LOGGER.debug(f"Deleted configuration ID {config_id} for {self._setup_name}")
-            
-            _LOGGER.info(f"Successfully deleted all data for {self._setup_name} from database")
-        except Exception as err:
-            _LOGGER.error(f"Error deleting configurations for {self._setup_name}: {err}")
