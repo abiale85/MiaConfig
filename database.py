@@ -106,6 +106,18 @@ class ConfigDatabase:
             )
         """)
         
+        # Tabella valori validi per ogni configurazione
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS configurazioni_valori_validi (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                setup_name TEXT NOT NULL,
+                value TEXT NOT NULL,
+                description TEXT,
+                sort_order INTEGER DEFAULT 0,
+                UNIQUE(setup_name, value)
+            )
+        """)
+        
         self.conn.commit()
         _LOGGER.info("Database inizializzato: %s", self.db_path)
     
@@ -1023,8 +1035,83 @@ class ConfigDatabase:
         deleted_count = cursor.rowcount
         self.conn.commit()
         
+        return deleted_count
+    
+    # ========== Gestione Valori Validi ==========
+    
+    def get_valid_values(self, setup_name: str) -> List[Dict[str, Any]]:
+        """Ottiene la lista dei valori validi per una configurazione."""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT id, value, description, sort_order
+            FROM configurazioni_valori_validi
+            WHERE setup_name = ?
+            ORDER BY sort_order, value
+        """, (setup_name,))
+        
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def add_valid_value(self, setup_name: str, value: str, description: str = None, sort_order: int = 0) -> None:
+        """Aggiunge un valore valido per una configurazione."""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO configurazioni_valori_validi (setup_name, value, description, sort_order)
+                VALUES (?, ?, ?, ?)
+            """, (setup_name, value, description, sort_order))
+            self.conn.commit()
+            _LOGGER.info(f"Valore valido aggiunto: {setup_name} = {value}")
+        except sqlite3.IntegrityError:
+            # Valore già esiste, aggiorna descrizione
+            cursor.execute("""
+                UPDATE configurazioni_valori_validi
+                SET description = ?, sort_order = ?
+                WHERE setup_name = ? AND value = ?
+            """, (description, sort_order, setup_name, value))
+            self.conn.commit()
+            _LOGGER.info(f"Valore valido aggiornato: {setup_name} = {value}")
+    
+    def delete_valid_value(self, valid_value_id: int) -> None:
+        """Elimina un valore valido."""
+        cursor = self.conn.cursor()
+        cursor.execute("DELETE FROM configurazioni_valori_validi WHERE id = ?", (valid_value_id,))
+        self.conn.commit()
+        _LOGGER.info(f"Valore valido eliminato: ID {valid_value_id}")
+    
+    def cleanup_orphan_valid_values(self) -> int:
+        """
+        Rimuove i valori validi per configurazioni che non esistono più.
+        Returns: numero di righe eliminate.
+        """
+        cursor = self.conn.cursor()
+        
+        # Trova tutti i setup_name ancora in uso
+        cursor.execute("""
+            SELECT DISTINCT setup_name FROM configurazioni
+            UNION
+            SELECT DISTINCT setup_name FROM configurazioni_a_orario
+            UNION
+            SELECT DISTINCT setup_name FROM configurazioni_a_tempo
+        """)
+        
+        active_names = {row['setup_name'] for row in cursor.fetchall()}
+        
+        if not active_names:
+            # Nessuna configurazione, elimina tutti i valori validi
+            cursor.execute("DELETE FROM configurazioni_valori_validi")
+        else:
+            # Elimina solo valori per setup_name non più presenti
+            placeholders = ','.join('?' * len(active_names))
+            cursor.execute(f"""
+                DELETE FROM configurazioni_valori_validi
+                WHERE setup_name NOT IN ({placeholders})
+            """, tuple(active_names))
+        
+        deleted_count = cursor.rowcount
+        self.conn.commit()
+        
         if deleted_count > 0:
-            _LOGGER.info(f"Cleanup: eliminati {deleted_count} eventi a tempo scaduti da più di {days} giorni")
+            _LOGGER.info(f"Rimossi {deleted_count} valori validi orfani")
         
         return deleted_count
     

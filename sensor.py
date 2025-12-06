@@ -343,8 +343,6 @@ class DynamicConfigSensor(CoordinatorEntity, SensorEntity):
                 else:
                     upcoming_text.append(f"{event['value']}")
             
-            attributes['upcoming_text'] = ', '.join(upcoming_text) if upcoming_text else ''
-            
             # Attributi dinamici per ogni valore futuro (per automazioni) - con timestamp
             value_first_occurrence = {}
             for event in upcoming_events:
@@ -360,21 +358,6 @@ class DynamicConfigSensor(CoordinatorEntity, SensorEntity):
             attributes['next_value'] = None
             attributes['next_change_at'] = None
             attributes['next_change_type'] = None
-            attributes['upcoming_changes'] = []
-            attributes['upcoming_text'] = ''
-        
-        # Durata valore corrente
-        if minutes_active is not None:
-            attributes['current_value_since_minutes'] = minutes_active
-            hours = minutes_active // 60
-            mins = minutes_active % 60
-            if hours > 0:
-                attributes['current_value_since_text'] = f"{hours}h {mins}min"
-            else:
-                attributes['current_value_since_text'] = f"{mins}min"
-        else:
-            attributes['current_value_since_minutes'] = None
-            attributes['current_value_since_text'] = "N/A (standard)"
         
         return attributes
     

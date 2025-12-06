@@ -1,5 +1,156 @@
 # 📋 Changelog - Mia Config
 
+## v1.4.1 - 6 Dicembre 2025 ⚡
+
+### ✨ Nuove Funzionalità
+- **Azioni Rapide Dashboard**: Aggiunti pulsanti azione per ogni configurazione
+  - **➕ Override**: Apre tab Configura e precompila form Override Temporale
+  - **📅 Vista**: Apre Vista Settimanale per quella configurazione
+  - Navigazione rapida senza cercare manualmente
+  - Auto-scroll al form dopo il cambio tab
+  - Precompilazione automatica dei campi
+
+- **Valori Validi Dinamici nei Form**: Campo valore diventa dropdown quando esistono valori predefiniti
+  - Selezione configurazione → carica automaticamente valori validi
+  - Se esistono valori: mostra dropdown con valore e descrizione
+  - Se non esistono: mostra campo testo libero
+  - Applicato ai form Override Orario e Override Temporale
+  - Indicatore visivo "✓ Valori predefiniti disponibili"
+
+- **Gestione Completa Valori Validi**:
+  - ✏️ **Pulsante Modifica**: Modifica descrizione e ordinamento (valore bloccato)
+  - Modalità modifica con form precompilato
+  - Dashboard mostra descrizione del valore corrente se disponibile
+  - Formato: "valore (descrizione)" per migliore leggibilità
+
+### 🔧 Miglioramenti UX
+- Dashboard più interattiva con azioni dirette su ogni valore
+- Workflow semplificato per creare override temporali (default)
+- Visualizzazione immediata della pianificazione settimanale
+- Layout responsive: pulsanti in colonna (desktop) o riga (mobile)
+- Validazione automatica tramite valori predefiniti
+
+### 🐛 Bug Fixes
+- Corretto errore `this.config.entity` undefined nelle funzioni valori validi
+- Usato `getSelectedEntityId()` invece di `this.config.entity`
+- Fix `callService` con `return_response` → usato `callWS` correttamente
+
+### 🎨 CSS
+- Nuova classe `.dc-dashboard-actions` per gestire layout pulsanti
+- Responsive mobile: pulsanti a larghezza piena in riga su smartphone
+- Migliorato hover effect sulla card dashboard
+
+---
+
+## v1.4.0 - 4 Dicembre 2025 ✅📱
+
+### ✨ Nuove Funzionalità
+- **Gestione Valori Validi**: Sistema per definire valori consentiti per ogni configurazione
+  - Nuova sezione "✓ Valori Validi" nel tab Configura
+  - Possibilità di definire valori opzionali con descrizioni (es. "0"="Off", "1"="Economy", "2"="Comfort")
+  - Gestione separata rispetto alla creazione configurazioni
+  - Auto-cleanup: valori eliminati automaticamente quando la configurazione viene cancellata
+  - Tabella database: `configurazioni_valori_validi` con campi value, description, sort_order
+  - **3 nuovi servizi**:
+    - `mia_config.add_valid_value`: Aggiunge/modifica valore valido
+    - `mia_config.delete_valid_value`: Elimina valore valido per ID
+    - `mia_config.get_valid_values`: Ottiene valori validi per configurazione (supporta response)
+  - Ordinamento personalizzabile tramite campo `sort_order`
+  
+- **UI Responsive Mobile**: Ottimizzazione completa per smartphone e tablet
+  - Media query @768px: Layout adattivo per tablet
+    - Tab su 2 colonne con dimensioni touch-friendly (min-height: 44px)
+    - Pulsanti più grandi (10px padding, 13px font)
+    - Input con font 16px per evitare zoom automatico iOS
+    - Tabelle con scroll orizzontale
+    - Configurazioni in colonna singola invece che flex-row
+  - Media query @480px: Layout ottimizzato per smartphone
+    - Tab a larghezza piena (100%)
+    - Header con font ridotto (18px)
+  - Vista settimanale: Scroll orizzontale con larghezza minima 700px
+  - Form con campi touch-optimized (min-height 44px)
+
+### 🔧 Miglioramenti Backend
+- **Database**: 
+  - Nuova tabella `configurazioni_valori_validi` con UNIQUE(setup_name, value)
+  - 4 nuove funzioni: `get_valid_values()`, `add_valid_value()`, `delete_valid_value()`, `cleanup_orphan_valid_values()`
+  - Cleanup automatico invocato dopo `delete_config()`
+  
+- **__init__.py**:
+  - 3 handler per servizi valori validi
+  - Integrazione cleanup nel flusso eliminazione configurazioni
+  - Schema validazione con campi opzionali (description, sort_order)
+
+### 📱 UX Mobile
+- **Touch-Friendly**: Tutti i controlli rispettano dimensioni minime 44x44px (Apple HIG)
+- **Typography**: Font più leggibili su mobile (13-16px)
+- **Layout Adaptive**: Grid/flex collassano in colonna singola sotto 768px
+- **Form Input**: Font 16px previene zoom automatico iOS
+- **Table Responsive**: Wrapper con overflow-x auto per tabelle larghe
+- **Navigation**: Tab wrappati in 2 colonne (tablet) o stacked (mobile)
+
+### 🎨 Frontend
+- **Sezione Valori Validi**: Integrata nel tab Configura
+  - Dropdown per selezionare configurazione
+  - Tabella con Value, Descrizione, Ordine, Azioni
+  - Form inline per aggiungere nuovi valori
+  - Pulsanti Elimina per ogni valore
+  - Separata visivamente dalle configurazioni con bordo superiore
+  
+- **JavaScript**:
+  - `loadConfigsForValidValues()`: Popola dropdown configurazioni
+  - `dcLoadValidValues()`: Carica valori per configurazione selezionata
+  - `dcShowAddValidValueForm()` / `dcHideAddValidValueForm()`: Toggle form
+  - `dcSaveValidValue()`: Salva nuovo valore con validazione
+  - `dcDeleteValidValue()`: Elimina con conferma
+
+---
+
+## v1.3.2 - 3 Dicembre 2025 🎨
+
+### ✨ Nuove Funzionalità
+- **Icona Personalizzata**: Aggiunta icona con cavalier king nella cuccia
+  - `icon.png` (128x128) e `icon@2x.png` (256x256)
+  - Visibile in Impostazioni → Dispositivi e Servizi
+- **Header Card Dinamico**: Titolo mostra il nome dell'istanza (es. "MiaHomeConfig")
+  - Funzione `getInstanceName()` legge `db_name` dagli attributi sensore
+  - Fallback su "Mia Config" se istanza non trovata
+- **Paginazione Storico**: Gestione efficiente di migliaia di record
+  - 20 elementi per pagina con navigazione: Prima, Precedente, Successiva, Ultima
+  - Mostra "Pagina X di Y (Z elementi)"
+  - Parametro `offset` nel servizio `get_history`
+  - Nuova funzione `get_history_count()` per conteggio totale
+
+### 🔧 Miglioramenti
+- **Attributi Sensori Semplificati**: Rimossi attributi non necessari
+  - ❌ `upcoming_text` (non si aggiornava dinamicamente)
+  - ❌ `upcoming_changes` (ridondante)
+  - ❌ `current_value_since_minutes` (non usato)
+  - ❌ `current_value_since_text` (non usato)
+  - ✅ Mantenuti solo: `next_value`, `next_change_at`, `next_change_type`, `next_<valore>_at`
+
+### 🐛 Bug Fixes
+- **Fix Dashboard**: Risolto errore `upcomingText.forEach is not a function`
+  - Rimossa visualizzazione `upcoming_text` dalla dashboard
+- **Fix Storico**: Corretto errore caricamento storico
+  - Sostituita chiamata `this.formatTimeDisplay()` con conversione inline
+  - Formato orari: `String(ora).replace('.', ':')` (es. 8.30 → 8:30)
+- **Fix Servizio get_history**: Aggiunto parametro `offset` allo schema
+  - Prima causava errore `extra keys not allowed @ data['offset']`
+  - Schema aggiornato: `vol.Optional("offset", default=0): cv.positive_int`
+- **Fix Vista Settimanale**: Priorità numeriche ora rispettate
+  - Implementato confronto priorità in `calculateDaySegments()`
+  - Funzione `shouldOverride()` confronta `priority` e `sourceOrder`
+  - Schedule con priorità 99 batte schedule con priorità 100
+
+### 📝 Documentazione
+- Aggiornato README con nuove funzionalità
+- Esempio automazione con timestamp ISO
+- Istruzioni installazione HACS
+- Documentazione attributi sensori semplificati
+
+---
+
 ## v1.3.1 - 2 Dicembre 2025 🔧
 
 ### 🐛 Bug Fixes Critici

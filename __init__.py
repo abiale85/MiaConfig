@@ -360,6 +360,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             db.delete_config, setup_name, config_type
         )
         
+        # Pulisci i valori validi orfani
+        await hass.async_add_executor_job(
+            db.cleanup_orphan_valid_values
+        )
+        
         # Forza aggiornamento e invalida cache
         for entry_id, data in hass.data.get(DOMAIN, {}).items():
             if isinstance(data, dict):
@@ -564,6 +569,87 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     
     hass.services.async_register(
         DOMAIN, "get_configurations", handle_get_configurations, schema=get_configurations_schema, supports_response=SupportsResponse.OPTIONAL
+    )
+    
+    # Servizi per gestione valori validi
+    async def handle_add_valid_value(call: ServiceCall) -> None:
+        """Aggiunge un valore valido per una configurazione."""
+        entity_id = call.data.get("entity_id")
+        db = get_db_from_entity_id(hass, entity_id)
+        
+        setup_name = call.data["setup_name"]
+        value = call.data["value"]
+        description = call.data.get("description")
+        sort_order = call.data.get("sort_order", 0)
+        
+        await hass.async_add_executor_job(
+            db.add_valid_value, setup_name, value, description, sort_order
+        )
+    
+    async def handle_delete_valid_value(call: ServiceCall) -> None:
+        """Elimina un valore valido."""
+        entity_id = call.data.get("entity_id")
+        db = get_db_from_entity_id(hass, entity_id)
+        
+        valid_value_id = call.data["id"]
+        
+        await hass.async_add_executor_job(
+            db.delete_valid_value, valid_value_id
+        )
+    
+    async def handle_get_valid_values(call: ServiceCall) -> ServiceResponse:
+        """Ottiene i valori validi per una configurazione."""
+        entity_id = call.data.get("entity_id")
+        db = get_db_from_entity_id(hass, entity_id)
+        
+        setup_name = call.data.get("setup_name")
+        
+        if setup_name:
+            valid_values = await hass.async_add_executor_job(
+                db.get_valid_values, setup_name
+            )
+            return {"valid_values": valid_values}
+        else:
+            # Restituisci tutti i valori validi raggruppati per setup_name
+            cursor = db.conn.cursor()
+            cursor.execute("""
+                SELECT setup_name, value, description, sort_order, id
+                FROM configurazioni_valori_validi
+                ORDER BY setup_name, sort_order, value
+            """)
+            all_values = {}
+            for row in cursor.fetchall():
+                name = row['setup_name']
+                if name not in all_values:
+                    all_values[name] = []
+                all_values[name].append(dict(row))
+            return {"valid_values": all_values}
+    
+    add_valid_value_schema = vol.Schema({
+        vol.Required("setup_name"): cv.string,
+        vol.Required("value"): cv.string,
+        vol.Optional("description"): cv.string,
+        vol.Optional("sort_order", default=0): cv.positive_int,
+    })
+    
+    delete_valid_value_schema = vol.Schema({
+        vol.Required("id"): cv.positive_int,
+    })
+    
+    get_valid_values_schema = vol.Schema({
+        vol.Optional("setup_name"): cv.string,
+    })
+    
+    hass.services.async_register(
+        DOMAIN, "add_valid_value", handle_add_valid_value, schema=add_valid_value_schema
+    )
+    
+    hass.services.async_register(
+        DOMAIN, "delete_valid_value", handle_delete_valid_value, schema=delete_valid_value_schema
+    )
+    
+    hass.services.async_register(
+        DOMAIN, "get_valid_values", handle_get_valid_values, schema=get_valid_values_schema, supports_response=SupportsResponse.OPTIONAL
     )
 
 

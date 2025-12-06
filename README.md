@@ -68,14 +68,19 @@ entity_id: sensor.miahomeconfig_main  # Opzionale: specifica l'istanza da gestir
 **Nota**: Se hai più istanze e non specifichi `entity_id`, la card mostrerà la prima istanza trovata.
 
 La card ti permette di:
-- ✅ Visualizzare dashboard con valori correnti
-- ✅ Creare/modificare configurazioni Standard, a Orario e a Tempo
-- ✅ Vista settimanale con barre colorate che mostrano i valori per ogni ora
-- ✅ Storico modifiche con paginazione (20 elementi per pagina)
-- ✅ Ripristino configurazioni eliminate dallo storico
-- ✅ Tutto tramite interfaccia grafica, senza YAML!
+- ✅ **Dashboard**: Visualizza valori correnti e configurazioni attive
+- ✅ **Configura**: Crea/modifica configurazioni Standard, a Orario e a Tempo + gestione valori validi
+- ✅ **Vista Settimanale**: Barre colorate che mostrano i valori per ogni ora della settimana
+- ✅ **Storico**: Cronologia modifiche con paginazione (20 elementi per pagina) e ripristino
+- ✅ **Mobile-Responsive**: Ottimizzata per smartphone e tablet con layout adattivi
 
 **Header Card**: Il titolo della card mostra automaticamente il nome dell'istanza (es. "MiaHomeConfig")
+
+**Valori Validi**: Nel tab Configura puoi definire opzionalmente valori consentiti per ogni configurazione:
+- Esempio: `riscaldamento` → "0"="Off", "1"="Economy", "2"="Comfort"
+- Sezione dedicata "✓ Valori Validi" in fondo al tab Configura
+- Eliminazione automatica quando la configurazione viene cancellata
+- Se non definiti, qualsiasi valore è accettato
 
 Per maggiori dettagli vedi [UI_GUIDE.md](UI_GUIDE.md)
 
@@ -88,6 +93,7 @@ Ogni istanza crea automaticamente un database SQLite separato (`<nome_istanza>.d
 - **configurazioni**: Configurazioni standard con priorità
 - **configurazioni_a_orario**: Configurazioni valide in fasce orarie giornaliere
 - **configurazioni_a_tempo**: Configurazioni valide in intervalli di date
+- **configurazioni_valori_validi**: Valori opzionali consentiti con descrizioni
 - **configurazioni_storico**: Cronologia modifiche con operazioni INSERT/UPDATE/DELETE
 
 ### Logica di Priorità
@@ -123,11 +129,7 @@ Ogni configurazione viene automaticamente esposta come sensore:
   - `next_value`: Prossimo valore che sarà attivo
   - `next_change_at`: Timestamp ISO del prossimo cambio (es. `2025-12-02T14:30:00`)
   - `next_change_type`: Tipo del prossimo cambio (`schedule`, `schedule_end`, `time`, `time_end`)
-  - `upcoming_changes`: Lista completa dei prossimi eventi con `value`, `at` (timestamp), `type`
-  - `upcoming_text`: Testo leggibile (es. "1 il 02/12 14:30, 0 il 02/12 18:00")
   - `next_<valore>_at`: Timestamp della prima occorrenza di ogni valore specifico
-  - `current_value_since_minutes`: Minuti da cui il valore corrente è attivo
-  - `current_value_since_text`: Testo leggibile (es. "2h 30min")
 
 **Utilizzo in automazioni**:
 ```yaml
@@ -253,6 +255,49 @@ service: mia_config.cleanup_history
 data:
   days: 30  # Elimina eventi più vecchi di 30 giorni
   entity_id: sensor.miahomeconfig_main  # Opzionale
+```
+
+#### `mia_config.add_valid_value`
+
+Aggiunge un valore valido con descrizione per una configurazione (opzionale).
+
+```yaml
+service: mia_config.add_valid_value
+data:
+  setup_name: "riscaldamento"
+  value: "0"
+  description: "Spento"  # Opzionale
+  sort_order: 0  # Opzionale, default: 0
+  entity_id: sensor.miahomeconfig_main  # Opzionale
+```
+
+**Valori validi**: Se definiti, puoi creare un sistema di validazione per i valori delle configurazioni. Per esempio:
+- `riscaldamento`: "0"="Off", "1"="Economy", "2"="Comfort"
+- `allarme`: "armed_away"="Totale", "armed_home"="Casa", "disarmed"="Disattivato"
+
+I valori validi sono opzionali e indipendenti dalle configurazioni. Se non definiti, qualsiasi valore è accettato.
+
+#### `mia_config.delete_valid_value`
+
+Elimina un valore valido.
+
+```yaml
+service: mia_config.delete_valid_value
+data:
+  id: 5  # ID del valore valido da eliminare
+  entity_id: sensor.miahomeconfig_main  # Opzionale
+```
+
+#### `mia_config.get_valid_values`
+
+Ottiene i valori validi per una configurazione (supporta response).
+
+```yaml
+service: mia_config.get_valid_values
+data:
+  setup_name: "riscaldamento"  # Opzionale, se omesso restituisce tutti
+  entity_id: sensor.miahomeconfig_main  # Opzionale
+response_variable: valid_values
 ```
 
 ## Esempi di Utilizzo

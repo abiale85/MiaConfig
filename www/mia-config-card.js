@@ -99,14 +99,20 @@ class MiaConfigCard extends HTMLElement {
                 .dc-tab {
                     padding: 10px 20px;
                     cursor: pointer;
-                    background: none;
-                    border: none;
+                    background: var(--card-background-color);
+                    border: 1px solid var(--divider-color);
                     border-bottom: 3px solid transparent;
+                    border-radius: 8px 8px 0 0;
                     font-size: 14px;
                     color: var(--primary-text-color);
+                    transition: all 0.2s ease;
+                }
+                .dc-tab:hover {
+                    background: var(--secondary-background-color);
                 }
                 .dc-tab.active {
                     border-bottom-color: var(--primary-color);
+                    background: var(--primary-background-color);
                     color: var(--primary-color);
                     font-weight: 500;
                 }
@@ -465,12 +471,99 @@ class MiaConfigCard extends HTMLElement {
                     grid-template-columns: 1fr 1fr;
                     gap: 10px;
                 }
+                
+                /* Dashboard action buttons */
+                .dc-dashboard-actions {
+                    display: flex;
+                    gap: 5px;
+                    flex-direction: column;
+                }
+                .dc-dashboard-actions button {
+                    white-space: nowrap;
+                }
+                
+                /* Responsive per mobile */
+                @media (max-width: 768px) {
+                    .dc-tabs {
+                        flex-wrap: wrap;
+                        gap: 8px;
+                        justify-content: space-between;
+                    }
+                    .dc-tab {
+                        flex: 0 0 calc(50% - 4px);
+                        max-width: calc(50% - 4px);
+                        font-size: 13px;
+                        padding: 12px 6px;
+                        min-height: 48px;
+                        text-align: center;
+                        border: 2px solid var(--divider-color);
+                        box-sizing: border-box;
+                    }
+                    .dc-tab.active {
+                        border: 2px solid var(--primary-color);
+                        background: var(--primary-color);
+                        color: white;
+                    }
+                    .dc-btn, .dc-btn-secondary, .dc-btn-danger {
+                        padding: 10px 12px;
+                        font-size: 13px;
+                        min-height: 44px;
+                    }
+                    .dc-config-item {
+                        flex-direction: column;
+                        align-items: flex-start;
+                        gap: 10px;
+                    }
+                    .dc-dashboard-actions {
+                        flex-direction: row;
+                        width: 100%;
+                    }
+                    .dc-dashboard-actions button {
+                        flex: 1;
+                    }
+                    .dc-time-group {
+                        grid-template-columns: 1fr;
+                    }
+                    .dc-table-responsive {
+                        overflow-x: auto;
+                    }
+                    .dc-table {
+                        font-size: 13px;
+                    }
+                    .dc-table td, .dc-table th {
+                        padding: 8px 6px;
+                    }
+                    input[type="text"],
+                    input[type="time"],
+                    input[type="number"],
+                    select {
+                        font-size: 16px !important;
+                        padding: 10px !important;
+                        min-height: 44px;
+                    }
+                    .dc-weekly-container {
+                        overflow-x: auto;
+                    }
+                    .dc-weekly-grid {
+                        min-width: 700px;
+                    }
+                }
+                
+                @media (max-width: 480px) {
+                    .dc-tab {
+                        flex: 1 1 100%;
+                        font-size: 14px;
+                    }
+                    .dc-card-header h2 {
+                        font-size: 18px;
+                    }
+                }
             </style>
 
             <div class="dc-tabs">
                 <button class="dc-tab" onclick="window.dcSwitchTab('dashboard', event)">📊 Dashboard</button>
                 <button class="dc-tab" onclick="window.dcSwitchTab('config', event)">⚙️ Configura</button>
-                <button class="dc-tab" onclick="window.dcSwitchTab('weekly', event)">📅 Vista Settimanale</button>
+                <button class="dc-tab" onclick="window.dcSwitchTab('weekly', event)">📅 Settimanale</button>
                 <button class="dc-tab" onclick="window.dcSwitchTab('history', event)">📜 Storico</button>
             </div>
 
@@ -486,11 +579,11 @@ class MiaConfigCard extends HTMLElement {
                     <select id="config-type-selector" onchange="window.dcShowConfigForm(this.value)">
                         <option value="standard">⚙️ Standard</option>
                         <option value="schedule">🕐 Override Orario</option>
-                        <option value="time">⏰ Override Temporale</option>
+                        <option value="time" selected>⏰ Override Temporale</option>
                     </select>
                 </div>
 
-                <div id="dc-form-container-standard" class="dc-form-container" style="display: block;">
+                <div id="dc-form-container-standard" class="dc-form-container" style="display: none;">
                 <form id="dc-form-standard">
                     <div class="dc-form-group">
                         <label>Nome Configurazione:</label>
@@ -516,14 +609,16 @@ class MiaConfigCard extends HTMLElement {
                 <form id="dc-form-schedule">
                     <div class="dc-form-group">
                         <label>Configurazione da Override:</label>
-                        <select id="schedule-config-select" name="setup_name" required>
+                        <select id="schedule-config-select" name="setup_name" required onchange="window.dcLoadValidValuesForForm('schedule')">
                             <option value="">-- Caricamento... --</option>
                         </select>
                         <small style="color: var(--secondary-text-color);">Seleziona una configurazione standard esistente</small>
                     </div>
                     <div class="dc-form-group">
                         <label>Valore Override:</label>
-                        <input type="text" name="setup_value" required placeholder="es. 20">
+                        <div id="schedule-value-container">
+                            <input type="text" id="schedule-setup-value" name="setup_value" required placeholder="es. 20">
+                        </div>
                     </div>
                     <div class="dc-form-group">
                         <label>Fascia Oraria:</label>
@@ -593,18 +688,20 @@ class MiaConfigCard extends HTMLElement {
                 </form>
                 </div>
 
-                <div id="dc-form-container-time" class="dc-form-container" style="display: none;">
+                <div id="dc-form-container-time" class="dc-form-container" style="display: block;">
                 <form id="dc-form-time">
                     <div class="dc-form-group">
                         <label>Configurazione da Override:</label>
-                        <select id="time-config-select" name="setup_name" required>
+                        <select id="time-config-select" name="setup_name" required onchange="window.dcLoadValidValuesForForm('time')">
                             <option value="">-- Caricamento... --</option>
                         </select>
                         <small style="color: var(--secondary-text-color);">Seleziona una configurazione standard esistente</small>
                     </div>
                     <div class="dc-form-group">
                         <label>Valore Override:</label>
-                        <input type="text" name="setup_value" required placeholder="es. 18">
+                        <div id="time-value-container">
+                            <input type="text" id="time-setup-value" name="setup_value" required placeholder="es. 18">
+                        </div>
                     </div>
                     <div class="dc-form-group">
                         <label>Data/Ora Inizio:</label>
@@ -700,6 +797,40 @@ class MiaConfigCard extends HTMLElement {
                 
                 <h3>🗂️ Configurazioni Database</h3>
                 <div id="dc-config-list">Caricamento...</div>
+                
+                <!-- Sezione Valori Validi -->
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid var(--divider-color);">
+                    <h3 style="margin-bottom: 15px;">✓ Valori Validi</h3>
+                    <p style="color: var(--secondary-text-color); margin-bottom: 15px; font-size: 14px;">
+                        Definisci opzionalmente valori consentiti con descrizioni per ogni configurazione
+                    </p>
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-weight: 500;">Seleziona Configurazione:</label>
+                        <select id="vv-config-select" onchange="window.dcLoadValidValues()" style="padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); color: var(--primary-text-color); width: 300px; margin-right: 10px;">
+                            <option value="">-- Seleziona --</option>
+                        </select>
+                        <button class="dc-btn" onclick="window.dcShowAddValidValueForm()">➕ Aggiungi Valore</button>
+                    </div>
+                    <div id="dc-valid-values-list">Seleziona una configurazione per gestire i valori validi</div>
+                    
+                    <div id="dc-add-valid-value-form" style="display: none; margin-top: 20px; padding: 15px; border: 2px solid var(--primary-color); border-radius: 8px; background: var(--card-background-color);">
+                        <h4 style="margin-top: 0;">Aggiungi Valore Valido</h4>
+                        <div style="margin-bottom: 10px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Valore:</label>
+                            <input type="text" id="vv-value" placeholder="es. 0, 1, comfort, auto..." style="padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); color: var(--primary-text-color); width: 100%;">
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Descrizione (opzionale):</label>
+                            <input type="text" id="vv-description" placeholder="es. Spento, Acceso, Modalità comfort..." style="padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); color: var(--primary-text-color); width: 100%;">
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Ordinamento:</label>
+                            <input type="number" id="vv-sort-order" value="0" min="0" style="padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); color: var(--primary-text-color); width: 100px;">
+                        </div>
+                        <button class="dc-btn" onclick="window.dcSaveValidValue()">💾 Salva</button>
+                        <button class="dc-btn-secondary" onclick="window.dcHideAddValidValueForm()">❌ Annulla</button>
+                    </div>
+                </div>
             </div>
             
             <div id="dc-tab-weekly" class="dc-tab-content">
@@ -715,8 +846,10 @@ class MiaConfigCard extends HTMLElement {
             
             <div id="dc-tab-history" class="dc-tab-content">
                 <div style="margin-bottom: 15px;">
-                    <label style="font-weight: 500;">Filtra per nome:</label>
-                    <input type="text" id="history-filter" placeholder="Lascia vuoto per tutte" style="padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); color: var(--primary-text-color); width: 300px;">
+                    <label style="font-weight: 500;">Filtra per configurazione:</label>
+                    <select id="history-filter" style="padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); color: var(--primary-text-color); width: 300px;">
+                        <option value="">-- Tutte le configurazioni --</option>
+                    </select>
                     <button class="dc-btn" onclick="window.dcLoadHistory()" style="margin-left: 10px;">Carica Storico</button>
                 </div>
                 <div id="dc-history-list">Clicca "Carica Storico" per visualizzare</div>
@@ -919,9 +1052,11 @@ class MiaConfigCard extends HTMLElement {
             } else if (tabName === 'config') {
                 this.loadConfigurations();
                 this.loadStandardConfigsForSelect();
+                this.loadConfigsForValidValues();
             } else if (tabName === 'weekly') {
                 this.loadConfigsForWeeklyView();
             } else if (tabName === 'history') {
+                this.loadConfigsForHistoryFilter();
                 window.dcLoadHistory();
             }
         };
@@ -947,6 +1082,58 @@ class MiaConfigCard extends HTMLElement {
                     this.setDefaultTimeValues();
                 }
             }
+        };
+        
+        // Quick Override - Apre tab Configura e precompila form temporale
+        window.dcQuickOverride = (setupName) => {
+            // Passa al tab configura
+            const configTab = this.content.querySelector('.dc-tab:nth-child(2)'); // Tab Configura
+            if (configTab) {
+                configTab.click();
+            }
+            
+            // Attendi che il tab si carichi
+            setTimeout(() => {
+                // Seleziona tipo "Override Temporale"
+                const typeSelector = this.content.querySelector('#config-type-selector');
+                if (typeSelector) {
+                    typeSelector.value = 'time';
+                    window.dcShowConfigForm('time');
+                }
+                
+                // Precompila il nome configurazione nel select dopo un momento
+                setTimeout(() => {
+                    const timeSelect = this.content.querySelector('#time-config-select');
+                    if (timeSelect) {
+                        timeSelect.value = setupName;
+                    }
+                    
+                    // Scroll al form
+                    const formContainer = this.content.querySelector('#dc-form-container-time');
+                    if (formContainer) {
+                        formContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }, 300);
+            }, 100);
+        };
+        
+        // Show Weekly - Apre tab Vista Settimanale e mostra quella configurazione
+        window.dcShowWeeklyFor = (setupName) => {
+            // Passa al tab vista settimanale
+            const weeklyTab = this.content.querySelector('.dc-tab:nth-child(3)'); // Tab Vista Settimanale
+            if (weeklyTab) {
+                weeklyTab.click();
+            }
+            
+            // Attendi che il tab si carichi
+            setTimeout(() => {
+                const weeklySelect = this.content.querySelector('#weekly-config-select');
+                if (weeklySelect) {
+                    weeklySelect.value = setupName;
+                    // Carica automaticamente la vista
+                    window.dcLoadWeeklyView();
+                }
+            }, 100);
         };
         
         // Carica dashboard iniziale se _hass è disponibile
@@ -1038,24 +1225,65 @@ class MiaConfigCard extends HTMLElement {
             let html = '<h3>📊 Valori Correnti</h3>';
             html += '<div style="margin-bottom: 20px;">';
             
+            // Carica tutti i valori validi per mostrare le descrizioni
+            const entityId = this.getSelectedEntityId();
+            const serviceData = {};
+            if (entityId) {
+                serviceData.entity_id = entityId;
+            }
+            
+            let validValuesMap = {};
+            try {
+                const response = await this._hass.callWS({
+                    type: 'call_service',
+                    domain: 'mia_config',
+                    service: 'get_valid_values',
+                    service_data: serviceData,
+                    return_response: true
+                });
+                
+                // Crea mappa: {setup_name: {value: {description, sort_order}}}
+                const allValidValues = response.response.valid_values || {};
+                for (const [setupName, values] of Object.entries(allValidValues)) {
+                    validValuesMap[setupName] = {};
+                    for (const vv of values) {
+                        validValuesMap[setupName][vv.value] = {
+                            description: vv.description,
+                            sort_order: vv.sort_order
+                        };
+                    }
+                }
+            } catch (err) {
+                console.log('Info: nessun valore valido disponibile o errore caricamento');
+            }
+            
             for (const sensor of sensors) {
                 const value = sensor.entity.state;
                 const attrs = sensor.entity.attributes;
                 const source = attrs.source || 'unknown';
                 const entityId = sensor.id;
+                const setupName = attrs.setup_name || sensor.name.replace(/ /g, '_');
                 const description = attrs.description || '';
+                
+                // Ottieni descrizione dal valore valido se disponibile
+                const valueDescription = validValuesMap[setupName]?.[value]?.description;
+                const valueDisplay = valueDescription ? `${value} <small style="color: var(--secondary-text-color);">(${valueDescription})</small>` : value;
                 
                 const typeLabel = source === 'time' ? '⏰ Tempo' :
                                  source === 'schedule' ? '📅 Orario' :
                                  source === 'standard' ? '⚙️ Standard' : '❌ Nessuna';
                 
                 html += `
-                    <div class="dc-config-item" onclick="window.dcOpenEntity('${entityId}')" style="background: var(--card-background-color); border-left: 4px solid var(--primary-color); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.backgroundColor='var(--secondary-background-color)'" onmouseout="this.style.backgroundColor='var(--card-background-color)'">
-                        <div>
+                    <div class="dc-config-item" style="background: var(--card-background-color); border-left: 4px solid var(--primary-color); display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
+                        <div style="flex: 1; cursor: pointer;" onclick="window.dcOpenEntity('${entityId}')" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
                             <strong>🎯 ${sensor.name}</strong><br>
                             ${description ? `<small style="color: var(--secondary-text-color); font-style: italic;">📝 ${description}</small><br>` : ''}
-                            <span style="font-size: 1.4em; color: var(--primary-color); font-weight: bold;">${value}</span><br>
+                            <span style="font-size: 1.4em; color: var(--primary-color); font-weight: bold;">${valueDisplay}</span><br>
                             <small>Origine: ${typeLabel}</small>
+                        </div>
+                        <div class="dc-dashboard-actions">
+                            <button class="dc-btn" onclick="event.stopPropagation(); window.dcQuickOverride('${setupName}')" style="padding: 6px 10px; font-size: 12px;">➕ Override</button>
+                            <button class="dc-btn-secondary" onclick="event.stopPropagation(); window.dcShowWeeklyFor('${setupName}')" style="padding: 6px 10px; font-size: 12px;">📅 Vista</button>
                         </div>
                     </div>
                 `;
@@ -1790,6 +2018,231 @@ class MiaConfigCard extends HTMLElement {
             }
         };
         
+        window.dcLoadValidValues = async () => {
+            const select = this.content.querySelector('#vv-config-select');
+            const setupName = select.value;
+            const container = this.content.querySelector('#dc-valid-values-list');
+            
+            if (!setupName) {
+                container.innerHTML = 'Seleziona una configurazione per gestire i valori validi';
+                return;
+            }
+            
+            container.innerHTML = 'Caricamento...';
+            
+            try {
+                const entityId = this.getSelectedEntityId();
+                const serviceData = {
+                    setup_name: setupName
+                };
+                if (entityId) {
+                    serviceData.entity_id = entityId;
+                }
+                
+                const response = await this._hass.callWS({
+                    type: 'call_service',
+                    domain: 'mia_config',
+                    service: 'get_valid_values',
+                    service_data: serviceData,
+                    return_response: true
+                });
+                
+                const validValues = response.response.valid_values || [];
+                
+                if (validValues.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: var(--secondary-text-color);">Nessun valore valido definito per questa configurazione</p>';
+                    return;
+                }
+                
+                let html = '<div class="dc-table-responsive"><table class="dc-table"><thead><tr>';
+                html += '<th>Valore</th><th>Descrizione</th><th>Ordine</th><th>Azioni</th>';
+                html += '</tr></thead><tbody>';
+                
+                for (const vv of validValues) {
+                    html += '<tr>';
+                    html += `<td style="font-weight: 500;">${vv.value || ''}</td>`;
+                    html += `<td>${vv.description || '-'}</td>`;
+                    html += `<td>${vv.sort_order || 0}</td>`;
+                    html += `<td>
+                        <button class="dc-btn" onclick="window.dcEditValidValue(${vv.id}, '${vv.value}', '${(vv.description || '').replace(/'/g, "\\'")}', ${vv.sort_order || 0})" style="padding: 5px 10px; margin-right: 5px;">✏️ Modifica</button>
+                        <button class="dc-btn-danger" onclick="window.dcDeleteValidValue(${vv.id}, '${setupName}')" style="padding: 5px 10px;">🗑️ Elimina</button>
+                    </td>`;
+                    html += '</tr>';
+                }
+                
+                html += '</tbody></table></div>';
+                container.innerHTML = html;
+                
+            } catch (err) {
+                console.error('Errore caricamento valori validi:', err);
+                container.innerHTML = '<p style="color: var(--error-color);">Errore nel caricamento dei valori validi</p>';
+            }
+        };
+        
+        window.dcShowAddValidValueForm = () => {
+            const form = this.content.querySelector('#dc-add-valid-value-form');
+            const select = this.content.querySelector('#vv-config-select');
+            
+            if (!select.value) {
+                this.showToast('Seleziona prima una configurazione', true);
+                return;
+            }
+            
+            // Reset form per nuovo inserimento
+            form.style.display = 'block';
+            form.dataset.editId = ''; // Rimuove ID se era in modalità modifica
+            this.content.querySelector('#vv-value').value = '';
+            this.content.querySelector('#vv-value').disabled = false; // Riabilita campo valore
+            this.content.querySelector('#vv-description').value = '';
+            this.content.querySelector('#vv-sort-order').value = '0';
+            form.querySelector('h4').textContent = 'Aggiungi Valore Valido';
+        };
+        
+        window.dcEditValidValue = (id, value, description, sortOrder) => {
+            const form = this.content.querySelector('#dc-add-valid-value-form');
+            const select = this.content.querySelector('#vv-config-select');
+            
+            if (!select.value) {
+                this.showToast('Errore: nessuna configurazione selezionata', true);
+                return;
+            }
+            
+            // Mostra form in modalità modifica
+            form.style.display = 'block';
+            form.dataset.editId = id; // Salva ID per la modifica
+            this.content.querySelector('#vv-value').value = value;
+            this.content.querySelector('#vv-value').disabled = true; // Blocca modifica valore
+            this.content.querySelector('#vv-description').value = description;
+            this.content.querySelector('#vv-sort-order').value = sortOrder;
+            form.querySelector('h4').textContent = 'Modifica Valore Valido';
+            
+            // Scroll al form
+            form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+        
+        window.dcHideAddValidValueForm = () => {
+            const form = this.content.querySelector('#dc-add-valid-value-form');
+            form.style.display = 'none';
+            form.dataset.editId = ''; // Reset ID
+        };
+        
+        // Carica valori validi per i form override e cambia input in select se necessario
+        window.dcLoadValidValuesForForm = async (formType) => {
+            const selectId = formType === 'schedule' ? '#schedule-config-select' : '#time-config-select';
+            const containerId = formType === 'schedule' ? '#schedule-value-container' : '#time-value-container';
+            const inputId = formType === 'schedule' ? '#schedule-setup-value' : '#time-setup-value';
+            
+            const configSelect = this.content.querySelector(selectId);
+            const container = this.content.querySelector(containerId);
+            const setupName = configSelect.value;
+            
+            if (!setupName) {
+                // Nessuna configurazione selezionata, mostra input text
+                container.innerHTML = `<input type="text" id="${inputId.substring(1)}" name="setup_value" required placeholder="es. 20">`;
+                return;
+            }
+            
+            try {
+                const entityId = this.getSelectedEntityId();
+                const serviceData = { setup_name: setupName };
+                if (entityId) {
+                    serviceData.entity_id = entityId;
+                }
+                
+                const response = await this._hass.callWS({
+                    type: 'call_service',
+                    domain: 'mia_config',
+                    service: 'get_valid_values',
+                    service_data: serviceData,
+                    return_response: true
+                });
+                
+                const validValues = response.response.valid_values || [];
+                
+                if (validValues.length === 0) {
+                    // Nessun valore valido, mostra input text
+                    container.innerHTML = `<input type="text" id="${inputId.substring(1)}" name="setup_value" required placeholder="Inserisci valore">`;
+                } else {
+                    // Ci sono valori validi, mostra select
+                    let html = `<select id="${inputId.substring(1)}" name="setup_value" required style="width: 100%;">`;
+                    html += '<option value="">-- Seleziona valore --</option>';
+                    for (const vv of validValues) {
+                        const description = vv.description ? ` - ${vv.description}` : '';
+                        html += `<option value="${vv.value}">${vv.value}${description}</option>`;
+                    }
+                    html += '</select>';
+                    html += '<small style="color: var(--secondary-text-color); display: block; margin-top: 5px;">✓ Valori predefiniti disponibili</small>';
+                    container.innerHTML = html;
+                }
+            } catch (err) {
+                console.error('Errore caricamento valori validi per form:', err);
+                // In caso di errore, mostra input text
+                container.innerHTML = `<input type="text" id="${inputId.substring(1)}" name="setup_value" required placeholder="Inserisci valore">`;
+            }
+        };
+        
+        window.dcSaveValidValue = async () => {
+            const select = this.content.querySelector('#vv-config-select');
+            const setupName = select.value;
+            const value = this.content.querySelector('#vv-value').value.trim();
+            const description = this.content.querySelector('#vv-description').value.trim();
+            const sortOrder = parseInt(this.content.querySelector('#vv-sort-order').value) || 0;
+            
+            if (!setupName) {
+                this.showToast('Seleziona una configurazione', true);
+                return;
+            }
+            
+            if (!value) {
+                this.showToast('Il valore è obbligatorio', true);
+                return;
+            }
+            
+            try {
+                const entityId = this.getSelectedEntityId();
+                const serviceData = {
+                    setup_name: setupName,
+                    value: value,
+                    description: description || null,
+                    sort_order: sortOrder
+                };
+                if (entityId) {
+                    serviceData.entity_id = entityId;
+                }
+                
+                await this._hass.callService('mia_config', 'add_valid_value', serviceData);
+                
+                this.showToast('Valore valido salvato');
+                window.dcHideAddValidValueForm();
+                window.dcLoadValidValues();
+                
+            } catch (err) {
+                console.error('Errore salvataggio valore valido:', err);
+                this.showToast('Errore nel salvataggio', true);
+            }
+        };
+        
+        window.dcDeleteValidValue = async (id, setupName) => {
+            if (!confirm('Eliminare questo valore valido?')) return;
+            
+            try {
+                const entityId = this.getSelectedEntityId();
+                const serviceData = { id: id };
+                if (entityId) {
+                    serviceData.entity_id = entityId;
+                }
+                
+                await this._hass.callService('mia_config', 'delete_valid_value', serviceData);
+                
+                this.showToast('Valore valido eliminato');
+                window.dcLoadValidValues();
+                
+            } catch (err) {
+                console.error('Errore eliminazione valore valido:', err);
+                this.showToast('Errore nell\'eliminazione', true);
+            }
+        };
+        
         window.dcRestoreFromHistory = async (historyId) => {
             if (!confirm('Ripristinare questa configurazione?')) return;
             
@@ -1881,6 +2334,36 @@ class MiaConfigCard extends HTMLElement {
             
         } catch (error) {
             console.error('Error loading configs for weekly view:', error);
+        }
+    }
+    
+    async loadConfigsForHistoryFilter() {
+        try {
+            const entityId = this.getSelectedEntityId();
+            const serviceData = entityId ? { entity_id: entityId } : {};
+            
+            const result = await this._hass.callWS({
+                type: 'call_service',
+                domain: 'mia_config',
+                service: 'get_configurations',
+                service_data: serviceData,
+                return_response: true
+            });
+            
+            const configs = result.response || {};
+            const select = this.content.querySelector('#history-filter');
+            
+            if (!select) return;
+            
+            // Popola il dropdown con tutti i setup_name
+            const configNames = Object.keys(configs).sort();
+            select.innerHTML = '<option value="">-- Tutte le configurazioni --</option>';
+            configNames.forEach(name => {
+                select.innerHTML += `<option value="${name}">${name}</option>`;
+            });
+            
+        } catch (error) {
+            console.error('Error loading configs for history filter:', error);
         }
         
         window.dcLoadWeeklyView = async () => {
@@ -2558,6 +3041,33 @@ class MiaConfigCard extends HTMLElement {
             return 'background: #e8f5e9;';
         }
         return '';
+    }
+    
+    async loadConfigsForValidValues() {
+        const select = this.content.querySelector('#vv-config-select');
+        if (!select) return;
+        
+        try {
+            const entityId = this.getSelectedEntityId();
+            const serviceData = entityId ? { entity_id: entityId } : {};
+            
+            const response = await this._hass.callWS({
+                type: 'call_service',
+                domain: 'mia_config',
+                service: 'get_configurations',
+                service_data: serviceData,
+                return_response: true
+            });
+            
+            // response.response è un oggetto con chiavi = nomi configurazioni
+            const configs = response.response || {};
+            const uniqueNames = Object.keys(configs).filter(name => Array.isArray(configs[name]) && configs[name].length > 0);
+            
+            select.innerHTML = '<option value="">-- Seleziona --</option>' + 
+                uniqueNames.map(name => `<option value="${name}">${name}</option>`).join('');
+        } catch (err) {
+            console.error('Errore caricamento configurazioni per valori validi:', err);
+        }
     }
 
     showToast(message, isError = false) {
