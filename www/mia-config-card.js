@@ -1,5 +1,14 @@
-// Version 1.3.2 - Icon and UI improvements - 20251202230000
+// Version 1.3.7 - Fixed dcLoadWeeklyView availability from dashboard - 20251208050000
+console.log('MIA-CONFIG-CARD Loading Version 1.3.7 - 20251208050000');
+
 class MiaConfigCard extends HTMLElement {
+    constructor() {
+        super();
+        // Definisci subito le funzioni window che potrebbero essere chiamate dalla dashboard
+        // prima che render() sia completato
+        this.initializeWindowFunctions();
+    }
+    
     set hass(hass) {
         const firstLoad = !this._hass;
         this._hass = hass;
@@ -17,6 +26,9 @@ class MiaConfigCard extends HTMLElement {
             this.content = this.querySelector("#dynamic-config-ui");
             this.configuredEntityId = null; // Entity ID configurato via YAML
             this.render();
+            // Assicura che setupEventListeners sia chiamato dopo render
+            // per garantire che tutte le funzioni window siano disponibili
+            this.setupEventListeners();
         } else if (firstLoad && this.content) {
             // Prima volta che _hass diventa disponibile e content già esiste
             // Carica dashboard se è il tab attivo
@@ -867,7 +879,7 @@ class MiaConfigCard extends HTMLElement {
             </div>
         `;
 
-        this.setupEventListeners();
+        // setupEventListeners() ora è chiamato in set hass dopo render()
         this.loadConfigurations();
         this.setDefaultTimeValues();
     }
@@ -910,6 +922,102 @@ class MiaConfigCard extends HTMLElement {
         
         if (validFromInput) validFromInput.value = formatDateTime(now);
         if (validToInput) validToInput.value = formatDateTime(midnight);
+    }
+
+    initializeWindowFunctions() {
+        // Definisce le funzioni window che possono essere chiamate dalla dashboard
+        // anche prima che render() sia completato
+        
+        window.dcShowWeeklyFor = (setupName) => {
+            // Verifica che il contenuto sia renderizzato
+            if (!this.content) {
+                console.warn('Content not ready, waiting...');
+                setTimeout(() => window.dcShowWeeklyFor(setupName), 100);
+                return;
+            }
+            
+            // Passa al tab vista settimanale
+            const weeklyTab = this.content.querySelector('.dc-tab:nth-child(3)');
+            if (weeklyTab) {
+                weeklyTab.click();
+            }
+            
+            // Attendi che il tab si carichi e il select sia popolato
+            setTimeout(() => {
+                const weeklySelect = this.content.querySelector('#weekly-config-select');
+                if (weeklySelect) {
+                    const checkAndLoad = () => {
+                        if (weeklySelect.options.length > 1) {
+                            weeklySelect.value = setupName;
+                            if (typeof window.dcLoadWeeklyView === 'function') {
+                                window.dcLoadWeeklyView();
+                            } else {
+                                console.error('dcLoadWeeklyView non è disponibile');
+                            }
+                        } else {
+                            setTimeout(checkAndLoad, 100);
+                        }
+                    };
+                    checkAndLoad();
+                }
+            }, 100);
+        };
+        
+        window.dcLoadWeeklyView = async () => {
+            if (!this._hass || !this.content) {
+                console.warn('Hass or content not ready');
+                return;
+            }
+            
+            const setupName = this.content.querySelector('#weekly-config-select').value;
+            if (!setupName) {
+                this.showToast('Seleziona una configurazione', true);
+                return;
+            }
+            
+            try {
+                const entityId = this.getSelectedEntityId();
+                const serviceData = entityId ? { entity_id: entityId } : {};
+                
+                const result = await this._hass.callWS({
+                    type: 'call_service',
+                    domain: 'mia_config',
+                    service: 'get_configurations',
+                    service_data: serviceData,
+                    return_response: true
+                });
+                
+                const configs = result.response || {};
+                const setupConfigs = configs[setupName] || [];
+                
+                if (setupConfigs.length === 0) {
+                    this.content.querySelector('#dc-weekly-view').innerHTML = '<p>Nessuna configurazione trovata per questo setup</p>';
+                    return;
+                }
+                
+                this.renderWeeklyView(setupName, setupConfigs);
+            } catch (error) {
+                console.error('Error loading weekly view:', error);
+                this.content.querySelector('#dc-weekly-view').innerHTML = `<p style="color: red;">Errore: ${error.message}</p>`;
+            }
+        };
+        
+        window.dcQuickOverride = (setupName) => {
+            if (!this.content) {
+                setTimeout(() => window.dcQuickOverride(setupName), 100);
+                return;
+            }
+            
+            window.dcSwitchTab('configs', { target: this.content.querySelector('.dc-tab:nth-child(2)') });
+            
+            setTimeout(() => {
+                const nameInput = this.content.querySelector('#dc-form-standard input[name="setup_name"]');
+                if (nameInput) {
+                    nameInput.value = setupName;
+                    nameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 100);
+        };
     }
 
     setupEventListeners() {
