@@ -1,5 +1,5 @@
-// Version 1.3.7 - Fixed dcLoadWeeklyView availability from dashboard - 20251208050000
-console.log('MIA-CONFIG-CARD Loading Version 1.3.7 - 20251208050000');
+// Version 1.3.8 - Fixed time conversion from base 100 to base 60 in database.py - 20251209010000
+console.log('MIA-CONFIG-CARD Loading Version 1.3.8 - 20251209010000');
 
 class MiaConfigCard extends HTMLElement {
     constructor() {
@@ -88,6 +88,8 @@ class MiaConfigCard extends HTMLElement {
     }
 
     timeSelectorsToDecimal(hour, minute) {
+        // Converte ore e minuti in formato decimale base 60
+        // Es: 22:30 = 22.5, 22:51 = 22.85
         return parseFloat((hour + minute / 60).toFixed(2));
     }
 

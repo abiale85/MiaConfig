@@ -139,8 +139,10 @@ class ConfigDatabase:
         all_active_configs = []
         
         # Configurazioni a tempo attive
-        current_day = datetime.now().weekday()
-        current_time = float(datetime.now().strftime('%H.%M'))
+        now = datetime.now()
+        current_day = now.weekday()
+        # Conversione corretta: ore + minuti/60 (es: 22:51 = 22.85, non 22.51)
+        current_time = now.hour + now.minute / 60.0
         
         cursor.execute("""
             SELECT setup_name, setup_value, priority, 'time' as source_type, 
@@ -180,8 +182,10 @@ class ConfigDatabase:
             })
         
         # Configurazioni a orario attive
-        current_day = datetime.now().weekday()
-        current_time = float(datetime.now().strftime('%H.%M'))
+        now = datetime.now()
+        current_day = now.weekday()
+        # Conversione corretta: ore + minuti/60 (es: 22:51 = 22.85, non 22.51)
+        current_time = now.hour + now.minute / 60.0
         
         cursor.execute("""
             SELECT setup_name, setup_value, priority, valid_from_ora, valid_to_ora, 
@@ -855,7 +859,8 @@ class ConfigDatabase:
                         is_valid = True
                         
                         if cfg['valid_from_ora'] is not None and cfg['valid_to_ora'] is not None:
-                            current_time = float(check_time.strftime('%H.%M'))
+                            # Conversione corretta: ore + minuti/60
+                            current_time = check_time.hour + check_time.minute / 60.0
                             from_ora = cfg['valid_from_ora']
                             to_ora = cfg['valid_to_ora']
                             
@@ -951,7 +956,8 @@ class ConfigDatabase:
         cursor = self.conn.cursor()
         now = datetime.now()
         current_day = now.weekday()
-        current_time = float(now.strftime('%H.%M'))
+        # Conversione corretta: ore + minuti/60
+        current_time = now.hour + now.minute / 60.0
         
         # Limita la ricerca a 24 ore nel passato
         lookback_limit = now - timedelta(hours=24)
