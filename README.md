@@ -86,6 +86,22 @@ Per maggiori dettagli vedi [UI_GUIDE.md](UI_GUIDE.md)
 
 ## Utilizzo
 
+## Esempi di Snapshot
+
+Di seguito alcuni esempi dell'interfaccia di MiaHomeConfig:
+
+### Dashboard e Valori Correnti
+![Dashboard e Valori Correnti](attachments/0.png)
+La schermata principale mostra i valori correnti delle configurazioni, con la possibilità di effettuare override o visualizzare i dettagli.
+
+### Vista Settimanale
+![Vista Settimanale](attachments/1.png)
+La vista settimanale permette di visualizzare e modificare i profili orari delle configurazioni, con una chiara rappresentazione grafica delle fasce orarie e dei giorni della settimana.
+
+### Storico e Dettaglio Configurazione
+![Storico e Dettaglio Configurazione](attachments/2.png)
+La schermata di dettaglio mostra lo storico dei cambiamenti di stato e i prossimi cambi previsti, con tutti gli attributi della configurazione selezionata.
+
 ### Database
 
 Ogni istanza crea automaticamente un database SQLite separato (`<nome_istanza>.db`) con le seguenti tabelle:
@@ -398,34 +414,82 @@ entities:
 
 ## Struttura Database
 
+
+## Struttura Database (aggiornata)
+
 ### Tabella `configurazioni`
 ```sql
-CREATE TABLE configurazioni (
-    setup_name TEXT PRIMARY KEY NOT NULL,
-    setup_value TEXT,
-    priority INTEGER NOT NULL DEFAULT 99
+CREATE TABLE IF NOT EXISTS configurazioni (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  setup_name TEXT NOT NULL,
+  setup_value TEXT,
+  priority INTEGER NOT NULL DEFAULT 99
 )
 ```
 
 ### Tabella `configurazioni_a_orario`
 ```sql
-CREATE TABLE configurazioni_a_orario (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    setup_name TEXT NOT NULL,
-    setup_value TEXT,
-    valid_from_ora REAL NOT NULL,
-    valid_to_ora REAL
+CREATE TABLE IF NOT EXISTS configurazioni_a_orario (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  setup_name TEXT NOT NULL,
+  setup_value TEXT,
+  valid_from_ora REAL NOT NULL,  -- orario in decimale base 60 (es: 22.5 = 22:30)
+  valid_to_ora REAL,
+  days_of_week TEXT DEFAULT '0,1,2,3,4,5,6', -- giorni abilitati (0=Lun, 6=Dom)
+  priority INTEGER NOT NULL DEFAULT 99
 )
 ```
 
 ### Tabella `configurazioni_a_tempo`
 ```sql
-CREATE TABLE configurazioni_a_tempo (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    setup_name TEXT NOT NULL,
-    setup_value TEXT,
-    valid_from_date DATETIME NOT NULL,
-    valid_to_date DATETIME
+CREATE TABLE IF NOT EXISTS configurazioni_a_tempo (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  setup_name TEXT NOT NULL,
+  setup_value TEXT,
+  valid_from_date DATETIME NOT NULL,
+  valid_to_date DATETIME,
+  valid_from_ora REAL,  -- opzionale: orario di inizio (decimale base 60)
+  valid_to_ora REAL,    -- opzionale: orario di fine (decimale base 60)
+  days_of_week TEXT,    -- opzionale: giorni abilitati
+  priority INTEGER NOT NULL DEFAULT 99
+)
+```
+
+### Tabella `configurazioni_storico`
+```sql
+CREATE TABLE IF NOT EXISTS configurazioni_storico (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  setup_name TEXT NOT NULL,
+  config_type TEXT NOT NULL,
+  setup_value TEXT,
+  priority INTEGER,
+  valid_from_ora REAL,
+  valid_to_ora REAL,
+  days_of_week TEXT,
+  valid_from_date TEXT,
+  valid_to_date TEXT,
+  operation TEXT NOT NULL,
+  timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+)
+```
+
+### Tabella `configurazioni_descrizioni`
+```sql
+CREATE TABLE IF NOT EXISTS configurazioni_descrizioni (
+  setup_name TEXT PRIMARY KEY NOT NULL,
+  description TEXT
+)
+```
+
+### Tabella `configurazioni_valori_validi`
+```sql
+CREATE TABLE IF NOT EXISTS configurazioni_valori_validi (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  setup_name TEXT NOT NULL,
+  value TEXT NOT NULL,
+  description TEXT,
+  sort_order INTEGER DEFAULT 0,
+  UNIQUE(setup_name, value)
 )
 ```
 
@@ -443,9 +507,11 @@ CREATE TABLE configurazioni_a_tempo (
 - Controlla che le date/orari siano formattati correttamente
 - Usa gli strumenti di sviluppo per verificare lo stato attuale del sensore
 
+
 ### Errori di formato orario
 
-- Gli orari devono essere in formato decimale: `8.30` per 08:30, `14.15` per 14:15
+- Gli orari devono essere in formato decimale base 60: `8.5` per 08:30, `14.25` per 14:15, `22.85` per 22:51 (calcolo: ora + minuti/60)
+- **Non usare il formato base 100** (es: `8.30` NON è 08:30, ma 08:18!)
 - Le date devono essere in formato ISO: `2025-12-25 00:00:00`
 
 ## Supporto
