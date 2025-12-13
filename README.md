@@ -90,16 +90,17 @@ Per maggiori dettagli vedi [UI_GUIDE.md](UI_GUIDE.md)
 
 Di seguito alcuni esempi dell'interfaccia di MiaHomeConfig:
 
+
 ### Dashboard e Valori Correnti
-![Dashboard e Valori Correnti](attachments/0.png)
+![Dashboard e Valori Correnti](images/dashboard.png)
 La schermata principale mostra i valori correnti delle configurazioni, con la possibilità di effettuare override o visualizzare i dettagli.
 
 ### Vista Settimanale
-![Vista Settimanale](attachments/1.png)
+![Vista Settimanale](images/settimanale.png)
 La vista settimanale permette di visualizzare e modificare i profili orari delle configurazioni, con una chiara rappresentazione grafica delle fasce orarie e dei giorni della settimana.
 
 ### Storico e Dettaglio Configurazione
-![Storico e Dettaglio Configurazione](attachments/2.png)
+![Storico e Dettaglio Configurazione](images/storico.png)
 La schermata di dettaglio mostra lo storico dei cambiamenti di stato e i prossimi cambi previsti, con tutti gli attributi della configurazione selezionata.
 
 ### Database
