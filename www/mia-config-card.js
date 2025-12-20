@@ -1216,6 +1216,8 @@ class MiaConfigCard extends HTMLElement {
                     const timeSelect = this.content.querySelector('#time-config-select');
                     if (timeSelect) {
                         timeSelect.value = setupName;
+                        // Carica i valori validi per il campo valore
+                        window.dcLoadValidValuesForForm('time');
                     }
                     
                     // Scroll al form
@@ -2727,8 +2729,65 @@ class MiaConfigCard extends HTMLElement {
             
             // Verifica sovrapposizione
             if (dayEnd >= from && dayStart <= to) {
-                const startMin = from <= dayStart ? 0 : (from.getHours() * 60 + from.getMinutes());
-                const endMin = to >= dayEnd ? 1439 : (to.getHours() * 60 + to.getMinutes());
+                let startMin = from <= dayStart ? 0 : (from.getHours() * 60 + from.getMinutes());
+                let endMin = to >= dayEnd ? 1439 : (to.getHours() * 60 + to.getMinutes());
+                
+                // Se definiti, limita anche alla fascia oraria
+                if (timeConfig.valid_from_ora !== undefined && timeConfig.valid_to_ora !== undefined) {
+                    const validFrom = timeConfig.valid_from_ora;
+                    const validTo = timeConfig.valid_to_ora;
+                    
+                    const timeStartMin = Math.floor(validFrom * 60);
+                    const timeEndMin = Math.floor(validTo * 60);
+                    
+                    if (validTo < validFrom) {
+                        // Attraversa mezzanotte: applica intersezione con i due range
+                        // Prima parte: da timeStartMin a 1439
+                        const firstStart = Math.max(startMin, timeStartMin);
+                        const firstEnd = Math.min(endMin, 1439);
+                        // Seconda parte: da 0 a timeEndMin
+                        const secondStart = Math.max(startMin, 0);
+                        const secondEnd = Math.min(endMin, timeEndMin);
+                        
+                        // Applica i range
+                        const shouldOverride = (existing) => {
+                            if (!existing) return true;
+                            if (priority < existing.priority) return true;
+                            if (priority > existing.priority) return false;
+                            return 1 < existing.sourceOrder;
+                        };
+                        
+                        for (let i = firstStart; i <= firstEnd && i < 1440; i++) {
+                            if (shouldOverride(minuteMap[i])) {
+                                minuteMap[i] = {
+                                    type: 'time',
+                                    value: timeConfig.value,
+                                    priority: priority,
+                                    sourceOrder: 1,
+                                    from: from,
+                                    to: to
+                                };
+                            }
+                        }
+                        for (let i = secondStart; i <= secondEnd && i < 1440; i++) {
+                            if (shouldOverride(minuteMap[i])) {
+                                minuteMap[i] = {
+                                    type: 'time',
+                                    value: timeConfig.value,
+                                    priority: priority,
+                                    sourceOrder: 1,
+                                    from: from,
+                                    to: to
+                                };
+                            }
+                        }
+                        continue; // Salta il loop normale
+                    } else {
+                        // Range normale
+                        startMin = Math.max(startMin, timeStartMin);
+                        endMin = Math.min(endMin, timeEndMin);
+                    }
+                }
                 
                 const shouldOverride = (existing) => {
                     if (!existing) return true;
@@ -2996,6 +3055,40 @@ class MiaConfigCard extends HTMLElement {
             checkDateEnd.setHours(hour, 59, 59, 999);
             
             if (checkDateEnd >= from && checkDateStart <= to) {
+                // Se definiti, controlla anche la fascia oraria
+                if (timeConfig.valid_from_ora !== undefined && timeConfig.valid_to_ora !== undefined) {
+                    const validFrom = timeConfig.valid_from_ora;
+                    const validTo = timeConfig.valid_to_ora;
+                    
+                    const fromHour = Math.floor(validFrom);
+                    const fromMin = Math.round((validFrom - fromHour) * 60);
+                    const toHour = Math.floor(validTo);
+                    const toMin = Math.round((validTo - toHour) * 60);
+                    
+                    let hasTimeOverlap = false;
+                    if (validTo < validFrom) {
+                        // Attraversa mezzanotte
+                        if (hour > fromHour || hour < toHour) {
+                            hasTimeOverlap = true;
+                        } else if (hour === fromHour && hourEnd >= validFrom) {
+                            hasTimeOverlap = true;
+                        } else if (hour === toHour && hourStart <= validTo) {
+                            hasTimeOverlap = true;
+                        }
+                    } else {
+                        // Range normale
+                        if (hour > fromHour && hour < toHour) {
+                            hasTimeOverlap = true;
+                        } else if (hour === fromHour && hourEnd >= validFrom) {
+                            hasTimeOverlap = true;
+                        } else if (hour === toHour && hourStart <= validTo) {
+                            hasTimeOverlap = true;
+                        }
+                    }
+                    
+                    if (!hasTimeOverlap) continue; // Non attivo in questa ora
+                }
+                
                 const fromStr = `${from.getDate()}/${from.getMonth()+1} ${String(from.getHours()).padStart(2,'0')}:${String(from.getMinutes()).padStart(2,'0')}`;
                 const toStr = `${to.getDate()}/${to.getMonth()+1} ${String(to.getHours()).padStart(2,'0')}:${String(to.getMinutes()).padStart(2,'0')}`;
                 
@@ -3095,6 +3188,22 @@ class MiaConfigCard extends HTMLElement {
             checkDate.setHours(hour, 0, 0, 0);
             
             if (checkDate >= from && checkDate <= to) {
+                // Se definiti, controlla anche la fascia oraria
+                if (timeConfig.valid_from_ora !== undefined && timeConfig.valid_to_ora !== undefined) {
+                    const validFrom = timeConfig.valid_from_ora;
+                    const validTo = timeConfig.valid_to_ora;
+                    const currentTime = hour + 0.0;
+                    
+                    let isInRange = false;
+                    if (validTo < validFrom) {
+                        isInRange = (currentTime >= validFrom || currentTime <= validTo);
+                    } else {
+                        isInRange = (currentTime >= validFrom && currentTime <= validTo);
+                    }
+                    
+                    if (!isInRange) continue;
+                }
+                
                 return timeConfig.value + ' ⏰';
             }
         }
