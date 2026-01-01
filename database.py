@@ -1479,6 +1479,17 @@ class ConfigDatabase:
             - metadata: Dati aggiuntivi specifici per tipo
         """
         segments = []
+        cursor = self.conn.cursor()
+
+        # Pre-carica i metadata per tipo - necessari per il frontend
+        cursor.execute("SELECT * FROM configurazioni_a_orario WHERE setup_name = ?", (setup_name,))
+        schedule_configs = {row['id']: dict(row) for row in cursor.fetchall()}
+        
+        cursor.execute("SELECT * FROM configurazioni_a_tempo WHERE setup_name = ?", (setup_name,))
+        time_configs = {row['id']: dict(row) for row in cursor.fetchall()}
+        
+        cursor.execute("SELECT * FROM configurazioni_condizionali WHERE setup_name = ?", (setup_name,))
+        conditional_configs = {row['id']: dict(row) for row in cursor.fetchall()}
 
         # Simula giorno per giorno
         for day_offset in range(days):
@@ -1539,6 +1550,33 @@ class ConfigDatabase:
                         'priority': config['priority'],
                         'id': config['id']
                     }
+                    
+                    # Aggiungi metadata specifici per tipo (necessari per tooltip frontend)
+                    config_id = config['id']
+                    if config['source'] == 'schedule' and config_id in schedule_configs:
+                        sched = schedule_configs[config_id]
+                        current_segment['metadata'] = {
+                            'valid_from_ora': sched['valid_from_ora'],
+                            'valid_to_ora': sched['valid_to_ora'],
+                            'days_of_week': [int(d) for d in sched['days_of_week'].split(',') if d] if sched['days_of_week'] else [0,1,2,3,4,5,6]
+                        }
+                    elif config['source'] == 'time' and config_id in time_configs:
+                        time_cfg = time_configs[config_id]
+                        current_segment['metadata'] = {
+                            'valid_from_date': time_cfg['valid_from_date'],
+                            'valid_to_date': time_cfg['valid_to_date']
+                        }
+                    elif config['source'] == 'conditional' and config_id in conditional_configs:
+                        cond = conditional_configs[config_id]
+                        current_segment['metadata'] = {
+                            'conditional_config': cond['conditional_config'],
+                            'conditional_operator': cond['conditional_operator'],
+                            'conditional_value': cond['conditional_value']
+                        }
+                        # Aggiungi fascia oraria se presente
+                        if cond['valid_from_ora'] is not None and cond['valid_to_ora'] is not None:
+                            current_segment['metadata']['valid_from_ora'] = cond['valid_from_ora']
+                            current_segment['metadata']['valid_to_ora'] = cond['valid_to_ora']
             
             # Aggiungi l'ultimo segmento del giorno
             if current_segment:
