@@ -55,17 +55,35 @@ mia_config/
 - Connessione SQLite
 - Creazione/migrazione tabelle
 - CRUD operations
-- Logica di priorità (Tempo > Orario > Standard)
+- **LOGICA UNIFICATA** per risoluzione configurazioni (runtime + simulazione)
+- Valutazione ricorsiva nested conditionals
+- Logica di priorità (Tempo > Orario > Conditional > Standard)
 - Query per recupero configurazioni attive
 
 **Metodi principali**:
 - `initialize()` - Crea database e tabelle
-- `get_all_configurations()` - Recupera configurazioni con priorità
+- **`_get_configurations_at_time(datetime)`** ⭐ CORE - Risolve configurazioni per timestamp specifico
+- `get_all_configurations()` - Usa `_get_configurations_at_time(now)` per runtime
 - `get_configuration(name)` - Recupera configurazione specifica
 - `set_config()` - Salva configurazione standard
 - `set_schedule_config()` - Salva configurazione oraria
 - `set_time_config()` - Salva configurazione temporale
+- `set_conditional_config()` - Salva configurazione condizionale (con check dipendenze circolari)
 - `delete_config()` - Elimina configurazioni
+- **`simulate_configuration_schedule()`** - Usa `_get_configurations_at_time()` per ogni minuto simulato
+
+**Architettura Unificata** (v1.5.0):
+```
+_get_configurations_at_time(timestamp) ← UNICA FONTE DI VERITÀ
+    ├── Carica config a tempo attive per timestamp
+    ├── Carica config a orario attive per timestamp
+    ├── Carica config standard
+    ├── Valuta condizionali ricorsivamente (nested support)
+    └── Applica priorità e source_order
+
+Runtime: get_all_configurations() → _get_configurations_at_time(now)
+Simulazione: per ogni minuto → _get_configurations_at_time(minuto)
+```
 
 ### `sensor.py` (Entity Platform)
 **Responsabilità**:

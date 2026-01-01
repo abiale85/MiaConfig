@@ -1,5 +1,51 @@
 # 📋 Changelog - Mia Config
 
+## v1.5.0 - 1 Gennaio 2026 🚀 Architettura Unificata
+
+### 🏗️ Refactoring Architetturale Maggiore
+- **LOGICA UNIFICATA Runtime ↔ Simulazione**: Eliminata duplicazione codice tra valutazione runtime e vista settimanale
+  - Nuova funzione `_get_configurations_at_time(target_datetime)` centralizza tutta la logica di risoluzione
+  - `get_all_configurations()` ora usa `_get_configurations_at_time(datetime.now())`
+  - `simulate_configuration_schedule()` usa `_get_configurations_at_time()` per ogni minuto simulato
+  - **Garanzia assoluta**: runtime e simulazione producono sempre gli stessi risultati
+  - Risoluzione ricorsiva nested conditionals unificata (profilo_temperatura → tipo_sveglia → giorno_festivo)
+
+### 🐛 Fix Critico Discrepanza Stato
+- **Risolto**: Vista settimanale mostrava valori diversi dall'entità in tempo reale
+  - Causa: `simulate_configuration_schedule` usava `build_minute_map_for_setup` (ricorsivo)
+  - Causa: `get_all_configurations` usava logica separata (non ricorsiva per nested conditionals)
+  - Soluzione: **unica fonte di verità** per entrambi i percorsi
+
+### 🎯 Vantaggi
+- ✅ Coerenza garantita tra dashboard e vista settimanale
+- ✅ Manutenibilità: modifiche alla logica di risoluzione in un solo punto
+- ✅ Testing semplificato: una sola funzione da testare
+- ✅ Meno bug: impossibile disallineamento logico
+
+### ⚠️ Note Prestazioni
+- Trade-off accettato: correttezza > performance
+- Simulazione chiama `_get_configurations_at_time` 1440 volte/giorno (20160 per 14gg)
+- Impatto limitato: vista settimanale chiamata solo su richiesta utente, non in loop
+
+### 📐 Architettura
+```
+_get_configurations_at_time(timestamp) ← LOGICA CORE
+    ├── Carica config a tempo attive
+    ├── Carica config a orario attive  
+    ├── Carica config standard
+    ├── Valuta condizionali ricorsivamente
+    └── Applica priorità e source_order
+
+get_all_configurations()
+    └── _get_configurations_at_time(now)
+
+simulate_configuration_schedule()
+    └── for ogni minuto:
+        └── _get_configurations_at_time(minuto)
+```
+
+---
+
 ## v1.4.2 - 1 Gennaio 2026 🎯🔧
 
 ### 🐛 Correzioni Critiche Backend

@@ -1,5 +1,5 @@
-// Version 1.3.10 - Async form prefill with proper wait for dynamic select population - 20260101010000
-console.log('MIA-CONFIG-CARD Loading Version 1.3.10 - 20260101010000');
+// Version 1.3.11 - Show time filter details in conditional override items - 20260101020000
+console.log('MIA-CONFIG-CARD Loading Version 1.3.11 - 20260101020000');
 
 class MiaConfigCard extends HTMLElement {
     constructor() {
@@ -2587,11 +2587,19 @@ class MiaConfigCard extends HTMLElement {
                 const { name, cfg } = item;
                 const cfgData = encodeURIComponent(JSON.stringify(cfg));
                 
+                // Aggiungi dettagli fascia oraria per condizionali se presente
+                let extraDetails = `Priorità: ${cfg.priority || 99}`;
+                if (group.type === 'conditional' && cfg.valid_from_ora !== undefined && cfg.valid_to_ora !== undefined) {
+                    const fromTime = this.formatTimeDisplay(cfg.valid_from_ora);
+                    const toTime = this.formatTimeDisplay(cfg.valid_to_ora);
+                    extraDetails += ` | ⏰ ${fromTime} → ${toTime}`;
+                }
+                
                 html += `
                     <div class="dc-config-item" style="margin: 5px 0; padding: 8px; background: var(--card-background-color); display: flex; justify-content: space-between; align-items: center;">
                         <div style="flex: 1;">
                             <strong>${name}</strong>: ${cfg.value}
-                            <br><small>Priorità: ${cfg.priority || 99}</small>
+                            <br><small>${extraDetails}</small>
                         </div>
                         <div style="display: flex; gap: 5px;">
                             <button class="dc-btn" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcEditConfig('${name}', '${cfg.type}', ${cfg.id}, '${cfgData}')">✏️</button>
