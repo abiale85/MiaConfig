@@ -1457,7 +1457,8 @@ class ConfigDatabase:
         self,
         setup_name: str,
         start_date: datetime,
-        days: int = 14
+        days: int = 14,
+        granularity_minutes: int = 1
     ) -> List[Dict[str, Any]]:
         """Simula la configurazione per un periodo di tempo specificato.
         USA LA LOGICA UNIFICATA _get_configurations_at_time per garantire coerenza con il runtime.
@@ -1466,6 +1467,9 @@ class ConfigDatabase:
             setup_name: Nome della configurazione da simulare
             start_date: Data di inizio simulazione
             days: Numero di giorni da simulare (default 14)
+            granularity_minutes: Granularità campionamento in minuti (allineato a scan_interval componente)
+                                 Derivato automaticamente da scan_interval (60s → 1min, 300s → 5min, etc.)
+                                 Una granularità maggiore migliora le performance (meno query database)
         
         Returns:
             Lista di segmenti, ognuno con:
@@ -1497,27 +1501,34 @@ class ConfigDatabase:
             day_of_week = current_date.weekday()
             date_str = current_date.strftime('%Y-%m-%d')
             
-            # Costruisci mappa minuti usando la logica unificata
+            # Costruisci mappa minuti usando la logica unificata con granularità configurabile
             minute_map = [None] * 1440
             
-            # Per ogni minuto del giorno, calcola la configurazione usando _get_configurations_at_time
-            for minute in range(1440):
-                hour = minute // 60
-                min_part = minute % 60
+            # Campiona ogni N minuti secondo la granularità specificata
+            # Per riempire i minuti intermedi, copia il valore campionato
+            for sample_minute in range(0, 1440, granularity_minutes):
+                hour = sample_minute // 60
+                min_part = sample_minute % 60
                 timestamp = current_date.replace(hour=hour, minute=min_part, second=0, microsecond=0)
                 
                 # Usa la logica unificata
                 all_configs = self._get_configurations_at_time(timestamp)
                 
                 # Trova la configurazione per questo setup_name
+                sample_config = None
                 if setup_name in all_configs:
                     config = all_configs[setup_name]
-                    minute_map[minute] = {
+                    sample_config = {
                         'value': config['value'],
                         'source': config['source'],
                         'priority': config['priority'],
                         'id': config['id']
                     }
+                
+                # Riempie i minuti dal sample corrente fino al prossimo sample (o fine giorno)
+                end_minute = min(sample_minute + granularity_minutes, 1440)
+                for minute in range(sample_minute, end_minute):
+                    minute_map[minute] = sample_config
             
             # Converti la mappa in segmenti
             current_segment = None

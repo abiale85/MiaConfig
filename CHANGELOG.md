@@ -1,5 +1,28 @@
 # 📋 Changelog - Mia Config
 
+## v1.5.1 - 1 Gennaio 2026 🎯 Performance e UX
+
+### 🚀 Ottimizzazione Performance
+- **Granularità Allineata a scan_interval**: Vista settimanale ora usa automaticamente `scan_interval` del componente
+  - Nessun parametro aggiuntivo - riusa configurazione esistente
+  - scan_interval 60s → 1 min granularità (1440 sample/giorno)
+  - scan_interval 300s → 5 min granularità (288 sample/giorno) = **5x più veloce**
+  - scan_interval 600s → 10 min granularità (144 sample/giorno) = **10x più veloce**
+  - Impatto: 14 giorni con 300s scan passa da 20160 a 4032 chiamate (-80%)
+
+### 🎨 Miglioramento UI
+- **Fix Tooltip Vista Settimanale**: Tooltip ore notturne non più tagliati fuori schermo
+  - Tooltip configurazioni 00:00-03:20 ora mostrati SEMPRE sotto la barra
+  - Logica basata su posizione assoluta (`style.top`) invece che viewport relativo
+  - Esperienza utente migliorata: tutti i tooltip sempre visibili
+
+### 🔧 Dettagli Tecnici
+- Algoritmo campionamento: sample ogni N minuti, riempimento minuti intermedi
+- Default 5 minuti bilancia performance/precisione ottimale
+- Usa sempre logica unificata `_get_configurations_at_time` (coerenza garantita)
+
+---
+
 ## v1.5.0 - 1 Gennaio 2026 🚀 Architettura Unificata
 
 ### 🏗️ Refactoring Architetturale Maggiore

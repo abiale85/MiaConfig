@@ -418,12 +418,16 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         start_date = call.data.get("start_date")
         days = call.data.get("days", 14)
         
+        # Usa lo scan_interval del componente come granularità (già in secondi, converti in minuti)
+        scan_interval_seconds = hass.data[DOMAIN].get("scan_interval", DEFAULT_SCAN_INTERVAL)
+        granularity_minutes = max(1, scan_interval_seconds // 60)  # Converti in minuti, minimo 1
+        
         # Se non specificata, usa data/ora corrente
         if start_date is None:
             start_date = datetime.now()
         
         segments = await hass.async_add_executor_job(
-            db.simulate_configuration_schedule, setup_name, start_date, days
+            db.simulate_configuration_schedule, setup_name, start_date, days, granularity_minutes
         )
         
         return {"segments": segments}

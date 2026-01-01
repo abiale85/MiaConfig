@@ -3055,17 +3055,22 @@ class MiaConfigCard extends HTMLElement {
                         const rect = this.getBoundingClientRect();
                         const parent = this.closest('.dc-weekly-day-content');
                         const parentRect = parent ? parent.getBoundingClientRect() : null;
-                        const viewportHeight = window.innerHeight;
-                        const tooltipHeight = 200; // Altezza stimata del tooltip + margine
-                        const headerHeight = 100; // Spazio per header Home Assistant
                         
-                        // Se la barra inizia nei primi 150px del contenitore giorno, mostra sempre sotto
-                        if (parentRect && (rect.top - parentRect.top) < 150) {
+                        // Ottieni la posizione top della barra dal suo style (in px)
+                        const barTopPx = parseFloat(this.style.top) || 0;
+                        
+                        // Se la barra inizia nei primi 200px del giorno (circa 3 ore), mostra SEMPRE sotto
+                        // Questo evita che il tooltip scompaia in alto per le configurazioni di inizio giornata
+                        if (barTopPx < 200) {
                             this.classList.add('tooltip-below');
                             return;
                         }
                         
-                        // Calcola lo spazio disponibile sopra e sotto la barra
+                        // Altrimenti usa logica basata su spazio disponibile nel viewport
+                        const viewportHeight = window.innerHeight;
+                        const tooltipHeight = 200; // Altezza stimata del tooltip + margine
+                        const headerHeight = 100; // Spazio per header Home Assistant
+                        
                         const spaceAbove = rect.top - headerHeight;
                         const spaceBelow = viewportHeight - rect.bottom;
                         
