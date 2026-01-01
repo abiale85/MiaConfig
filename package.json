@@ -1,0 +1,25 @@
+{
+  "name": "mia-config-card",
+  "version": "2.0.0",
+  "description": "Custom Lovelace card for MiaConfig Home Assistant integration",
+  "type": "module",
+  "main": "www/mia-config-card.js",
+  "scripts": {
+    "build": "rollup -c",
+    "watch": "rollup -c -w",
+    "dev": "rollup -c -w"
+  },
+  "keywords": [
+    "home-assistant",
+    "lovelace",
+    "custom-card",
+    "mia-config"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-terser": "^0.4.4",
+    "rollup": "^4.9.6"
+  }
+}

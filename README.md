@@ -99,6 +99,8 @@ La schermata principale mostra i valori correnti delle configurazioni, con la po
 ![Vista Settimanale](images/settimanale.png)
 La vista settimanale permette di visualizzare e modificare i profili orari delle configurazioni, con una chiara rappresentazione grafica delle fasce orarie e dei giorni della settimana.
 
+**Come funziona ora**: la card delega tutto il calcolo al backend tramite il servizio `mia_config.simulate_schedule`, che restituisce i segmenti già risolti con le priorità applicate. Gli override condizionali vengono valutati minuto per minuto in base al valore che il setup di riferimento avrà in quel momento simulato (non sul valore corrente), così l’override appare solo quando la condizione è effettivamente vera.
+
 ### Storico e Dettaglio Configurazione
 ![Storico e Dettaglio Configurazione](images/storico.png)
 La schermata di dettaglio mostra lo storico dei cambiamenti di stato e i prossimi cambi previsti, con tutti gli attributi della configurazione selezionata.

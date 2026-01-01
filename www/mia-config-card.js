@@ -1,5 +1,5 @@
-// Version 1.3.8 - Fixed time conversion from base 100 to base 60 in database.py - 20251209010000
-console.log('MIA-CONFIG-CARD Loading Version 1.3.8 - 20251209010000');
+// Version 1.3.10 - Async form prefill with proper wait for dynamic select population - 20260101010000
+console.log('MIA-CONFIG-CARD Loading Version 1.3.10 - 20260101010000');
 
 class MiaConfigCard extends HTMLElement {
     constructor() {
@@ -81,16 +81,16 @@ class MiaConfigCard extends HTMLElement {
 
     generateMinuteOptions() {
         let options = '';
-        for (let i = 0; i < 60; i += 5) {
+        for (let i = 0; i < 60; i++) {
             options += `<option value="${i}">${String(i).padStart(2, '0')}</option>`;
         }
         return options;
     }
 
     timeSelectorsToDecimal(hour, minute) {
-        // Converte ore e minuti in formato decimale base 60
-        // Es: 22:30 = 22.5, 22:51 = 22.85
-        return parseFloat((hour + minute / 60).toFixed(2));
+        // Converte ore e minuti in formato decimale
+        // Es: 4 ore e 30 minuti = 4.5, 22 ore e 15 minuti = 22.25
+        return hour + (minute / 60);
     }
 
     formatTimeDisplay(decimalTime) {
@@ -99,481 +99,83 @@ class MiaConfigCard extends HTMLElement {
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
     }
 
+    getStyles() {
+        return `
+            <style>
+                .mia-config-card .dc-tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid var(--divider-color); }
+                .mia-config-card .dc-tab { padding: 10px 20px; cursor: pointer; background: var(--card-background-color); border: 1px solid var(--divider-color); border-bottom: 3px solid transparent; border-radius: 8px 8px 0 0; font-size: 14px; color: var(--primary-text-color); transition: all 0.2s ease; }
+                .mia-config-card .dc-tab:hover { background: var(--secondary-background-color); }
+                .mia-config-card .dc-tab.active { border-bottom-color: var(--primary-color); background: var(--primary-background-color); color: var(--primary-color); font-weight: 500; }
+                .mia-config-card .dc-tab-content { display: none; }
+                .mia-config-card .dc-tab-content.active { display: block; }
+                .mia-config-card .dc-form-group { margin-bottom: 16px; }
+                .mia-config-card .dc-form-group label { display: block; margin-bottom: 4px; font-weight: 500; font-size: 14px; }
+                .mia-config-card .dc-form-group input, .mia-config-card .dc-form-group select { width: 100%; padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 14px; box-sizing: border-box; }
+                .mia-config-card .dc-checkbox-group { display: flex; gap: 10px; flex-wrap: wrap; }
+                .mia-config-card .dc-checkbox-label { display: flex; align-items: center; gap: 5px; font-size: 14px; }
+                .mia-config-card .dc-time-picker { display: flex; gap: 15px; align-items: center; }
+                .mia-config-card .dc-time-input { display: flex; gap: 8px; align-items: center; }
+                .mia-config-card .dc-time-input select { width: 70px; padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 14px; }
+                .mia-config-card .dc-time-separator { font-size: 18px; font-weight: bold; }
+                .mia-config-card .dc-time-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+                .mia-config-card .dc-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center; }
+                .mia-config-card .dc-modal.active { display: flex; }
+                .mia-config-card .dc-modal-content { background: var(--card-background-color); padding: 20px; border-radius: 8px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; }
+                .mia-config-card .dc-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid var(--divider-color); }
+                .mia-config-card .dc-modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--primary-text-color); }
+                .mia-config-card .dc-weekly-tooltip { position: relative; cursor: help; }
+                .mia-config-card .dc-weekly-tooltip .dc-tooltip-text { visibility: hidden; opacity: 0; width: 300px; max-width: 90vw; background-color: rgba(0,0,0,0.95); color: #fff; text-align: left; border-radius: 6px; padding: 12px; position: absolute; z-index: 999999; left: 50%; bottom: 100%; transform: translateX(-50%); margin-bottom: 8px; font-size: 12px; line-height: 1.5; box-shadow: 0 4px 16px rgba(0,0,0,0.6); pointer-events: none; transition: opacity 0.2s, visibility 0.2s; white-space: normal; }
+                .mia-config-card .dc-weekly-tooltip.tooltip-below .dc-tooltip-text { bottom: auto; top: 100%; margin-bottom: 0; margin-top: 8px; }
+                .mia-config-card .dc-weekly-tooltip:hover .dc-tooltip-text { visibility: visible; opacity: 1; }
+                .mia-config-card .dc-weekly-container { overflow-x: auto; margin: 15px 0; position: relative; }
+                .mia-config-card .dc-weekly-grid { display: flex; min-width: 1000px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); position: relative; overflow: visible; }
+                .mia-config-card .dc-weekly-time-column { width: 60px; flex-shrink: 0; border-right: 2px solid var(--divider-color); background: var(--primary-color); color: white; }
+                .mia-config-card .dc-weekly-time-slot { height: 60px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; box-sizing: border-box; border-bottom: 1px solid rgba(255,255,255,0.1); }
+                .mia-config-card .dc-weekly-days { display: flex; flex: 1; }
+                .mia-config-card .dc-weekly-day-column { flex: 1; position: relative; border-right: 1px solid var(--divider-color); background: #f9f9f9; overflow: visible; min-height: 1490px; }
+                .mia-config-card .dc-weekly-day-column:last-child { border-right: none; }
+                .mia-config-card .dc-weekly-day-header { height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--primary-color); color: white; border-bottom: 2px solid var(--divider-color); font-weight: bold; font-size: 12px; position: sticky; top: 0; z-index: 10; }
+                .mia-config-card .dc-weekly-day-content { position: relative; height: 1440px; min-height: 1440px; overflow: visible; }
+                .mia-config-card .dc-weekly-hour-line { position: absolute; left: 0; right: 0; height: 1px; background: var(--divider-color); pointer-events: none; }
+                .mia-config-card .dc-weekly-bar { position: absolute; left: 2px; right: 2px; border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; cursor: pointer; transition: all 0.2s; overflow: visible; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; box-sizing: border-box; border-top: 2px solid rgba(0,0,0,0.3); border-bottom: 2px solid rgba(0,0,0,0.3); z-index: 1; }
+                .mia-config-card .dc-weekly-bar:hover { left: 0; right: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 9999 !important; transform: scaleY(1.05); }
+                .mia-config-card .dc-weekly-bar-time { background: #2196f3; color: white; border-left: 3px solid #0d47a1; border-right: 3px solid #0d47a1; }
+                .mia-config-card .dc-weekly-bar-schedule { background: #ff9800; color: white; border-left: 3px solid #e65100; border-right: 3px solid #e65100; }
+                .mia-config-card .dc-weekly-bar-conditional { background: #9c27b0; color: white; border-left: 3px solid #7b1fa2; border-right: 3px solid #7b1fa2; }
+                .mia-config-card .dc-weekly-bar-standard { background: #4caf50; color: white; border-left: 3px solid #1b5e20; border-right: 3px solid #1b5e20; }
+                .mia-config-card .dc-btn { background-color: var(--primary-color); color: var(--text-primary-color, white); border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; }
+                .mia-config-card .dc-btn:hover { opacity: 0.9; }
+                .mia-config-card .dc-btn-delete { background-color: #f44336; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+                .mia-config-card .dc-config-item { border: 1px solid var(--divider-color); border-radius: 4px; padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+                .mia-config-card .dc-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; margin-right: 8px; }
+                .mia-config-card .dc-badge-time { background-color: #e3f2fd; color: #1976d2; }
+                .mia-config-card .dc-badge-schedule { background-color: #fff3e0; color: #f57c00; }
+                .mia-config-card .dc-badge-standard { background-color: #f5f5f5; color: #616161; }
+                .mia-config-card .dc-dashboard-actions { display: flex; gap: 5px; flex-direction: column; }
+                .mia-config-card .dc-dashboard-actions button { white-space: nowrap; }
+                @media (max-width: 768px) {
+                    .mia-config-card .dc-tabs { flex-wrap: wrap; gap: 8px; justify-content: space-between; }
+                    .mia-config-card .dc-tab { flex: 0 0 calc(50% - 4px); max-width: calc(50% - 4px); font-size: 13px; padding: 12px 6px; min-height: 48px; text-align: center; border: 2px solid var(--divider-color); box-sizing: border-box; }
+                    .mia-config-card .dc-tab.active { border: 2px solid var(--primary-color); background: var(--primary-color); color: white; }
+                    .mia-config-card .dc-btn, .mia-config-card .dc-btn-secondary, .mia-config-card .dc-btn-danger { padding: 10px 12px; font-size: 13px; min-height: 44px; }
+                    .mia-config-card .dc-config-item { flex-direction: column; align-items: flex-start; gap: 10px; }
+                    .mia-config-card .dc-dashboard-actions { flex-direction: row; width: 100%; }
+                    .mia-config-card .dc-dashboard-actions button { flex: 1; }
+                    .mia-config-card .dc-time-group { grid-template-columns: 1fr; }
+                    .mia-config-card input[type="text"], .mia-config-card input[type="time"], .mia-config-card input[type="number"], .mia-config-card select { font-size: 16px !important; padding: 10px !important; min-height: 44px; }
+                    .mia-config-card .dc-weekly-container { overflow-x: auto; }
+                    .mia-config-card .dc-weekly-grid { min-width: 700px; }
+                }
+            </style>
+        `;
+    }
+
     render() {
         if (!this._hass) return;
 
         this.content.innerHTML = `
-            <style>
-                .dc-tabs {
-                    display: flex;
-                    gap: 10px;
-                    margin-bottom: 20px;
-                    border-bottom: 2px solid var(--divider-color);
-                }
-                .dc-tab {
-                    padding: 10px 20px;
-                    cursor: pointer;
-                    background: var(--card-background-color);
-                    border: 1px solid var(--divider-color);
-                    border-bottom: 3px solid transparent;
-                    border-radius: 8px 8px 0 0;
-                    font-size: 14px;
-                    color: var(--primary-text-color);
-                    transition: all 0.2s ease;
-                }
-                .dc-tab:hover {
-                    background: var(--secondary-background-color);
-                }
-                .dc-tab.active {
-                    border-bottom-color: var(--primary-color);
-                    background: var(--primary-background-color);
-                    color: var(--primary-color);
-                    font-weight: 500;
-                }
-                .dc-tab-content {
-                    display: none;
-                }
-                .dc-tab-content.active {
-                    display: block;
-                }
-                .dc-form-group {
-                    margin-bottom: 16px;
-                }
-                .dc-form-group label {
-                    display: block;
-                    margin-bottom: 4px;
-                    font-weight: 500;
-                    font-size: 14px;
-                }
-                .dc-form-group input,
-                .dc-form-group select {
-                    width: 100%;
-                    padding: 8px;
-                    border: 1px solid var(--divider-color);
-                    border-radius: 4px;
-                    background: var(--card-background-color);
-                    color: var(--primary-text-color);
-                    font-size: 14px;
-                    box-sizing: border-box;
-                }
-                .dc-checkbox-group {
-                    display: flex;
-                    gap: 10px;
-                    flex-wrap: wrap;
-                }
-                .dc-checkbox-label {
-                    display: flex;
-                    align-items: center;
-                    gap: 5px;
-                    font-size: 14px;
-                }
-                .dc-time-picker {
-                    display: flex;
-                    gap: 15px;
-                    align-items: center;
-                }
-                .dc-time-input {
-                    display: flex;
-                    gap: 8px;
-                    align-items: center;
-                }
-                .dc-time-input select {
-                    width: 70px;
-                    padding: 8px;
-                    border: 1px solid var(--divider-color);
-                    border-radius: 4px;
-                    background: var(--card-background-color);
-                    color: var(--primary-text-color);
-                    font-size: 14px;
-                }
-                .dc-time-separator {
-                    font-size: 18px;
-                    font-weight: bold;
-                }
-                .dc-modal {
-                    display: none;
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: rgba(0,0,0,0.5);
-                    z-index: 9999;
-                    justify-content: center;
-                    align-items: center;
-                }
-                .dc-modal.active {
-                    display: flex;
-                }
-                .dc-modal-content {
-                    background: var(--card-background-color);
-                    padding: 20px;
-                    border-radius: 8px;
-                    max-width: 500px;
-                    width: 90%;
-                    max-height: 80vh;
-                    overflow-y: auto;
-                }
-                .dc-modal-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 15px;
-                    padding-bottom: 10px;
-                    border-bottom: 2px solid var(--divider-color);
-                }
-                .dc-modal-close {
-                    background: none;
-                    border: none;
-                    font-size: 24px;
-                    cursor: pointer;
-                    color: var(--primary-text-color);
-                }
-                .dc-weekly-tooltip {
-                    position: relative;
-                    cursor: help;
-                }
-                .dc-weekly-tooltip .dc-tooltip-text {
-                    visibility: hidden;
-                    opacity: 0;
-                    width: 300px;
-                    max-width: 90vw;
-                    background-color: rgba(0, 0, 0, 0.95);
-                    color: #fff;
-                    text-align: left;
-                    border-radius: 6px;
-                    padding: 12px;
-                    position: absolute;
-                    z-index: 999999;
-                    left: 50%;
-                    bottom: 100%;
-                    transform: translateX(-50%);
-                    margin-bottom: 8px;
-                    font-size: 12px;
-                    line-height: 1.5;
-                    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
-                    pointer-events: none;
-                    transition: opacity 0.2s, visibility 0.2s;
-                    white-space: normal;
-                }
-                /* Tooltip a sinistra: sposta a destra */
-                .dc-weekly-day-column:first-child .dc-weekly-tooltip .dc-tooltip-text,
-                .dc-weekly-day-column:nth-child(2) .dc-weekly-tooltip .dc-tooltip-text {
-                    left: 0;
-                    transform: translateX(0);
-                }
-                /* Tooltip a destra: sposta a sinistra */
-                .dc-weekly-day-column:last-child .dc-weekly-tooltip .dc-tooltip-text,
-                .dc-weekly-day-column:nth-last-child(2) .dc-weekly-tooltip .dc-tooltip-text {
-                    left: auto;
-                    right: 0;
-                    transform: translateX(0);
-                }
-                .dc-weekly-tooltip .dc-tooltip-text::after {
-                    content: "";
-                    position: absolute;
-                    top: 100%;
-                    left: 50%;
-                    margin-left: -6px;
-                    border-width: 6px;
-                    border-style: solid;
-                    border-color: rgba(0, 0, 0, 0.95) transparent transparent transparent;
-                }
-                /* Freccia spostata per tooltip a sinistra */
-                .dc-weekly-day-column:first-child .dc-weekly-tooltip .dc-tooltip-text::after,
-                .dc-weekly-day-column:nth-child(2) .dc-weekly-tooltip .dc-tooltip-text::after {
-                    left: 20px;
-                }
-                /* Freccia spostata per tooltip a destra */
-                .dc-weekly-day-column:last-child .dc-weekly-tooltip .dc-tooltip-text::after,
-                .dc-weekly-day-column:nth-last-child(2) .dc-weekly-tooltip .dc-tooltip-text::after {
-                    left: auto;
-                    right: 20px;
-                    margin-left: 0;
-                    margin-right: -6px;
-                }
-                /* Tooltip in alto: mostra sotto invece che sopra (gestito via JS) */
-                .dc-weekly-tooltip.tooltip-below .dc-tooltip-text {
-                    bottom: auto;
-                    top: 100%;
-                    margin-bottom: 0;
-                    margin-top: 8px;
-                }
-                .dc-weekly-tooltip.tooltip-below .dc-tooltip-text::after {
-                    top: auto;
-                    bottom: 100%;
-                    border-color: transparent transparent rgba(0, 0, 0, 0.95) transparent;
-                }
-                .dc-weekly-tooltip:hover .dc-tooltip-text {
-                    visibility: visible;
-                    opacity: 1;
-                }
-                .dc-weekly-container {
-                    overflow-x: auto;
-                    margin: 15px 0;
-                    position: relative;
-                }
-                .dc-weekly-grid {
-                    display: flex;
-                    min-width: 1000px;
-                    border: 1px solid var(--divider-color);
-                    border-radius: 4px;
-                    background: var(--card-background-color);
-                    position: relative;
-                    overflow: visible;
-                }
-                .dc-weekly-time-column {
-                    width: 60px;
-                    flex-shrink: 0;
-                    border-right: 2px solid var(--divider-color);
-                    background: var(--primary-color);
-                    color: white;
-                }
-                .dc-weekly-time-slot {
-                    height: 60px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 11px;
-                    font-weight: bold;
-                    box-sizing: border-box;
-                    border-bottom: 1px solid rgba(255,255,255,0.1);
-                }
-                .dc-weekly-days {
-                    display: flex;
-                    flex: 1;
-                }
-                .dc-weekly-day-column {
-                    flex: 1;
-                    position: relative;
-                    border-right: 1px solid var(--divider-color);
-                    background: #f9f9f9;
-                    overflow: visible;
-                    min-height: 1490px;
-                }
-                .dc-weekly-day-column:last-child {
-                    border-right: none;
-                }
-                .dc-weekly-day-header {
-                    height: 50px;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    background: var(--primary-color);
-                    color: white;
-                    border-bottom: 2px solid var(--divider-color);
-                    font-weight: bold;
-                    font-size: 12px;
-                    position: sticky;
-                    top: 0;
-                    z-index: 10;
-                }
-                .dc-weekly-day-content {
-                    position: relative;
-                    height: 1440px;
-                    min-height: 1440px;
-                    overflow: visible;
-                }
-                .dc-weekly-hour-line {
-                    position: absolute;
-                    left: 0;
-                    right: 0;
-                    height: 1px;
-                    background: var(--divider-color);
-                    pointer-events: none;
-                }
-                .dc-weekly-bar {
-                    position: absolute;
-                    left: 2px;
-                    right: 2px;
-                    border-radius: 2px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 10px;
-                    font-weight: bold;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                    overflow: visible;
-                    text-overflow: ellipsis;
-                    white-space: nowrap;
-                    padding: 0 4px;
-                    box-sizing: border-box;
-                    border-top: 2px solid rgba(0,0,0,0.3);
-                    border-bottom: 2px solid rgba(0,0,0,0.3);
-                    z-index: 1;
-                }
-                .dc-weekly-bar:hover {
-                    left: 0;
-                    right: 0;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-                    z-index: 9999 !important;
-                    transform: scaleY(1.05);
-                }
-                .dc-weekly-bar-time {
-                    background: #2196f3;
-                    color: white;
-                    border-left: 3px solid #0d47a1;
-                    border-right: 3px solid #0d47a1;
-                }
-                .dc-weekly-bar-schedule {
-                    background: #ff9800;
-                    color: white;
-                    border-left: 3px solid #e65100;
-                    border-right: 3px solid #e65100;
-                }
-                .dc-weekly-bar-standard {
-                    background: #4caf50;
-                    color: white;
-                    border-left: 3px solid #1b5e20;
-                    border-right: 3px solid #1b5e20;
-                }
-                .dc-btn {
-                    background-color: var(--primary-color);
-                    color: var(--text-primary-color, white);
-                    border: none;
-                    padding: 10px 20px;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    font-size: 14px;
-                    font-weight: 500;
-                }
-                .dc-btn:hover {
-                    opacity: 0.9;
-                }
-                .dc-config-item {
-                    border: 1px solid var(--divider-color);
-                    border-radius: 4px;
-                    padding: 12px;
-                    margin-bottom: 8px;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                }
-                .dc-badge {
-                    display: inline-block;
-                    padding: 2px 8px;
-                    border-radius: 12px;
-                    font-size: 11px;
-                    font-weight: 500;
-                    margin-right: 8px;
-                }
-                .dc-badge-time {
-                    background-color: #e3f2fd;
-                    color: #1976d2;
-                }
-                .dc-badge-schedule {
-                    background-color: #fff3e0;
-                    color: #f57c00;
-                }
-                .dc-badge-standard {
-                    background-color: #f5f5f5;
-                    color: #616161;
-                }
-                .dc-btn-delete {
-                    background-color: #f44336;
-                    color: white;
-                    border: none;
-                    padding: 6px 12px;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    font-size: 12px;
-                }
-                .dc-time-group {
-                    display: grid;
-                    grid-template-columns: 1fr 1fr;
-                    gap: 10px;
-                }
-                
-                /* Dashboard action buttons */
-                .dc-dashboard-actions {
-                    display: flex;
-                    gap: 5px;
-                    flex-direction: column;
-                }
-                .dc-dashboard-actions button {
-                    white-space: nowrap;
-                }
-                
-                /* Responsive per mobile */
-                @media (max-width: 768px) {
-                    .dc-tabs {
-                        flex-wrap: wrap;
-                        gap: 8px;
-                        justify-content: space-between;
-                    }
-                    .dc-tab {
-                        flex: 0 0 calc(50% - 4px);
-                        max-width: calc(50% - 4px);
-                        font-size: 13px;
-                        padding: 12px 6px;
-                        min-height: 48px;
-                        text-align: center;
-                        border: 2px solid var(--divider-color);
-                        box-sizing: border-box;
-                    }
-                    .dc-tab.active {
-                        border: 2px solid var(--primary-color);
-                        background: var(--primary-color);
-                        color: white;
-                    }
-                    .dc-btn, .dc-btn-secondary, .dc-btn-danger {
-                        padding: 10px 12px;
-                        font-size: 13px;
-                        min-height: 44px;
-                    }
-                    .dc-config-item {
-                        flex-direction: column;
-                        align-items: flex-start;
-                        gap: 10px;
-                    }
-                    .dc-dashboard-actions {
-                        flex-direction: row;
-                        width: 100%;
-                    }
-                    .dc-dashboard-actions button {
-                        flex: 1;
-                    }
-                    .dc-time-group {
-                        grid-template-columns: 1fr;
-                    }
-                    .dc-table-responsive {
-                        overflow-x: auto;
-                    }
-                    .dc-table {
-                        font-size: 13px;
-                    }
-                    .dc-table td, .dc-table th {
-                        padding: 8px 6px;
-                    }
-                    input[type="text"],
-                    input[type="time"],
-                    input[type="number"],
-                    select {
-                        font-size: 16px !important;
-                        padding: 10px !important;
-                        min-height: 44px;
-                    }
-                    .dc-weekly-container {
-                        overflow-x: auto;
-                    }
-                    .dc-weekly-grid {
-                        min-width: 700px;
-                    }
-                }
-                
-                @media (max-width: 480px) {
-                    .dc-tab {
-                        flex: 1 1 100%;
-                        font-size: 14px;
-                    }
-                    .dc-card-header h2 {
-                        font-size: 18px;
-                    }
-                }
-            </style>
-
+            ${this.getStyles()}
+            <div class="mia-config-card">
             <div class="dc-tabs">
                 <button class="dc-tab" onclick="window.dcSwitchTab('dashboard', event)">📊 Dashboard</button>
                 <button class="dc-tab" onclick="window.dcSwitchTab('config', event)">⚙️ Configura</button>
@@ -594,6 +196,7 @@ class MiaConfigCard extends HTMLElement {
                         <option value="standard">⚙️ Standard</option>
                         <option value="schedule">🕐 Override Orario</option>
                         <option value="time" selected>⏰ Override Temporale</option>
+                        <option value="conditional">🎯 Override Condizionale</option>
                     </select>
                 </div>
 
@@ -807,9 +410,101 @@ class MiaConfigCard extends HTMLElement {
                 </form>
                 </div>
                 
+                <div id="dc-form-container-conditional" class="dc-form-container" style="display: none;">
+                <form id="dc-form-conditional">
+                    <div class="dc-form-group">
+                        <label>Configurazione da Override:</label>
+                        <select id="conditional-config-select" name="setup_name" required onchange="window.dcLoadValidValuesForForm('conditional')">
+                            <option value="">-- Caricamento... --</option>
+                        </select>
+                        <small style="color: var(--secondary-text-color);">Seleziona una configurazione standard esistente</small>
+                    </div>
+                    <div class="dc-form-group">
+                        <label>Valore Override:</label>
+                        <div id="conditional-value-container">
+                            <input type="text" id="conditional-setup-value" name="setup_value" required placeholder="es. 18">
+                        </div>
+                    </div>
+                    <div class="dc-form-group">
+                        <label>🎯 Condizione Basata Su:</label>
+                        <select id="conditional-source-config" name="conditional_config" required onchange="window.dcUpdateConditionalOptions()">
+                            <option value="">-- Seleziona configurazione --</option>
+                        </select>
+                        <small style="color: var(--secondary-text-color);">L'override si attiverà quando questa configurazione ha un valore specifico</small>
+                    </div>
+                    <div class="dc-form-group">
+                        <label>Operatore:</label>
+                        <select id="conditional-operator" name="conditional_operator" required>
+                            <option value="==">=== (uguale)</option>
+                            <option value="!=">!= (diverso)</option>
+                            <option value=">">  > (maggiore)</option>
+                            <option value="<">  < (minore)</option>
+                            <option value=">=">>= (maggiore o uguale)</option>
+                            <option value="<="><= (minore o uguale)</option>
+                        </select>
+                    </div>
+                    <div class="dc-form-group">
+                        <label>Valore di Confronto:</label>
+                        <div id="conditional-comparison-container">
+                            <input type="text" id="conditional-comparison-value" name="conditional_value" required placeholder="es. 1">
+                        </div>
+                        <small style="color: var(--secondary-text-color);">L'override si attiva se: <strong id="conditional-preview">configurazione operatore valore</strong></small>
+                    </div>
+                    <div class="dc-form-group">
+                        <label>Priorità (1-999):</label>
+                        <input type="number" name="priority" min="1" max="999" value="50">
+                        <small style="color: var(--secondary-text-color);">Gli override condizionali hanno priorità intermedia (default 50)</small>
+                    </div>
+                    
+                    <div class="dc-form-group">
+                        <label>
+                            <input type="checkbox" id="conditional-enable-hours"> Limita a fascia oraria
+                        </label>
+                        <div id="conditional-hours-container" style="display: none; margin-top: 10px;">
+                            <div class="dc-time-picker">
+                                <div>
+                                    <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
+                                    <div class="dc-time-input">
+                                        <select id="conditional-from-hour">
+                                            ${this.generateHourOptions(0, 23)}
+                                        </select>
+                                        <span class="dc-time-separator">:</span>
+                                        <select id="conditional-from-minute">
+                                            ${this.generateMinuteOptions()}
+                                        </select>
+                                    </div>
+                                </div>
+                                <span style="font-size: 18px; align-self: flex-end; padding-bottom: 8px;">→</span>
+                                <div>
+                                    <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
+                                    <div class="dc-time-input">
+                                        <select id="conditional-to-hour">
+                                            ${this.generateHourOptions(0, 23)}
+                                        </select>
+                                        <span class="dc-time-separator">:</span>
+                                        <select id="conditional-to-minute">
+                                            ${this.generateMinuteOptions()}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="padding: 10px; background: var(--secondary-background-color); border-radius: 4px; margin: 10px 0;">
+                        <strong>⚠️ Nota:</strong> Il sistema previene loop infiniti. Non puoi creare dipendenze circolari.
+                    </div>
+                    <button type="submit" class="dc-btn">Aggiungi Override Condizionale</button>
+                </form>
+                </div>
+                
                 <hr style="margin: 30px 0; border: none; border-top: 2px solid var(--divider-color);">
                 
                 <h3>🗂️ Configurazioni Database</h3>
+                <div class="dc-view-mode-toggle">
+                    <button class="dc-view-btn active" data-mode="name" onclick="window.dcSwitchConfigView('name')">Per Nome</button>
+                    <button class="dc-view-btn" data-mode="override" onclick="window.dcSwitchConfigView('override')">Per Override</button>
+                </div>
                 <div id="dc-config-list">Caricamento...</div>
                 
                 <!-- Sezione Valori Validi -->
@@ -878,6 +573,7 @@ class MiaConfigCard extends HTMLElement {
                     </div>
                     <div id="dc-edit-modal-body"></div>
                 </div>
+            </div>
             </div>
         `;
 
@@ -1148,6 +844,64 @@ class MiaConfigCard extends HTMLElement {
             const container = this.content.querySelector('#time-days-container');
             container.style.display = e.target.checked ? 'block' : 'none';
         });
+        
+        // Toggle per filtri opzionali nel form Conditional
+        this.content.querySelector('#conditional-enable-hours').addEventListener('change', (e) => {
+            const container = this.content.querySelector('#conditional-hours-container');
+            container.style.display = e.target.checked ? 'block' : 'none';
+        });
+        
+        // Form Conditional
+        this.content.querySelector('#dc-form-conditional').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const formData = new FormData(form);
+            
+            try {
+                const serviceData = {
+                    setup_name: formData.get('setup_name'),
+                    setup_value: formData.get('setup_value'),
+                    conditional_config: formData.get('conditional_config'),
+                    conditional_operator: formData.get('conditional_operator'),
+                    conditional_value: formData.get('conditional_value'),
+                    priority: parseInt(formData.get('priority'))
+                };
+                
+                // Aggiungi filtro orario se abilitato
+                const enableHours = this.content.querySelector('#conditional-enable-hours').checked;
+                if (enableHours) {
+                    const fromHour = parseInt(this.content.querySelector('#conditional-from-hour').value);
+                    const fromMinute = parseInt(this.content.querySelector('#conditional-from-minute').value);
+                    const toHour = parseInt(this.content.querySelector('#conditional-to-hour').value);
+                    const toMinute = parseInt(this.content.querySelector('#conditional-to-minute').value);
+                    
+                    serviceData.valid_from_ora = this.timeSelectorsToDecimal(fromHour, fromMinute);
+                    serviceData.valid_to_ora = this.timeSelectorsToDecimal(toHour, toMinute);
+                }
+                
+                await this.callMiaConfigService('set_conditional_config', serviceData);
+                form.reset();
+                // Reset checkbox e contenitori
+                this.content.querySelector('#conditional-enable-hours').checked = false;
+                this.content.querySelector('#conditional-hours-container').style.display = 'none';
+                this.showToast('Override condizionale salvato!');
+                setTimeout(() => this.loadConfigurations(), 500);
+            } catch (err) {
+                console.error('Errore salvataggio:', err);
+                const errorMsg = err?.message || err?.error?.message || JSON.stringify(err);
+                this.showToast('Errore: ' + errorMsg, true);
+            }
+        });
+        
+        // Update conditional preview on operator change
+        this.content.querySelector('#conditional-operator').addEventListener('change', () => {
+            const sourceSelect = this.content.querySelector('#conditional-source-config');
+            const operator = this.content.querySelector('#conditional-operator').value;
+            const previewSpan = this.content.querySelector('#conditional-preview');
+            if (sourceSelect && sourceSelect.value && previewSpan) {
+                previewSpan.textContent = `${sourceSelect.value} ${operator} [valore]`;
+            }
+        });
 
         // Switch Tab Function
         window.dcSwitchTab = (tabName, event) => {
@@ -1167,7 +921,9 @@ class MiaConfigCard extends HTMLElement {
                 this.loadConfigsForWeeklyView();
             } else if (tabName === 'history') {
                 this.loadConfigsForHistoryFilter();
-                window.dcLoadHistory();
+                if (typeof window.dcLoadHistory === 'function') {
+                    window.dcLoadHistory();
+                }
             }
         };
         
@@ -1182,8 +938,8 @@ class MiaConfigCard extends HTMLElement {
             if (container) {
                 container.style.display = 'block';
                 
-                // Carica le configurazioni standard per i select (schedule e time)
-                if (formType === 'schedule' || formType === 'time') {
+                // Carica le configurazioni standard per i select (schedule, time, conditional)
+                if (formType === 'schedule' || formType === 'time' || formType === 'conditional') {
                     this.loadStandardConfigsForSelect();
                 }
                 
@@ -1191,6 +947,86 @@ class MiaConfigCard extends HTMLElement {
                 if (formType === 'time') {
                     this.setDefaultTimeValues();
                 }
+            }
+        };
+        
+        window.dcSwitchConfigView = (mode) => {
+            // Salva la modalità di visualizzazione
+            this.configViewMode = mode;
+            
+            // Aggiorna i pulsanti
+            this.content.querySelectorAll('.dc-view-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            this.content.querySelector(`.dc-view-btn[data-mode="${mode}"]`).classList.add('active');
+            
+            // Ricarica le configurazioni con la nuova vista
+            this.loadConfigurations();
+        };
+        
+        window.dcLoadValidValuesForForm = async (formType) => {
+            await this.dcLoadValidValuesForForm(formType);
+        };
+        
+        window.dcUpdateConditionalOptions = async () => {
+            const sourceSelect = this.content.querySelector('#conditional-source-config');
+            const comparisonContainer = this.content.querySelector('#conditional-comparison-container');
+            const previewSpan = this.content.querySelector('#conditional-preview');
+            
+            if (!sourceSelect || !sourceSelect.value) return;
+            
+            const configName = sourceSelect.value;
+            
+            // Carica valori validi per questa configurazione
+            try {
+                const entityId = this.getSelectedEntityId();
+                const serviceData = { setup_name: configName };
+                if (entityId) serviceData.entity_id = entityId;
+                
+                const result = await this._hass.callWS({
+                    type: 'call_service',
+                    domain: 'mia_config',
+                    service: 'get_valid_values',
+                    service_data: serviceData,
+                    return_response: true
+                });
+                
+                const validValues = result.response?.valid_values || [];
+                const allowFreeText = validValues.some(vv => vv.value === '%');
+                
+                if (validValues.length > 0 && allowFreeText) {
+                    const datalistId = 'conditional-comparison-datalist';
+                    let html = `<input type="text" id="conditional-comparison-value" name="conditional_value" required list="${datalistId}" placeholder="Inserisci o seleziona valore" style="width: 100%; padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px;">`;
+                    html += `<datalist id="${datalistId}">`;
+                    validValues.forEach(vv => {
+                        const label = vv.description ? `${vv.value} (${vv.description})` : vv.value;
+                        html += `<option value="${vv.value}">${label}</option>`;
+                    });
+                    html += '</datalist>';
+                    html += '<small style="color: var(--secondary-text-color); display: block; margin-top: 4px;">Suggerimenti disponibili; % abilita valori liberi</small>';
+                    comparisonContainer.innerHTML = html;
+                } else if (validValues.length > 0) {
+                    // Crea un select con i valori validi
+                    let html = '<select id="conditional-comparison-value" name="conditional_value" required style="width: 100%; padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px;">';
+                    html += '<option value="">-- Seleziona valore --</option>';
+                    validValues.forEach(vv => {
+                        const label = vv.description ? `${vv.value} (${vv.description})` : vv.value;
+                        html += `<option value="${vv.value}">${label}</option>`;
+                    });
+                    html += '</select>';
+                    comparisonContainer.innerHTML = html;
+                } else {
+                    // Campo di input libero
+                    comparisonContainer.innerHTML = '<input type="text" id="conditional-comparison-value" name="conditional_value" required placeholder="es. 1" style="width: 100%; padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px;">';
+                }
+                
+                // Aggiorna preview
+                const operator = this.content.querySelector('#conditional-operator').value;
+                if (previewSpan) {
+                    previewSpan.textContent = `${configName} ${operator} [valore]`;
+                }
+            } catch (err) {
+                console.error('Errore caricamento valori validi:', err);
             }
         };
         
@@ -1289,11 +1125,15 @@ class MiaConfigCard extends HTMLElement {
             
             const scheduleSelect = this.content.querySelector('#schedule-config-select');
             const timeSelect = this.content.querySelector('#time-config-select');
+            const conditionalSelect = this.content.querySelector('#conditional-config-select');
+            const conditionalSourceSelect = this.content.querySelector('#conditional-source-config');
             
             if (standardConfigs.length === 0) {
                 const noConfigOption = '<option value="">-- Nessuna configurazione standard disponibile --</option>';
                 if (scheduleSelect) scheduleSelect.innerHTML = noConfigOption;
                 if (timeSelect) timeSelect.innerHTML = noConfigOption;
+                if (conditionalSelect) conditionalSelect.innerHTML = noConfigOption;
+                if (conditionalSourceSelect) conditionalSourceSelect.innerHTML = noConfigOption;
                 return;
             }
             
@@ -1304,6 +1144,8 @@ class MiaConfigCard extends HTMLElement {
             
             if (scheduleSelect) scheduleSelect.innerHTML = options;
             if (timeSelect) timeSelect.innerHTML = options;
+            if (conditionalSelect) conditionalSelect.innerHTML = options;
+            if (conditionalSourceSelect) conditionalSourceSelect.innerHTML = options;
         } catch (err) {
             console.error('Errore caricamento configurazioni:', err);
         }
@@ -1314,20 +1156,23 @@ class MiaConfigCard extends HTMLElement {
         container.innerHTML = 'Caricamento...';
         
         try {
-            // Ottieni tutti i sensori mia_config, escludendo il sensore principale
+            // Ottieni tutti i sensori mia_config
             const sensors = Object.keys(this._hass.states)
                 .filter(id => {
                     if (!id.startsWith('sensor.mia_config_')) return false;
-                    
-                    // Escludi il sensore principale (quello che ha total_configs negli attributi)
+                    // Escludi solo aggregatori noti
+                    if (id === 'sensor.miahomeconfig' || id === 'sensor.mia_config_main') return false;
                     const entity = this._hass.states[id];
-                    return !entity.attributes.total_configs;
+                    // Escludi sensori che sono chiaramente aggregatori (hanno total_configs negli attributi)
+                    if (entity?.attributes?.total_configs !== undefined) return false;
+                    return true;
                 })
                 .map(id => ({
                     id,
                     entity: this._hass.states[id],
                     name: id.replace('sensor.mia_config_', '').replace(/_/g, ' ')
                 }));
+            console.debug('MIA-CONFIG dashboard sensors trovati:', sensors.map(s => s.id));
             
             if (sensors.length === 0) {
                 container.innerHTML = '<p style="text-align: center; color: var(--secondary-text-color);">Nessun sensore disponibile</p>';
@@ -1413,6 +1258,9 @@ class MiaConfigCard extends HTMLElement {
         const container = this.content.querySelector('#dc-config-list');
         container.innerHTML = 'Caricamento...';
         
+        // Determina la modalità di visualizzazione
+        const viewMode = this.configViewMode || 'name';
+        
         try {
             const entityId = this.getSelectedEntityId();
             const serviceData = entityId ? { entity_id: entityId } : {};
@@ -1424,16 +1272,10 @@ class MiaConfigCard extends HTMLElement {
                 service_data: serviceData,
                 return_response: true
             });
-            console.log('Risposta get_configurations:', result);
-            console.log('result.response:', result.response);
-            console.log('result.response type:', typeof result.response);
-            console.log('result.response keys:', result.response ? Object.keys(result.response) : 'null');
             
-            // I dati sono direttamente in result.response, NON in result.response.configurations
             const configs = result.response || result.configurations || {};
-            console.log('Configurazioni trovate:', Object.keys(configs).length, configs);
             
-            // Filtra configurazioni vuote o sensori principali (che hanno array vuoto)
+            // Filtra configurazioni vuote o sensori principali
             const validConfigs = Object.entries(configs).filter(([name, configsList]) => {
                 return Array.isArray(configsList) && configsList.length > 0 && configsList[0].id !== undefined;
             });
@@ -1443,127 +1285,154 @@ class MiaConfigCard extends HTMLElement {
                 return;
             }
             
-            let html = '';
+            // Se modalità "override", raggruppa per override invece che per nome
+            if (viewMode === 'override') {
+                this.renderConfigurationsByOverride(validConfigs, container);
+            } else {
+                this.renderConfigurationsByName(validConfigs, container);
+            }
             
-            // Sezione configurazioni nel database
-            for (const [name, configsList] of validConfigs) {
-                // configsList è un array di configurazioni per questo nome
-                if (!Array.isArray(configsList) || configsList.length === 0) continue;
-                    
-                    // Ordina le configurazioni:
-                    // 1. Tempo future (valid_to_date > now) - ordinate per valid_from_date
-                    // 2. Orario - ordinate per valid_from_ora
-                    // 3. Standard
-                    // 4. Tempo passate (valid_to_date <= now) - ordinate per valid_to_date desc
-                    const now = new Date();
-                    const sortedConfigs = configsList.slice().sort((a, b) => {
-                        const typeOrder = {
-                            'time_future': 1,
-                            'schedule': 2,
-                            'standard': 3,
-                            'time_past': 4
-                        };
-                        
-                        // Determina categoria per a
-                        let categoryA = a.type;
-                        if (a.type === 'time') {
-                            const toDate = new Date(a.valid_to_date);
-                            categoryA = toDate > now ? 'time_future' : 'time_past';
-                        }
-                        
-                        // Determina categoria per b
-                        let categoryB = b.type;
-                        if (b.type === 'time') {
-                            const toDate = new Date(b.valid_to_date);
-                            categoryB = toDate > now ? 'time_future' : 'time_past';
-                        }
-                        
-                        // Ordina per categoria
-                        if (typeOrder[categoryA] !== typeOrder[categoryB]) {
-                            return typeOrder[categoryA] - typeOrder[categoryB];
-                        }
-                        
-                        // All'interno della stessa categoria
-                        if (categoryA === 'time_future') {
-                            // Ordina per data inizio (prima le più vicine)
-                            return new Date(a.valid_from_date) - new Date(b.valid_from_date);
-                        } else if (categoryA === 'time_past') {
-                            // Ordina per data fine (prima le più recenti)
-                            return new Date(b.valid_to_date) - new Date(a.valid_to_date);
-                        } else if (categoryA === 'schedule') {
-                            // Ordina per orario di inizio
-                            return a.valid_from_ora - b.valid_from_ora;
-                        }
-                        
-                        return 0;
-                    });
-                    
-                    html += `<div style="margin-bottom: 15px; padding: 10px; border: 1px solid var(--divider-color); border-radius: 8px;">`;
-                    html += `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">`;
-                    html += `<strong style="font-size: 1.1em;">📦 ${name}</strong>`;
-                    html += `<button class="dc-btn-delete" onclick="window.dcDeleteConfig('${name}')">Elimina Tutto</button>`;
-                    html += `</div>`;
-                    
-                    for (const cfg of sortedConfigs) {
-                        const type = cfg.type || 'standard';
-                        const badgeClass = type === 'time' ? 'dc-badge-time' : 
-                                          type === 'schedule' ? 'dc-badge-schedule' : 'dc-badge-standard';
-                        const sourceLabel = type === 'time' ? '⏰ Tempo' :
-                                           type === 'schedule' ? '📅 Orario' : '⚙️ Standard';
-                        
-                        let extra = '';
-                        if (type === 'standard') {
-                            extra = `Priorità: ${cfg.priority}`;
-                        } else if (type === 'time') {
-                            extra = `Da ${cfg.valid_from_date} a ${cfg.valid_to_date}`;
-                            
-                            // Aggiungi filtri opzionali se presenti
-                            if (cfg.valid_from_ora !== undefined && cfg.valid_to_ora !== undefined) {
-                                const fromTime = this.formatTimeDisplay(cfg.valid_from_ora);
-                                const toTime = this.formatTimeDisplay(cfg.valid_to_ora);
-                                extra += ` | ⏰ ${fromTime} → ${toTime}`;
-                            }
-                            if (cfg.days_of_week !== undefined) {
-                                const days = cfg.days_of_week.map(d => ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'][d]).join(', ');
-                                extra += ` | 📅 ${days}`;
-                            }
-                            
-                            extra += ` | Priorità: ${cfg.priority}`;
-                        } else if (type === 'schedule') {
-                            const days = cfg.days_of_week.map(d => ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'][d]).join(', ');
-                            const fromTime = this.formatTimeDisplay(cfg.valid_from_ora);
-                            const toTime = this.formatTimeDisplay(cfg.valid_to_ora);
-                        extra = `${fromTime} → ${toTime} | ${days} | Priorità: ${cfg.priority}`;
-                    }
-                    
-                    // ID per operazioni: sempre usa cfg.id (numerico)
-                    const configId = cfg.id;
-                    
-                    // Serializza i dati della configurazione per passarli alla funzione di edit
-                    const cfgData = encodeURIComponent(JSON.stringify(cfg));
-                    
-                    html += `
-                        <div class="dc-config-item" style="margin: 5px 0; padding: 8px; background: var(--card-background-color); display: flex; justify-content: space-between; align-items: center;">
-                            <div style="flex: 1;">
-                                <span class="dc-badge ${badgeClass}">${sourceLabel}</span>
-                                Valore: <strong>${cfg.value}</strong><br>
-                                <small>${extra}</small>
-                            </div>
-                            <div style="display: flex; gap: 5px;">
-                                <button class="dc-btn" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcEditConfig('${name}', '${type}', ${configId}, '${cfgData}')">✏️</button>
-                                <button class="dc-btn-delete" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcDeleteSingleConfig('${type}', ${configId})">🗑️</button>
-                            </div>
-                        </div>
-                    `;
-                }                    html += `</div>`;
-                }
-            
-            container.innerHTML = html;
         } catch (error) {
             console.error('Error loading configurations:', error);
-            container.innerHTML = '<p style="color: var(--error-color);">Errore nel caricamento</p>';
+            const errorMsg = error?.message || error?.toString() || 'Errore sconosciuto';
+            container.innerHTML = `<p style="color: var(--error-color);">Errore nel caricamento: ${errorMsg}</p>`;
         }
-
+    }
+    
+    renderConfigurationsByName(validConfigs, container) {
+        let html = '';
+        
+        // Vista classica per nome
+        for (const [name, configsList] of validConfigs) {
+            // configsList è un array di configurazioni per questo nome
+            if (!Array.isArray(configsList) || configsList.length === 0) continue;
+                
+            // Ordina le configurazioni:
+            // 1. Tempo future (valid_to_date > now) - ordinate per valid_from_date
+            // 2. Orario - ordinate per valid_from_ora
+            // 3. Standard
+            // 4. Tempo passate (valid_to_date <= now) - ordinate per valid_to_date desc
+            const now = new Date();
+            const sortedConfigs = configsList.slice().sort((a, b) => {
+                const typeOrder = {
+                    'time_future': 1,
+                    'schedule': 2,
+                    'standard': 3,
+                    'time_past': 4
+                };
+                
+                // Determina categoria per a
+                let categoryA = a.type;
+                if (a.type === 'time') {
+                    const toDate = new Date(a.valid_to_date);
+                    categoryA = toDate > now ? 'time_future' : 'time_past';
+                }
+                
+                // Determina categoria per b
+                let categoryB = b.type;
+                if (b.type === 'time') {
+                    const toDate = new Date(b.valid_to_date);
+                    categoryB = toDate > now ? 'time_future' : 'time_past';
+                }
+                
+                // Ordina per categoria
+                if (typeOrder[categoryA] !== typeOrder[categoryB]) {
+                    return typeOrder[categoryA] - typeOrder[categoryB];
+                }
+                
+                // All'interno della stessa categoria
+                if (categoryA === 'time_future') {
+                    // Ordina per data inizio (prima le più vicine)
+                    return new Date(a.valid_from_date) - new Date(b.valid_from_date);
+                } else if (categoryA === 'time_past') {
+                    // Ordina per data fine (prima le più recenti)
+                    return new Date(b.valid_to_date) - new Date(a.valid_to_date);
+                } else if (categoryA === 'schedule') {
+                    // Ordina per orario di inizio
+                    return a.valid_from_ora - b.valid_from_ora;
+                }
+                
+                return 0;
+            });
+            
+            html += `<div style="margin-bottom: 15px; padding: 10px; border: 1px solid var(--divider-color); border-radius: 8px;">`;
+            html += `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">`;
+            html += `<strong style="font-size: 1.1em;">📦 ${name}</strong>`;
+            html += `<button class="dc-btn-delete" onclick="window.dcDeleteConfig('${name}')">Elimina Tutto</button>`;
+            html += `</div>`;
+            
+            for (const cfg of sortedConfigs) {
+                const type = cfg.type || 'standard';
+                const badgeClass = type === 'time' ? 'dc-badge-time' : 
+                                  type === 'schedule' ? 'dc-badge-schedule' :
+                                  type === 'conditional' ? 'dc-badge-time' : 'dc-badge-standard';
+                const sourceLabel = type === 'time' ? '⏰ Tempo' :
+                                   type === 'schedule' ? '📅 Orario' :
+                                   type === 'conditional' ? '🎯 Condizionale' : '⚙️ Standard';
+                
+                let extra = '';
+                if (type === 'standard') {
+                    extra = `Priorità: ${cfg.priority}`;
+                } else if (type === 'time') {
+                    extra = `Da ${cfg.valid_from_date} a ${cfg.valid_to_date}`;
+                    
+                    // Aggiungi filtri opzionali se presenti
+                    if (cfg.valid_from_ora !== undefined && cfg.valid_to_ora !== undefined) {
+                        const fromTime = this.formatTimeDisplay(cfg.valid_from_ora);
+                        const toTime = this.formatTimeDisplay(cfg.valid_to_ora);
+                        extra += ` | ⏰ ${fromTime} → ${toTime}`;
+                    }
+                    if (cfg.days_of_week !== undefined) {
+                        const days = cfg.days_of_week.map(d => ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'][d]).join(', ');
+                        extra += ` | 📅 ${days}`;
+                    }
+                    
+                    extra += ` | Priorità: ${cfg.priority}`;
+                } else if (type === 'schedule') {
+                    const days = cfg.days_of_week.map(d => ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'][d]).join(', ');
+                    const fromTime = this.formatTimeDisplay(cfg.valid_from_ora);
+                    const toTime = this.formatTimeDisplay(cfg.valid_to_ora);
+                    extra = `${fromTime} → ${toTime} | ${days} | Priorità: ${cfg.priority}`;
+                } else if (type === 'conditional') {
+                    extra = `Se ${cfg.conditional_config} ${cfg.conditional_operator} ${cfg.conditional_value}`;
+                    
+                    // Aggiungi fascia oraria se presente
+                    if (cfg.valid_from_ora !== undefined && cfg.valid_to_ora !== undefined) {
+                        const fromTime = this.formatTimeDisplay(cfg.valid_from_ora);
+                        const toTime = this.formatTimeDisplay(cfg.valid_to_ora);
+                        extra += ` | ⏰ ${fromTime} → ${toTime}`;
+                    }
+                    
+                    extra += ` | Priorità: ${cfg.priority}`;
+                }
+                
+                // ID per operazioni: sempre usa cfg.id (numerico)
+                const configId = cfg.id;
+                
+                // Serializza i dati della configurazione per passarli alla funzione di edit
+                const cfgData = encodeURIComponent(JSON.stringify(cfg));
+                
+                html += `
+                    <div class="dc-config-item" style="margin: 5px 0; padding: 8px; background: var(--card-background-color); display: flex; justify-content: space-between; align-items: center;">
+                        <div style="flex: 1;">
+                            <span class="dc-badge ${badgeClass}">${sourceLabel}</span>
+                            Valore: <strong>${cfg.value}</strong><br>
+                            <small>${extra}</small>
+                        </div>
+                        <div style="display: flex; gap: 5px;">
+                            <button class="dc-btn" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcEditConfig('${name}', '${type}', ${configId}, '${cfgData}')">✏️</button>
+                            <button class="dc-btn-delete" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcDeleteSingleConfig('${type}', ${configId})">🗑️</button>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            html += `</div>`;
+        }
+        
+        container.innerHTML = html;
+        
+        // Definisci le funzioni window dopo aver popolato l'HTML
         window.dcDeleteConfig = async (name) => {
             if (confirm(`Eliminare tutte le configurazioni di "${name}"?`)) {
                 await this.callMiaConfigService('delete_config', {
@@ -1884,12 +1753,147 @@ class MiaConfigCard extends HTMLElement {
                     this.content.querySelector('#edit-to-hour').value = toHour;
                     this.content.querySelector('#edit-to-minute').value = toMinute;
                 }, 10);
+            } else if (type === 'conditional') {
+                // Form per modifica configurazione condizionale
+                const hasTimeFilter = cfg.valid_from_ora !== undefined && cfg.valid_to_ora !== undefined;
+                
+                let timeFilterHtml = '';
+                if (hasTimeFilter) {
+                    const fromHour = Math.floor(cfg.valid_from_ora);
+                    const fromMinute = Math.round((cfg.valid_from_ora - fromHour) * 60);
+                    const toHour = Math.floor(cfg.valid_to_ora);
+                    const toMinute = Math.round((cfg.valid_to_ora - toHour) * 60);
+                    
+                    timeFilterHtml = `
+                        <div class="dc-form-group">
+                            <label>
+                                <input type="checkbox" id="edit-conditional-enable-hours" checked> Limita a fascia oraria
+                            </label>
+                            <div id="edit-conditional-hours-container" style="margin-top: 10px;">
+                                <div class="dc-time-picker">
+                                    <div>
+                                        <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
+                                        <div class="dc-time-input">
+                                            <select id="edit-conditional-from-hour">
+                                                ${this.generateHourOptions(0, 23)}
+                                            </select>
+                                            <span class="dc-time-separator">:</span>
+                                            <select id="edit-conditional-from-minute">
+                                                ${this.generateMinuteOptions()}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <span style="font-size: 18px; align-self: flex-end; padding-bottom: 8px;">→</span>
+                                    <div>
+                                        <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
+                                        <div class="dc-time-input">
+                                            <select id="edit-conditional-to-hour">
+                                                ${this.generateHourOptions(0, 23)}
+                                            </select>
+                                            <span class="dc-time-separator">:</span>
+                                            <select id="edit-conditional-to-minute">
+                                                ${this.generateMinuteOptions()}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    timeFilterHtml = `
+                        <div class="dc-form-group">
+                            <label>
+                                <input type="checkbox" id="edit-conditional-enable-hours"> Limita a fascia oraria
+                            </label>
+                            <div id="edit-conditional-hours-container" style="display: none; margin-top: 10px;">
+                                <div class="dc-time-picker">
+                                    <div>
+                                        <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
+                                        <div class="dc-time-input">
+                                            <select id="edit-conditional-from-hour">
+                                                ${this.generateHourOptions(0, 23)}
+                                            </select>
+                                            <span class="dc-time-separator">:</span>
+                                            <select id="edit-conditional-from-minute">
+                                                ${this.generateMinuteOptions()}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <span style="font-size: 18px; align-self: flex-end; padding-bottom: 8px;">→</span>
+                                    <div>
+                                        <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
+                                        <div class="dc-time-input">
+                                            <select id="edit-conditional-to-hour">
+                                                ${this.generateHourOptions(0, 23)}
+                                            </select>
+                                            <span class="dc-time-separator">:</span>
+                                            <select id="edit-conditional-to-minute">
+                                                ${this.generateMinuteOptions()}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                formHtml = `
+                    <form id="dc-edit-form">
+                        <div class="dc-form-group">
+                            <label>Nome Configurazione:</label>
+                            <input type="text" value="${name}" disabled style="background: var(--disabled-color);">
+                        </div>
+                        <div class="dc-form-group">
+                            <label>Valore:</label>
+                            <input type="text" name="setup_value" value="${cfg.value}" required>
+                        </div>
+                        <div class="dc-form-group">
+                            <label>Configurazione Sorgente:</label>
+                            <input type="text" value="${cfg.conditional_config}" disabled style="background: var(--disabled-color);">
+                        </div>
+                        <div class="dc-form-group">
+                            <label>Operatore:</label>
+                            <input type="text" value="${cfg.conditional_operator}" disabled style="background: var(--disabled-color);">
+                        </div>
+                        <div class="dc-form-group">
+                            <label>Valore di Confronto:</label>
+                            <input type="text" value="${cfg.conditional_value}" disabled style="background: var(--disabled-color);">
+                        </div>
+                        ${timeFilterHtml}
+                        <div class="dc-form-group">
+                            <label>Priorità:</label>
+                            <input type="number" name="priority" value="${cfg.priority || 99}" required>
+                            <small style="color: var(--secondary-text-color);">Più basso = più prioritario</small>
+                        </div>
+                        <div style="display: flex; gap: 10px; margin-top: 20px;">
+                            <button type="submit" class="dc-btn">Salva</button>
+                            <button type="button" class="dc-btn" onclick="window.dcCloseEditModal()" style="background: #666;">Annulla</button>
+                        </div>
+                    </form>
+                `;
+                
+                // Dopo aver mostrato il modal, imposta i valori dei selettori se presenti
+                if (hasTimeFilter) {
+                    setTimeout(() => {
+                        const fromHour = Math.floor(cfg.valid_from_ora);
+                        const fromMinute = Math.round((cfg.valid_from_ora - fromHour) * 60);
+                        const toHour = Math.floor(cfg.valid_to_ora);
+                        const toMinute = Math.round((cfg.valid_to_ora - toHour) * 60);
+                        
+                        this.content.querySelector('#edit-conditional-from-hour').value = fromHour;
+                        this.content.querySelector('#edit-conditional-from-minute').value = fromMinute;
+                        this.content.querySelector('#edit-conditional-to-hour').value = toHour;
+                        this.content.querySelector('#edit-conditional-to-minute').value = toMinute;
+                    }, 10);
+                }
             }
             
             modalBody.innerHTML = formHtml;
             modal.classList.add('active');
             
-            // Aggiungi event listener per i checkbox toggle se è una config a tempo
+            // Aggiungi event listener per i checkbox toggle
             if (type === 'time') {
                 const enableHoursCheckbox = this.content.querySelector('#edit-time-enable-hours');
                 const enableDaysCheckbox = this.content.querySelector('#edit-time-enable-days');
@@ -1911,10 +1915,27 @@ class MiaConfigCard extends HTMLElement {
                         }
                     });
                 }
+            } else if (type === 'conditional') {
+                const enableHoursCheckbox = this.content.querySelector('#edit-conditional-enable-hours');
+                
+                if (enableHoursCheckbox) {
+                    enableHoursCheckbox.addEventListener('change', (e) => {
+                        const container = this.content.querySelector('#edit-conditional-hours-container');
+                        if (container) {
+                            container.style.display = e.target.checked ? 'block' : 'none';
+                        }
+                    });
+                }
             }
             
             // Gestione submit del form
-            this.content.querySelector('#dc-edit-form').addEventListener('submit', async (e) => {
+            const editForm = this.content.querySelector('#dc-edit-form');
+            if (!editForm) {
+                console.error('Form di edit non trovato nel DOM');
+                return;
+            }
+            
+            editForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const formData = new FormData(e.target);
                 
@@ -1996,6 +2017,36 @@ class MiaConfigCard extends HTMLElement {
                             days_of_week: days,
                             priority: parseInt(formData.get('priority'))
                         });
+                    } else if (type === 'conditional') {
+                        // Prima elimina la vecchia configurazione
+                        await this.callMiaConfigService('delete_single_config', {
+                            config_type: 'conditional',
+                            config_id: parseInt(id)
+                        });
+                        
+                        // Poi crea la nuova con gli stessi parametri condizionali
+                        const serviceData = {
+                            setup_name: name,
+                            setup_value: formData.get('setup_value'),
+                            conditional_config: cfg.conditional_config,
+                            conditional_operator: cfg.conditional_operator,
+                            conditional_value: cfg.conditional_value,
+                            priority: parseInt(formData.get('priority'))
+                        };
+                        
+                        // Aggiungi fascia oraria se abilitata
+                        const enableHours = this.content.querySelector('#edit-conditional-enable-hours');
+                        if (enableHours && enableHours.checked) {
+                            const fromHour = parseInt(this.content.querySelector('#edit-conditional-from-hour').value);
+                            const fromMinute = parseInt(this.content.querySelector('#edit-conditional-from-minute').value);
+                            const toHour = parseInt(this.content.querySelector('#edit-conditional-to-hour').value);
+                            const toMinute = parseInt(this.content.querySelector('#edit-conditional-to-minute').value);
+                            
+                            serviceData.valid_from_ora = this.timeSelectorsToDecimal(fromHour, fromMinute);
+                            serviceData.valid_to_ora = this.timeSelectorsToDecimal(toHour, toMinute);
+                        }
+                        
+                        await this.callMiaConfigService('set_conditional_config', serviceData);
                     }
                     
                     window.dcCloseEditModal();
@@ -2240,9 +2291,9 @@ class MiaConfigCard extends HTMLElement {
         
         // Carica valori validi per i form override e cambia input in select se necessario
         window.dcLoadValidValuesForForm = async (formType) => {
-            const selectId = formType === 'schedule' ? '#schedule-config-select' : '#time-config-select';
-            const containerId = formType === 'schedule' ? '#schedule-value-container' : '#time-value-container';
-            const inputId = formType === 'schedule' ? '#schedule-setup-value' : '#time-setup-value';
+            const selectId = formType === 'schedule' ? '#schedule-config-select' : (formType === 'time' ? '#time-config-select' : '#conditional-config-select');
+            const containerId = formType === 'schedule' ? '#schedule-value-container' : (formType === 'time' ? '#time-value-container' : '#conditional-value-container');
+            const inputId = formType === 'schedule' ? '#schedule-setup-value' : (formType === 'time' ? '#time-setup-value' : '#conditional-setup-value');
             
             const configSelect = this.content.querySelector(selectId);
             const container = this.content.querySelector(containerId);
@@ -2270,10 +2321,22 @@ class MiaConfigCard extends HTMLElement {
                 });
                 
                 const validValues = response.response.valid_values || [];
+                const allowFreeText = formType === 'conditional' && validValues.some(vv => vv.value === '%');
                 
                 if (validValues.length === 0) {
                     // Nessun valore valido, mostra input text
                     container.innerHTML = `<input type="text" id="${inputId.substring(1)}" name="setup_value" required placeholder="Inserisci valore">`;
+                } else if (allowFreeText) {
+                    const datalistId = `${inputId.substring(1)}-datalist`;
+                    let html = `<input type="text" id="${inputId.substring(1)}" name="setup_value" required list="${datalistId}" placeholder="Inserisci o seleziona valore" style="width: 100%;">`;
+                    html += `<datalist id="${datalistId}">`;
+                    for (const vv of validValues) {
+                        const label = vv.description ? `${vv.value} (${vv.description})` : vv.value;
+                        html += `<option value="${vv.value}">${label}</option>`;
+                    }
+                    html += '</datalist>';
+                    html += '<small style="color: var(--secondary-text-color); display: block; margin-top: 5px;">Suggerimenti disponibili; % abilita valori liberi</small>';
+                    container.innerHTML = html;
                 } else {
                     // Ci sono valori validi, mostra select
                     let html = `<select id="${inputId.substring(1)}" name="setup_value" required style="width: 100%;">`;
@@ -2315,9 +2378,14 @@ class MiaConfigCard extends HTMLElement {
                 const serviceData = {
                     setup_name: setupName,
                     value: value,
-                    description: description || null,
                     sort_order: sortOrder
                 };
+                
+                // Aggiungi description solo se non è vuota
+                if (description) {
+                    serviceData.description = description;
+                }
+                
                 if (entityId) {
                     serviceData.entity_id = entityId;
                 }
@@ -2418,6 +2486,291 @@ class MiaConfigCard extends HTMLElement {
             }
         };
     }
+    
+    renderConfigurationsByOverride(validConfigs, container) {
+        // Raggruppa tutte le configurazioni per tipo e parametri di override
+        const groups = {};
+        
+        for (const [name, configsList] of validConfigs) {
+            for (const cfg of configsList) {
+                // Ignora configurazioni standard: non sono override
+                if (cfg.type === 'standard') continue;
+                // Crea una chiave univoca per ogni gruppo di override
+                let groupKey;
+                let groupTitle;
+                let isExpired = false;
+                
+                if (cfg.type === 'schedule') {
+                    // Raggruppa per orario e giorni
+                    const fromTime = this.formatTimeDisplay(cfg.valid_from_ora);
+                    const toTime = this.formatTimeDisplay(cfg.valid_to_ora);
+                    const days = (cfg.days_of_week || []).sort().join(',');
+                    groupKey = `schedule_${cfg.valid_from_ora}_${cfg.valid_to_ora}_${days}`;
+                    const daysNames = cfg.days_of_week.map(d => ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'][d]).join(', ');
+                    groupTitle = `🕐 Override Orario: ${fromTime} → ${toTime} | ${daysNames}`;
+                } else if (cfg.type === 'time') {
+                    // Raggruppa per periodo temporale
+                    groupKey = `time_${cfg.valid_from_date}_${cfg.valid_to_date}`;
+                    groupTitle = `⏰ Override Temporale: ${cfg.valid_from_date} → ${cfg.valid_to_date}`;
+                    isExpired = new Date(cfg.valid_to_date) < new Date();
+                    
+                    // Aggiungi filtri opzionali alla chiave e al titolo
+                    if (cfg.valid_from_ora !== undefined && cfg.valid_to_ora !== undefined) {
+                        const fromTime = this.formatTimeDisplay(cfg.valid_from_ora);
+                        const toTime = this.formatTimeDisplay(cfg.valid_to_ora);
+                        groupKey += `_${cfg.valid_from_ora}_${cfg.valid_to_ora}`;
+                        groupTitle += ` | ⏰ ${fromTime} → ${toTime}`;
+                    }
+                    if (cfg.days_of_week) {
+                        const days = cfg.days_of_week.sort().join(',');
+                        groupKey += `_${days}`;
+                        const daysNames = cfg.days_of_week.map(d => ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'][d]).join(', ');
+                        groupTitle += ` | 📅 ${daysNames}`;
+                    }
+                } else if (cfg.type === 'conditional') {
+                    // Raggruppa per condizione (senza considerare fascia oraria)
+                    groupKey = `conditional_${cfg.conditional_config}_${cfg.conditional_operator}_${cfg.conditional_value}`;
+                    groupTitle = `🎯 Override Condizionale: ${cfg.conditional_config} ${cfg.conditional_operator} ${cfg.conditional_value}`;
+                }
+                
+                if (!groups[groupKey]) {
+                    groups[groupKey] = {
+                        title: groupTitle,
+                        type: cfg.type,
+                        configs: [],
+                        priority: cfg.priority || 99,
+                        expired: isExpired
+                    };
+                }
+                
+                groups[groupKey].configs.push({
+                    name: name,
+                    cfg: cfg
+                });
+            }
+        }
+        
+        // Ordina gruppi per priorità e mette gli override temporali scaduti in coda
+        const sortedGroups = Object.entries(groups).sort((a, b) => {
+            const orderValue = (group) => {
+                if (group.type === 'time' && group.expired) return 99;
+                if (group.type === 'time') return 1;
+                if (group.type === 'schedule') return 2;
+                if (group.type === 'conditional') return 3;
+                return 98;
+            };
+            const aOrder = orderValue(a[1]);
+            const bOrder = orderValue(b[1]);
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return a[1].priority - b[1].priority;
+        });
+        
+        let html = '';
+        
+        for (const [groupKey, group] of sortedGroups) {
+            const templateData = encodeURIComponent(JSON.stringify({
+                type: group.type,
+                cfg: group.configs[0].cfg,
+                name: group.configs[0].name
+            }));
+            html += `<div class="dc-config-group">`;
+            html += `<div class="dc-config-group-header">`;
+            html += `<span class="dc-config-group-title">${group.title}</span>`;
+            if (group.type !== 'standard') {
+                // Pulsante per inserire un nuovo override con le stesse condizioni
+                html += `<button class="dc-btn" onclick="window.dcInsertOverrideGroup('${group.type}', '${templateData}')">Inserisci</button>`;
+            }
+            html += `</div>`;
+            
+            // Lista configurazioni nel gruppo
+            for (const item of group.configs) {
+                const { name, cfg } = item;
+                const cfgData = encodeURIComponent(JSON.stringify(cfg));
+                
+                html += `
+                    <div class="dc-config-item" style="margin: 5px 0; padding: 8px; background: var(--card-background-color); display: flex; justify-content: space-between; align-items: center;">
+                        <div style="flex: 1;">
+                            <strong>${name}</strong>: ${cfg.value}
+                            <br><small>Priorità: ${cfg.priority || 99}</small>
+                        </div>
+                        <div style="display: flex; gap: 5px;">
+                            <button class="dc-btn" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcEditConfig('${name}', '${cfg.type}', ${cfg.id}, '${cfgData}')">✏️</button>
+                            <button class="dc-btn-delete" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcDeleteSingleConfig('${cfg.type}', ${cfg.id})">🗑️</button>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            html += `</div>`;
+        }
+        
+        container.innerHTML = html;
+        
+        // Inserisci un override precompilato con le condizioni del gruppo
+        window.dcInsertOverrideGroup = async (groupType, templateEncoded) => {
+            const payload = JSON.parse(decodeURIComponent(templateEncoded));
+            const cfg = payload.cfg || {};
+            const name = payload.name || '';
+            const configTab = this.content.querySelector('.dc-tab:nth-child(2)');
+            if (configTab) {
+                configTab.click();
+            }
+            
+            setTimeout(async () => {
+                const selector = this.content.querySelector('#config-type-selector');
+                if (!selector) return;
+                selector.value = groupType;
+                window.dcShowConfigForm(groupType);
+                
+                const configSelect = this.content.querySelector(groupType === 'schedule' ? '#schedule-config-select' : groupType === 'time' ? '#time-config-select' : '#conditional-config-select');
+                if (configSelect) {
+                    configSelect.value = name;
+                }
+                
+                // Aspetta il caricamento dei valori validi
+                if (typeof window.dcLoadValidValuesForForm === 'function') {
+                    await window.dcLoadValidValuesForForm(groupType);
+                }
+                
+                // Attendi un po' per permettere al DOM di aggiornarsi
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                if (groupType === 'schedule') {
+                    // Pre-popola valore override
+                    const valueInput = this.content.querySelector('#schedule-config-value');
+                    if (valueInput && cfg.value !== undefined) {
+                        valueInput.value = cfg.value;
+                    }
+                    
+                    // Pre-popola fascia oraria e giorni
+                    const fromHour = Math.floor(cfg.valid_from_ora || 0);
+                    const fromMinute = Math.round(((cfg.valid_from_ora || 0) - fromHour) * 60);
+                    const toHour = Math.floor(cfg.valid_to_ora || 0);
+                    const toMinute = Math.round(((cfg.valid_to_ora || 0) - toHour) * 60);
+                    const days = Array.isArray(cfg.days_of_week) ? cfg.days_of_week : (typeof cfg.days_of_week === 'string' ? cfg.days_of_week.split(',').map(d => parseInt(d)).filter(n => !Number.isNaN(n)) : [0,1,2,3,4,5,6]);
+                    const daysCheckboxes = this.content.querySelectorAll('#dc-form-schedule input[name="days"]');
+                    if (daysCheckboxes.length) {
+                        daysCheckboxes.forEach(cb => cb.checked = days.includes(parseInt(cb.value)));
+                    }
+                    const fromHourSel = this.content.querySelector('#from-hour');
+                    const fromMinuteSel = this.content.querySelector('#from-minute');
+                    const toHourSel = this.content.querySelector('#to-hour');
+                    const toMinuteSel = this.content.querySelector('#to-minute');
+                    if (fromHourSel) fromHourSel.value = fromHour;
+                    if (fromMinuteSel) fromMinuteSel.value = fromMinute;
+                    if (toHourSel) toHourSel.value = toHour;
+                    if (toMinuteSel) toMinuteSel.value = toMinute;
+                } else if (groupType === 'time') {
+                    // Pre-popola valore override
+                    const valueInput = this.content.querySelector('#time-config-value');
+                    if (valueInput && cfg.value !== undefined) {
+                        valueInput.value = cfg.value;
+                    }
+                    
+                    // Pre-popola periodo temporale
+                    const formatForInput = (dt) => typeof dt === 'string' ? dt.replace(' ', 'T').substring(0, 16) : '';
+                    const validFromInput = this.content.querySelector('#dc-form-time input[name="valid_from"]');
+                    const validToInput = this.content.querySelector('#dc-form-time input[name="valid_to"]');
+                    if (validFromInput && cfg.valid_from_date) validFromInput.value = formatForInput(cfg.valid_from_date);
+                    if (validToInput && cfg.valid_to_date) validToInput.value = formatForInput(cfg.valid_to_date);
+                    
+                    const hasTimeFilter = cfg.valid_from_ora !== undefined && cfg.valid_to_ora !== undefined;
+                    const timeToggle = this.content.querySelector('#time-enable-hours');
+                    const timeContainer = this.content.querySelector('#time-hours-container');
+                    if (timeToggle && timeContainer) {
+                        timeToggle.checked = hasTimeFilter;
+                        timeContainer.style.display = hasTimeFilter ? 'block' : 'none';
+                    }
+                    if (hasTimeFilter) {
+                        const fromHour = Math.floor(cfg.valid_from_ora);
+                        const fromMinute = Math.round((cfg.valid_from_ora - fromHour) * 60);
+                        const toHour = Math.floor(cfg.valid_to_ora);
+                        const toMinute = Math.round((cfg.valid_to_ora - toHour) * 60);
+                        const fromHourSel = this.content.querySelector('#time-from-hour');
+                        const fromMinuteSel = this.content.querySelector('#time-from-minute');
+                        const toHourSel = this.content.querySelector('#time-to-hour');
+                        const toMinuteSel = this.content.querySelector('#time-to-minute');
+                        if (fromHourSel) fromHourSel.value = fromHour;
+                        if (fromMinuteSel) fromMinuteSel.value = fromMinute;
+                        if (toHourSel) toHourSel.value = toHour;
+                        if (toMinuteSel) toMinuteSel.value = toMinute;
+                    }
+                    const hasDays = cfg.days_of_week !== undefined && cfg.days_of_week !== null;
+                    const dayToggle = this.content.querySelector('#time-enable-days');
+                    const dayContainer = this.content.querySelector('#time-days-container');
+                    if (dayToggle && dayContainer) {
+                        dayToggle.checked = hasDays;
+                        dayContainer.style.display = hasDays ? 'block' : 'none';
+                    }
+                    if (hasDays) {
+                        const days = Array.isArray(cfg.days_of_week) ? cfg.days_of_week : (typeof cfg.days_of_week === 'string' ? cfg.days_of_week.split(',').map(d => parseInt(d)).filter(n => !Number.isNaN(n)) : []);
+                        this.content.querySelectorAll('#dc-form-time input[name="time-days"]').forEach(cb => {
+                            cb.checked = days.includes(parseInt(cb.value));
+                        });
+                    }
+                } else if (groupType === 'conditional') {
+                    // Pre-popola valore override
+                    const valueInput = this.content.querySelector('#conditional-config-value');
+                    if (valueInput && cfg.value !== undefined) {
+                        valueInput.value = cfg.value;
+                    }
+                    
+                    // Pre-popola configurazione sorgente
+                    const sourceSelect = this.content.querySelector('#conditional-source-config');
+                    if (sourceSelect && cfg.conditional_config) {
+                        sourceSelect.value = cfg.conditional_config;
+                    }
+                    
+                    // Pre-popola operatore
+                    const operatorSelect = this.content.querySelector('#conditional-operator');
+                    if (operatorSelect && cfg.conditional_operator) {
+                        operatorSelect.value = cfg.conditional_operator;
+                    }
+                    
+                    // Pre-attiva e pre-popola fascia oraria se presente
+                    const enableHours = cfg.valid_from_ora !== undefined && cfg.valid_to_ora !== undefined;
+                    const hoursToggle = this.content.querySelector('#conditional-enable-hours');
+                    const hoursContainer = this.content.querySelector('#conditional-hours-container');
+                    if (hoursToggle && hoursContainer) {
+                        hoursToggle.checked = enableHours;
+                        hoursContainer.style.display = enableHours ? 'block' : 'none';
+                    }
+                    if (enableHours) {
+                        const fromHour = Math.floor(cfg.valid_from_ora);
+                        const fromMinute = Math.round((cfg.valid_from_ora - fromHour) * 60);
+                        const toHour = Math.floor(cfg.valid_to_ora);
+                        const toMinute = Math.round((cfg.valid_to_ora - toHour) * 60);
+                        const fromHourSel = this.content.querySelector('#conditional-from-hour');
+                        const fromMinuteSel = this.content.querySelector('#conditional-from-minute');
+                        const toHourSel = this.content.querySelector('#conditional-to-hour');
+                        const toMinuteSel = this.content.querySelector('#conditional-to-minute');
+                        if (fromHourSel) fromHourSel.value = fromHour;
+                        if (fromMinuteSel) fromMinuteSel.value = fromMinute;
+                        if (toHourSel) toHourSel.value = toHour;
+                        if (toMinuteSel) toMinuteSel.value = toMinute;
+                    }
+                    
+                    // Aggiorna le opzioni e aspetta il completamento
+                    if (typeof window.dcUpdateConditionalOptions === 'function') {
+                        await window.dcUpdateConditionalOptions();
+                        // Attendi che il DOM si aggiorni
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        
+                        // Ora imposta il valore di confronto
+                        const comparisonInput = this.content.querySelector('#conditional-comparison-value');
+                        if (comparisonInput && cfg.conditional_value !== undefined) {
+                            comparisonInput.value = cfg.conditional_value;
+                        }
+                    }
+                }
+                
+                const targetForm = this.content.querySelector(`#dc-form-container-${groupType}`);
+                if (targetForm) {
+                    targetForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 200);
+        };
+    }
 
     async loadConfigsForWeeklyView() {
         try {
@@ -2509,127 +2862,225 @@ class MiaConfigCard extends HTMLElement {
         };
     }
 
-    renderWeeklyView(setupName, configs) {
+    async renderWeeklyView(setupName, configs) {
         const container = this.content.querySelector('#dc-weekly-view');
         
-        // Separa configurazioni per tipo
-        const standardConfig = configs.find(c => c.type === 'standard');
-        const timeConfigs = configs.filter(c => c.type === 'time');
-        const scheduleConfigs = configs.filter(c => c.type === 'schedule');
+        // Mostra loading
+        container.innerHTML = '<div style="padding: 20px; text-align: center;">Caricamento vista settimanale...</div>';
         
-        // Genera 14 giorni a partire da oggi
-        const now = new Date();
-        const days = [];
-        for (let i = 0; i < 14; i++) {
-            const date = new Date(now);
-            date.setDate(date.getDate() + i);
-            days.push(date);
-        }
-        
-        // Pre-calcola i segmenti per ogni giorno
-        const daySegments = days.map(day => this.calculateDaySegments(day, standardConfig, timeConfigs, scheduleConfigs));
-        
-        let html = `<h3>📊 Vista Settimanale: ${setupName}</h3>`;
-        html += '<div class="dc-weekly-container">';
-        html += '<div class="dc-weekly-grid">';
-        
-        // Colonna orari
-        html += '<div class="dc-weekly-time-column">';
-        html += '<div style="height: 50px; display: flex; align-items: center; justify-content: center; border-bottom: 2px solid rgba(255,255,255,0.3);">Ora</div>';
-        for (let hour = 0; hour < 24; hour++) {
-            html += `<div class="dc-weekly-time-slot">${String(hour).padStart(2, '0')}:00</div>`;
-        }
-        html += '</div>';
-        
-        // Contenitore giorni
-        html += '<div class="dc-weekly-days">';
-        
-        // Colonna per ogni giorno
-        days.forEach((day, dayIdx) => {
-            const dayOfWeekJS = day.getDay();
-            const dayOfWeekPython = dayOfWeekJS === 0 ? 6 : dayOfWeekJS - 1;
-            const dayName = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'][dayOfWeekPython];
-            const dateStr = `${day.getDate()}/${day.getMonth() + 1}`;
-            
-            html += '<div class="dc-weekly-day-column">';
-            html += `<div class="dc-weekly-day-header"><div>${dayName}</div><div style="font-size: 11px; font-weight: normal;">${dateStr}</div></div>`;
-            html += '<div class="dc-weekly-day-content">';
-            
-            // Linee orizzontali per le ore (0, 60, 120, ..., 1440)
-            for (let hour = 0; hour < 24; hour++) {
-                const topPosition = hour * 60;
-                html += `<div class="dc-weekly-hour-line" style="top: ${topPosition}px;"></div>`;
-            }
-            // Linea finale a 1440px (24:00)
-            html += `<div class="dc-weekly-hour-line" style="top: 1440px; border-top: 2px solid var(--divider-color);"></div>`;
-            
-            // Renderizza i segmenti per questo giorno
-            const segments = daySegments[dayIdx];
-            segments.forEach((seg, segIdx) => {
-                const topPos = seg.startTime;
-                const height = seg.endTime - seg.startTime; // endTime è già esclusivo
-                
-                const tooltip = this.generateSegmentTooltip(seg);
-                const barClass = `dc-weekly-bar dc-weekly-bar-${seg.type}`;
-                
-                // Calcola quante barre ci sono in sovrapposizione
-                const overlapping = segments.filter(s => 
-                    (s.startTime < seg.endTime && s.endTime > seg.startTime)
-                ).length;
-                
-                // Se ci sono sovrapposizioni, restringi la larghezza e sposta orizzontalmente
-                const widthPercent = overlapping > 1 ? (100 / overlapping) : 100;
-                const leftPercent = overlapping > 1 ? (segIdx % overlapping) * widthPercent : 0;
-                
-                html += `<div class="${barClass} dc-weekly-tooltip" style="top: ${topPos}px; height: ${height}px; left: ${leftPercent}%; width: ${widthPercent}%;">`;
-                if (height > 20) {
-                    html += seg.value;
+        try {
+                // Determina entity_id se disponibile
+                const entityId = this._selectedEntity || null;
+                const serviceData = {
+                    setup_name: setupName,
+                    days: 14
+                };
+                if (entityId) {
+                    serviceData.entity_id = entityId;
                 }
-                html += `<span class="dc-tooltip-text">${tooltip}</span>`;
-                html += `</div>`;
+            
+                // Chiama il servizio backend per ottenere i segmenti calcolati
+                const result = await this._hass.callWS({
+                    type: 'call_service',
+                    domain: 'mia_config',
+                    service: 'simulate_schedule',
+                    service_data: serviceData,
+                    return_response: true
+                });
+            
+                const segments = result.response?.segments || [];
+            
+            // Raggruppa i segmenti per giorno
+            const segmentsByDate = {};
+            segments.forEach(seg => {
+                // Normalizza la data (supporta formati con ora) ed evita segmenti fuori periodo
+                const rawDate = seg.date || '';
+                const parsedDate = new Date(rawDate);
+                const isValidDate = !Number.isNaN(parsedDate.getTime());
+                const dateKey = isValidDate
+                    ? `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, '0')}-${String(parsedDate.getDate()).padStart(2, '0')}`
+                    : rawDate.split(' ')[0];
+                if (!dateKey) return;
+                
+                // Se il backend fornisce valid_from_date/valid_to_date, filtra i segmenti per il giorno corrente
+                const meta = seg.metadata || {};
+                const fromDate = meta.valid_from_date ? new Date(meta.valid_from_date) : null;
+                const toDate = meta.valid_to_date ? new Date(meta.valid_to_date) : null;
+                const hasFrom = fromDate && !Number.isNaN(fromDate.getTime());
+                const hasTo = toDate && !Number.isNaN(toDate.getTime());
+                if (isValidDate) {
+                    if (hasFrom && parsedDate < fromDate) return;
+                    if (hasTo && parsedDate > toDate) return;
+                }
+                
+                if (!segmentsByDate[dateKey]) {
+                    segmentsByDate[dateKey] = [];
+                }
+                segmentsByDate[dateKey].push(seg);
             });
             
-            html += '</div></div>';
-        });
-        
-        html += '</div></div></div>';
-        
-        // Legenda
-        html += '<div style="margin-top: 15px; padding: 10px; background: var(--card-background-color); border-radius: 4px;">';
-        html += '<strong>Legenda:</strong><br>';
-        html += '<span style="display: inline-block; width: 30px; height: 20px; background: #4caf50; border: 1px solid #388e3c; margin-right: 5px; vertical-align: middle; border-radius: 3px;"></span> Valore standard<br>';
-        html += '<span style="display: inline-block; width: 30px; height: 20px; background: #ff9800; border: 1px solid #f57c00; margin-right: 5px; vertical-align: middle; border-radius: 3px;"></span> Override orario (🕐)<br>';
-        html += '<span style="display: inline-block; width: 30px; height: 20px; background: #2196f3; border: 1px solid #1976d2; margin-right: 5px; vertical-align: middle; border-radius: 3px;"></span> Override temporale (⏰)<br>';
-        html += '<small style="color: var(--secondary-text-color); display: block; margin-top: 8px;">💡 Le barre mostrano la durata esatta con posizionamento continuo</small>';
-        html += '<small style="color: var(--secondary-text-color); display: block; margin-top: 4px;">📌 Configurazioni sovrapposte vengono visualizzate affiancate</small>';
-        html += '</div>';
-        
-        container.innerHTML = html;
-        
-        // Gestione dinamica posizione tooltip
-        setTimeout(() => {
-            const bars = container.querySelectorAll('.dc-weekly-tooltip');
-            bars.forEach(bar => {
-                bar.addEventListener('mouseenter', function(e) {
-                    const rect = this.getBoundingClientRect();
-                    const tooltipHeight = 200; // Altezza stimata del tooltip + margine
-                    const headerHeight = 100; // Spazio per header Home Assistant
+            // Genera 14 giorni a partire da oggi
+            const now = new Date();
+            const days = [];
+            for (let i = 0; i < 14; i++) {
+                const date = new Date(now);
+                date.setDate(date.getDate() + i);
+                days.push(date);
+            }
+            
+            let html = `<h3>📊 Vista Settimanale: ${setupName}</h3>`;
+            html += '<div class="dc-weekly-container">';
+            html += '<div class="dc-weekly-grid">';
+            
+            // Colonna orari
+            html += '<div class="dc-weekly-time-column">';
+            html += '<div style="height: 50px; display: flex; align-items: center; justify-content: center; border-bottom: 2px solid rgba(255,255,255,0.3);">Ora</div>';
+            for (let hour = 0; hour < 24; hour++) {
+                html += `<div class="dc-weekly-time-slot">${String(hour).padStart(2, '0')}:00</div>`;
+            }
+            html += '</div>';
+            
+            // Contenitore giorni
+            html += '<div class="dc-weekly-days">';
+            
+            // Colonna per ogni giorno
+            days.forEach((day, dayIdx) => {
+                const dayOfWeekJS = day.getDay();
+                const dayOfWeekPython = dayOfWeekJS === 0 ? 6 : dayOfWeekJS - 1;
+                const dayName = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'][dayOfWeekPython];
+                const dateStr = `${day.getDate()}/${day.getMonth() + 1}`;
+                const dateKey = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+                
+                html += '<div class="dc-weekly-day-column">';
+                html += `<div class="dc-weekly-day-header"><div>${dayName}</div><div style="font-size: 11px; font-weight: normal;">${dateStr}</div></div>`;
+                html += '<div class="dc-weekly-day-content">';
+                
+                // Linee orizzontali per le ore (0, 60, 120, ..., 1440)
+                for (let hour = 0; hour < 24; hour++) {
+                    const topPosition = hour * 60;
+                    html += `<div class="dc-weekly-hour-line" style="top: ${topPosition}px;"></div>`;
+                }
+                // Linea finale a 1440px (24:00)
+                html += `<div class="dc-weekly-hour-line" style="top: 1440px; border-top: 2px solid var(--divider-color);"></div>`;
+                
+                // Ottieni i segmenti per questo giorno dal backend
+                const daySegments = segmentsByDate[dateKey] || [];
+                
+                // Converti i segmenti dal formato backend al formato UI
+                const uiSegments = daySegments.map(seg => {
+                    const uiSeg = {
+                        startTime: seg.start_minute,
+                        endTime: seg.end_minute,
+                        value: seg.value,
+                        type: seg.type,
+                        priority: seg.priority
+                    };
                     
-                    // Calcola lo spazio disponibile sopra la barra
-                    const spaceAbove = rect.top - headerHeight;
-                    
-                    // Se non c'è abbastanza spazio sopra, mostra sotto
-                    if (spaceAbove < tooltipHeight) {
-                        this.classList.add('tooltip-below');
-                    } else {
-                        this.classList.remove('tooltip-below');
+                    // Aggiungi metadata specifici per tipo per i tooltip
+                    if (seg.type === 'time' && seg.metadata) {
+                        uiSeg.from = new Date(seg.metadata.valid_from_date);
+                        uiSeg.to = new Date(seg.metadata.valid_to_date);
+                    } else if (seg.type === 'schedule' && seg.metadata) {
+                        uiSeg.validFrom = seg.metadata.valid_from_ora;
+                        uiSeg.validTo = seg.metadata.valid_to_ora;
+                        uiSeg.days = seg.metadata.days_of_week || [0,1,2,3,4,5,6];
+                    } else if (seg.type === 'conditional' && seg.metadata) {
+                        uiSeg.condition = `${seg.metadata.conditional_config} ${seg.metadata.conditional_operator} ${seg.metadata.conditional_value}`;
+                        uiSeg.entity = seg.metadata.conditional_config;
+                        // Se il condizionale ha una fascia oraria, la includiamo
+                        if (typeof seg.metadata.valid_from_ora === 'number' && typeof seg.metadata.valid_to_ora === 'number') {
+                            uiSeg.validFrom = seg.metadata.valid_from_ora;
+                            uiSeg.validTo = seg.metadata.valid_to_ora;
+                        }
                     }
+                    
+                    return uiSeg;
                 });
+                
+                uiSegments.forEach((seg, segIdx) => {
+                    const topPos = seg.startTime;
+                    const height = seg.endTime - seg.startTime;
+                    
+                    const tooltip = this.generateSegmentTooltip(seg);
+                    const barClass = `dc-weekly-bar dc-weekly-bar-${seg.type}`;
+                    
+                    // Calcola quante barre ci sono in sovrapposizione
+                    const overlapping = uiSegments.filter(s => 
+                        (s.startTime < seg.endTime && s.endTime > seg.startTime)
+                    ).length;
+                    
+                    // Se ci sono sovrapposizioni, restringi la larghezza e sposta orizzontalmente
+                    const widthPercent = overlapping > 1 ? (100 / overlapping) : 100;
+                    const leftPercent = overlapping > 1 ? (segIdx % overlapping) * widthPercent : 0;
+                    
+                    html += `<div class="${barClass} dc-weekly-tooltip" style="top: ${topPos}px; height: ${height}px; left: ${leftPercent}%; width: ${widthPercent}%;">`;
+                    if (height > 20) {
+                        html += seg.value;
+                    }
+                    html += `<span class="dc-tooltip-text">${tooltip}</span>`;
+                    html += `</div>`;
+                });
+                
+                html += '</div></div>';
             });
-        }, 100);
+            
+            html += '</div></div></div>';
+            
+            // Legenda
+            html += '<div style="margin-top: 15px; padding: 10px; background: var(--card-background-color); border-radius: 4px;">';
+            html += '<strong>Legenda:</strong><br>';
+            html += '<span style="display: inline-block; width: 30px; height: 20px; background: #4caf50; border: 1px solid #388e3c; margin-right: 5px; vertical-align: middle; border-radius: 3px;"></span> Valore standard<br>';
+            html += '<span style="display: inline-block; width: 30px; height: 20px; background: #ff9800; border: 1px solid #f57c00; margin-right: 5px; vertical-align: middle; border-radius: 3px;"></span> Override orario (🕐)<br>';
+            html += '<span style="display: inline-block; width: 30px; height: 20px; background: #2196f3; border: 1px solid #1976d2; margin-right: 5px; vertical-align: middle; border-radius: 3px;"></span> Override temporale (⏰)<br>';
+            html += '<span style="display: inline-block; width: 30px; height: 20px; background: #9c27b0; border: 1px solid #7b1fa2; margin-right: 5px; vertical-align: middle; border-radius: 3px;"></span> Override condizionale (🎯)<br>';
+            html += '<small style="color: var(--secondary-text-color); display: block; margin-top: 8px;">💡 Le barre mostrano la durata esatta con posizionamento continuo</small>';
+            html += '<small style="color: var(--secondary-text-color); display: block; margin-top: 4px;">📌 Configurazioni sovrapposte vengono visualizzate affiancate</small>';
+            html += '</div>';
+            
+            container.innerHTML = html;
+            
+            // Gestione dinamica posizione tooltip
+            setTimeout(() => {
+                const bars = container.querySelectorAll('.dc-weekly-tooltip');
+                bars.forEach(bar => {
+                    bar.addEventListener('mouseenter', function(e) {
+                        const rect = this.getBoundingClientRect();
+                        const parent = this.closest('.dc-weekly-day-content');
+                        const parentRect = parent ? parent.getBoundingClientRect() : null;
+                        const viewportHeight = window.innerHeight;
+                        const tooltipHeight = 200; // Altezza stimata del tooltip + margine
+                        const headerHeight = 100; // Spazio per header Home Assistant
+                        
+                        // Se la barra inizia nei primi 150px del contenitore giorno, mostra sempre sotto
+                        if (parentRect && (rect.top - parentRect.top) < 150) {
+                            this.classList.add('tooltip-below');
+                            return;
+                        }
+                        
+                        // Calcola lo spazio disponibile sopra e sotto la barra
+                        const spaceAbove = rect.top - headerHeight;
+                        const spaceBelow = viewportHeight - rect.bottom;
+                        
+                        // Mostra sotto se non c'è abbastanza spazio sopra E c'è più spazio sotto che sopra
+                        if (spaceAbove < tooltipHeight && spaceBelow > spaceAbove) {
+                            this.classList.add('tooltip-below');
+                        } else {
+                            this.classList.remove('tooltip-below');
+                        }
+                    });
+                });
+            }, 100);
+            
+        } catch (error) {
+            console.error('Errore nel caricamento della vista settimanale:', error);
+            container.innerHTML = `<div style="padding: 20px; color: var(--error-color);">
+                <strong>Errore nel caricamento della vista settimanale</strong><br>
+                ${error.message}
+            </div>`;
+        }
     }
 
-    calculateDaySegments(date, standardConfig, timeConfigs, scheduleConfigs) {
+    calculateDaySegments(date, standardConfig, timeConfigs, scheduleConfigs, conditionalConfigs) {
         const dayOfWeek = date.getDay();
         const adjustedDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
         const segments = [];
@@ -2710,6 +3161,75 @@ class MiaConfigCard extends HTMLElement {
                             validFrom: validFrom,
                             validTo: validTo,
                             days: validDays
+                        };
+                    }
+                }
+            }
+        }
+        
+        // Passa intermedia: override condizionali con fascia oraria
+        for (const condConfig of conditionalConfigs || []) {
+            // Solo condizionali con fascia oraria definita
+            if (condConfig.valid_from_ora === undefined || condConfig.valid_to_ora === undefined) {
+                continue; // Salta i condizionali senza fascia oraria
+            }
+            
+            const validFrom = condConfig.valid_from_ora;
+            const validTo = condConfig.valid_to_ora;
+            const priority = condConfig.priority || 99;
+            
+            const fromMin = Math.floor(validFrom * 60);
+            const toMin = Math.floor(validTo * 60);
+            
+            const shouldOverride = (existing) => {
+                if (!existing) return true;
+                // Confronta priorità (1 = massima)
+                if (priority < existing.priority) return true;
+                if (priority > existing.priority) return false;
+                // A parità di priorità, conditional ha sourceOrder simile a schedule
+                return 2 < existing.sourceOrder;
+            };
+            
+            if (validTo < validFrom) {
+                // Attraversa mezzanotte
+                for (let i = fromMin; i < 1440; i++) {
+                    if (shouldOverride(minuteMap[i])) {
+                        minuteMap[i] = {
+                            type: 'conditional',
+                            value: condConfig.value,
+                            priority: priority,
+                            sourceOrder: 2,
+                            validFrom: validFrom,
+                            validTo: validTo,
+                            condition: `${condConfig.conditional_config} ${condConfig.conditional_operator} ${condConfig.conditional_value}`
+                        };
+                    }
+                }
+                for (let i = 0; i <= toMin; i++) {
+                    if (shouldOverride(minuteMap[i])) {
+                        minuteMap[i] = {
+                            type: 'conditional',
+                            value: condConfig.value,
+                            priority: priority,
+                            sourceOrder: 2,
+                            validFrom: validFrom,
+                            validTo: validTo,
+                            condition: `${condConfig.conditional_config} ${condConfig.conditional_operator} ${condConfig.conditional_value}`
+                        };
+                    }
+                }
+            } else {
+                // Range normale
+                for (let i = fromMin; i <= toMin && i < 1440; i++) {
+                    if (shouldOverride(minuteMap[i])) {
+                        minuteMap[i] = {
+                            type: 'conditional',
+                            value: condConfig.value,
+                            priority: priority,
+                            sourceOrder: 2,
+                            validFrom: validFrom,
+                            validTo: validTo,
+                            condition: `${condConfig.conditional_config} ${condConfig.conditional_operator} ${condConfig.conditional_value}`
                         };
                     }
                 }
@@ -2868,16 +3388,24 @@ class MiaConfigCard extends HTMLElement {
         tooltip += `<strong>Orario:</strong> ${String(startHour).padStart(2,'0')}:${String(startMin).padStart(2,'0')} - ${String(endHour).padStart(2,'0')}:${String(endMin).padStart(2,'0')}<br><br>`;
         
         if (segment.type === 'time') {
-            const fromStr = `${segment.from.getDate()}/${segment.from.getMonth()+1} ${String(segment.from.getHours()).padStart(2,'0')}:${String(segment.from.getMinutes()).padStart(2,'0')}`;
-            const toStr = `${segment.to.getDate()}/${segment.to.getMonth()+1} ${String(segment.to.getHours()).padStart(2,'0')}:${String(segment.to.getMinutes()).padStart(2,'0')}`;
+            const hasDates = segment.from instanceof Date && segment.to instanceof Date && !Number.isNaN(segment.from) && !Number.isNaN(segment.to);
             tooltip += `<strong>⏰ Override Temporale</strong><br>`;
-            tooltip += `Periodo completo:<br>${fromStr} - ${toStr}`;
+            if (hasDates) {
+                const fromStr = `${segment.from.getDate()}/${segment.from.getMonth()+1} ${String(segment.from.getHours()).padStart(2,'0')}:${String(segment.from.getMinutes()).padStart(2,'0')}`;
+                const toStr = `${segment.to.getDate()}/${segment.to.getMonth()+1} ${String(segment.to.getHours()).padStart(2,'0')}:${String(segment.to.getMinutes()).padStart(2,'0')}`;
+                tooltip += `Periodo completo:<br>${fromStr} - ${toStr}`;
+            } else {
+                tooltip += 'Periodo temporale attivo';
+            }
         } else if (segment.type === 'schedule') {
             const daysStr = segment.days.map(d => ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'][d]).join(', ');
-            const fromHour = Math.floor(segment.validFrom);
-            const fromMin = Math.round((segment.validFrom - fromHour) * 60);
-            const toHour = Math.floor(segment.validTo);
-            const toMin = Math.round((segment.validTo - toHour) * 60);
+            // Converti ore decimali in HH:MM (es. 4.5 ore = 270 minuti = 4h 30m)
+            const fromTotalMin = Math.round(segment.validFrom * 60);
+            const fromHour = Math.floor(fromTotalMin / 60);
+            const fromMin = fromTotalMin % 60;
+            const toTotalMin = Math.round(segment.validTo * 60);
+            const toHour = Math.floor(toTotalMin / 60);
+            const toMin = toTotalMin % 60;
             
             tooltip += `<strong>🕐 Override Orario</strong><br>`;
             tooltip += `Fascia configurata: ${String(fromHour).padStart(2,'0')}:${String(fromMin).padStart(2,'0')} - ${String(toHour).padStart(2,'0')}:${String(toMin).padStart(2,'0')}<br>`;
@@ -2885,6 +3413,24 @@ class MiaConfigCard extends HTMLElement {
             
             if (segment.validTo < segment.validFrom) {
                 tooltip += '<br><small>(attraversa la mezzanotte)</small>';
+            }
+        } else if (segment.type === 'conditional') {
+            tooltip += `<strong>🎯 Override Condizionale</strong><br>`;
+            tooltip += `Condizione: ${segment.condition}<br>`;
+            tooltip += `Entità: ${segment.entity || 'n/d'}<br>`;
+            const hasWindow = typeof segment.validFrom === 'number' && typeof segment.validTo === 'number';
+            if (hasWindow) {
+                // Converti ore decimali in HH:MM
+                const fromTotalMin = Math.round(segment.validFrom * 60);
+                const fromHour = Math.floor(fromTotalMin / 60);
+                const fromMin = fromTotalMin % 60;
+                const toTotalMin = Math.round(segment.validTo * 60);
+                const toHour = Math.floor(toTotalMin / 60);
+                const toMin = toTotalMin % 60;
+                tooltip += `Fascia oraria: ${String(fromHour).padStart(2,'0')}:${String(fromMin).padStart(2,'0')} - ${String(toHour).padStart(2,'0')}:${String(toMin).padStart(2,'0')}`;
+                if (segment.validTo < segment.validFrom) {
+                    tooltip += '<br><small>(attraversa la mezzanotte)</small>';
+                }
             }
         } else if (segment.type === 'standard') {
             tooltip += `<strong>⚙️ Valore Standard</strong><br>`;

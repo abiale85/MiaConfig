@@ -396,3 +396,39 @@ cleanup_history:
           min: 1
           max: 500
           mode: box
+simulate_schedule:
+  name: Simula Configurazione Settimanale
+  description: Simula la configurazione per un periodo di tempo specificato (usato per la vista settimanale)
+  fields:
+    entity_id:
+      name: Entità
+      description: Entità sensor.mia_config_* dell'istanza da utilizzare (opzionale)
+      required: false
+      example: "sensor.mia_config_temperatura_target"
+      selector:
+        entity:
+          integration: mia_config
+    setup_name:
+      name: Nome Configurazione
+      description: Nome della configurazione da simulare
+      required: true
+      example: "temperatura_target"
+      selector:
+        text:
+    start_date:
+      name: Data Inizio
+      description: "Data e ora di inizio simulazione (default: ora corrente)"
+      required: false
+      selector:
+        datetime:
+    days:
+      name: Numero Giorni
+      description: Numero di giorni da simulare
+      required: false
+      default: 14
+      example: 7
+      selector:
+        number:
+          min: 1
+          max: 30
+          mode: box

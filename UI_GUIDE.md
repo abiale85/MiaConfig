@@ -33,6 +33,12 @@ type: custom:dynamic-config-card
 
 ## Utilizzo dell'Interfaccia UI
 
+### Vista Settimanale
+La vista settimanale mostra le barre orarie per ciascun giorno.
+
+- Il calcolo delle sovrapposizioni è eseguito dal backend tramite il servizio `mia_config.simulate_schedule`, che restituisce segmenti già risolti con le priorità applicate.
+- Gli override condizionali sono valutati minuto per minuto usando il valore che il setup di riferimento avrà in quel momento simulato (non il valore attuale), quindi l’override appare solo quando la condizione è davvero vera.
+
 ### 📋 Tab Lista
 Visualizza tutte le configurazioni esistenti con:
 - Badge colorato che indica il tipo (Standard/Orario/Tempo)

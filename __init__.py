@@ -324,6 +324,40 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         
         _LOGGER.info(f"Configurazione a orario '{setup_name}' impostata")
     
+    async def handle_set_conditional_config(call: ServiceCall) -> None:
+        """Gestisce il servizio per impostare una configurazione condizionale."""
+        entity_id = call.data.get("entity_id")
+        db = get_db_from_entity_id(hass, entity_id)
+        
+        setup_name = call.data.get("setup_name")
+        setup_value = call.data.get("setup_value")
+        conditional_config = call.data.get("conditional_config")
+        conditional_operator = call.data.get("conditional_operator")
+        conditional_value = call.data.get("conditional_value")
+        priority = call.data.get("priority", 99)
+        valid_from_ora = call.data.get("valid_from_ora")
+        valid_to_ora = call.data.get("valid_to_ora")
+        
+        try:
+            await hass.async_add_executor_job(
+                db.set_conditional_config, setup_name, setup_value, conditional_config,
+                conditional_operator, conditional_value, priority,
+                valid_from_ora, valid_to_ora
+            )
+            
+            # Forza aggiornamento e invalida cache
+            for entry_id, data in hass.data.get(DOMAIN, {}).items():
+                if isinstance(data, dict):
+                    if 'clear_cache' in data:
+                        data['clear_cache']()
+                    if 'coordinator' in data:
+                        await data['coordinator'].async_request_refresh()
+            
+            _LOGGER.info(f"Configurazione condizionale '{setup_name}' impostata")
+        except ValueError as err:
+            _LOGGER.error(f"Errore nella configurazione condizionale: {err}")
+            raise
+    
     async def handle_update_standard_config(call: ServiceCall) -> None:
         """Gestisce il servizio per aggiornare una configurazione standard esistente."""
         entity_id = call.data.get("entity_id")
@@ -374,6 +408,25 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     await data['coordinator'].async_request_refresh()
         
         _LOGGER.info(f"Configurazione '{setup_name}' eliminata")
+    
+    async def handle_simulate_schedule(call: ServiceCall) -> ServiceResponse:
+        """Simula la configurazione per un periodo di tempo."""
+        entity_id = call.data.get("entity_id")
+        db = get_db_from_entity_id(hass, entity_id)
+        
+        setup_name = call.data.get("setup_name")
+        start_date = call.data.get("start_date")
+        days = call.data.get("days", 14)
+        
+        # Se non specificata, usa data/ora corrente
+        if start_date is None:
+            start_date = datetime.now()
+        
+        segments = await hass.async_add_executor_job(
+            db.simulate_configuration_schedule, setup_name, start_date, days
+        )
+        
+        return {"segments": segments}
     
     async def handle_delete_single_config(call: ServiceCall) -> None:
         """Gestisce il servizio per eliminare una singola configurazione tramite ID."""
@@ -507,13 +560,24 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         vol.Optional("priority", default=99): cv.positive_int,
     })
     
+    set_conditional_config_schema = vol.Schema({
+        vol.Required("setup_name"): cv.string,
+        vol.Required("setup_value"): cv.string,
+        vol.Required("conditional_config"): cv.string,
+        vol.Required("conditional_operator"): vol.In(["==", "!=", ">", "<", ">=", "<=", "contains", "not_contains"]),
+        vol.Required("conditional_value"): cv.string,
+        vol.Optional("priority", default=99): cv.positive_int,
+        vol.Optional("valid_from_ora"): vol.Any(int, float),
+        vol.Optional("valid_to_ora"): vol.Any(int, float),
+    })
+    
     delete_config_schema = vol.Schema({
         vol.Required("setup_name"): cv.string,
-        vol.Optional("config_type", default="all"): vol.In(["all", "standard", "time", "schedule"]),
+        vol.Optional("config_type", default="all"): vol.In(["all", "standard", "time", "schedule", "conditional"]),
     })
     
     delete_single_config_schema = vol.Schema({
-        vol.Required("config_type"): vol.In(["standard", "time", "schedule"]),
+        vol.Required("config_type"): vol.In(["standard", "time", "schedule", "conditional"]),
         vol.Required("config_id"): cv.positive_int,
     })
     
@@ -534,6 +598,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         vol.Optional("min_entries_per_name", default=DEFAULT_MIN_HISTORY_PER_NAME): cv.positive_int,
     })
     
+    simulate_schedule_schema = vol.Schema({
+        vol.Required("setup_name"): cv.string,
+        vol.Optional("start_date"): cv.datetime,
+        vol.Optional("days", default=14): cv.positive_int,
+    })
+    
     # Registra i servizi
     hass.services.async_register(
         DOMAIN, "set_config", handle_set_config, schema=set_config_schema
@@ -549,6 +619,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     
     hass.services.async_register(
         DOMAIN, "set_schedule_config", handle_set_schedule_config, schema=set_schedule_config_schema
+    )
+    
+    hass.services.async_register(
+        DOMAIN, "set_conditional_config", handle_set_conditional_config, schema=set_conditional_config_schema
     )
     
     hass.services.async_register(
@@ -650,6 +724,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     
     hass.services.async_register(
         DOMAIN, "get_valid_values", handle_get_valid_values, schema=get_valid_values_schema, supports_response=SupportsResponse.OPTIONAL
+    )
+    
+    hass.services.async_register(
+        DOMAIN, "simulate_schedule", handle_simulate_schedule, schema=simulate_schedule_schema, supports_response=SupportsResponse.OPTIONAL
     )
 
 

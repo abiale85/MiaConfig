@@ -1,5 +1,46 @@
 # 📋 Changelog - Mia Config
 
+## v1.4.2 - 1 Gennaio 2026 🎯🔧
+
+### 🐛 Correzioni Critiche Backend
+- **Fix Conversione `days_of_week` Vuote**: Aggiunta validazione `if d` in tutte le conversioni `int(d)` per evitare errori con stringhe vuote
+  - Risolto `invalid literal for int() with base 10: ''`
+  - Gestione corretta di NULL/empty strings in `days_of_week`
+  - Applicato fix su 9 occorrenze nel codice (linee 185, 212, 763, 787, 1093, 1155, 1274, 1520, 1563, 1646, 1719)
+
+- **Fix Dipendenze Circolari**: Corretto algoritmo di rilevamento dipendenze negli override condizionali
+  - Query invertita: da "WHERE conditional_config = ?" a "WHERE setup_name = ?"
+  - Ora traccia correttamente le catene di dipendenza (A→B→C)
+  - Aggiunto check diretto `if conditional_config == setup_name` all'inizio
+  - Aggiunto `row_factory = sqlite3.Row` per accesso corretto ai campi
+
+### ✨ Miglioramenti UI - Override Condizionali
+- **Raggruppamento Semplificato**: Rimossa fascia oraria e giorni dalla chiave di raggruppamento
+  - Override condizionali ora raggruppati solo per: `conditional_config`, `conditional_operator`, `conditional_value`
+  - Vista più pulita e intuitiva
+
+- **Pre-popolamento Completo Form "Inserisci"**: Funzione asincrona con await corretto
+  - ✅ Configurazione da override (setup_name)
+  - ✅ **Valore override** (setup_value) - NUOVO
+  - ✅ Condizione basata su (conditional_config)
+  - ✅ Operatore (conditional_operator)
+  - ✅ Valore di confronto (conditional_value)
+  - ✅ **Fascia oraria** (valid_from_ora/valid_to_ora) - NUOVO: pre-attivata e pre-popolata se presente
+  - Attende caricamento valori validi con `await dcLoadValidValuesForForm()`
+  - Attende `dcUpdateConditionalOptions()` per popolazione dropdown dinamici
+  - Pause aggiuntive (100ms) per sincronizzazione DOM
+
+### 🔧 Ottimizzazioni
+- Funzione `dcInsertOverrideGroup` ora async per gestione corretta caricamento dati
+- Pre-popolamento anche per form Schedule e Time (oltre a Conditional)
+- Gestione robusta di `days_of_week` come string o array
+
+### 📦 Versioni
+- **Frontend**: v1.3.10 → Async form prefill with proper wait for dynamic select population
+- **Backend**: Fix gestione stringhe vuote e circular dependency detection
+
+---
+
 ## v1.4.1 - 6 Dicembre 2025 ⚡
 
 ### ✨ Nuove Funzionalità

@@ -80,6 +80,21 @@ class ConfigDatabase:
             )
         """)
         
+        # Tabella configurazioni condizionali
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS configurazioni_condizionali (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                setup_name TEXT NOT NULL,
+                setup_value TEXT,
+                conditional_config TEXT NOT NULL,
+                conditional_operator TEXT NOT NULL,
+                conditional_value TEXT NOT NULL,
+                valid_from_ora REAL,
+                valid_to_ora REAL,
+                priority INTEGER NOT NULL DEFAULT 99
+            )
+        """)
+        
         # Tabella storico configurazioni
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS configurazioni_storico (
@@ -167,7 +182,7 @@ class ConfigDatabase:
             
             # Verifica filtri opzionali giorni
             if row['days_of_week'] is not None:
-                valid_days = [int(d) for d in row['days_of_week'].split(',')]
+                valid_days = [int(d) for d in row['days_of_week'].split(',') if d]
                 if current_day not in valid_days:
                     continue
             
@@ -194,7 +209,7 @@ class ConfigDatabase:
         """)
         for row in cursor.fetchall():
             days_of_week = row['days_of_week'] if row['days_of_week'] else '0,1,2,3,4,5,6'
-            valid_days = [int(d) for d in days_of_week.split(',')]
+            valid_days = [int(d) for d in days_of_week.split(',') if d]
             
             valid_from = row['valid_from_ora']
             valid_to = row['valid_to_ora']
@@ -230,9 +245,64 @@ class ConfigDatabase:
                 'value': row['setup_value'],
                 'priority': row['priority'],
                 'source': 'standard',
-                'source_order': 3,  # standard ha priorità minore
+                'source_order': 4,  # standard ha priorità minore
                 'id': row['id']
             })
+        
+        # Configurazioni condizionali (valutate in base alla condizione)
+        cursor.execute("""
+            SELECT setup_name, setup_value, priority, conditional_config, 
+                   conditional_operator, conditional_value, 
+                   valid_from_ora, valid_to_ora, id
+            FROM configurazioni_condizionali
+        """)
+        conditional_configs = cursor.fetchall()
+        
+        # Prima ordina per priorità, poi valuta le condizioni
+        all_active_configs.sort(key=lambda x: (x['priority'], x['source_order']))
+        
+        # Crea risultato provvisorio per poter valutare le condizioni
+        temp_result = {}
+        for config in all_active_configs:
+            name = config['setup_name']
+            if name not in temp_result:
+                temp_result[name] = config['value']
+        
+        # Valuta le configurazioni condizionali
+        for row in conditional_configs:
+            base_config = row['conditional_config']
+            operator = row['conditional_operator']
+            expected_value = row['conditional_value']
+            
+            # Ottieni il valore attuale della configurazione di base
+            actual_value = temp_result.get(base_config)
+            
+            if actual_value is None:
+                continue  # Configurazione base non esiste
+            
+            # Valuta la condizione
+            condition_met = self._evaluate_condition(actual_value, operator, expected_value)
+            
+            if condition_met:
+                # Aggiungi alla lista delle configurazioni attive
+                config_dict = {
+                    'setup_name': row['setup_name'],
+                    'value': row['setup_value'],
+                    'priority': row['priority'],
+                    'source': 'conditional',
+                    'source_order': 1,  # conditional ha alta priorità quando attivo
+                    'conditional_config': base_config,
+                    'conditional_operator': operator,
+                    'conditional_value': expected_value,
+                    'id': row['id']
+                }
+                # Aggiungi info temporali se presenti
+                if row['valid_from_ora'] is not None:
+                    config_dict['valid_from_ora'] = row['valid_from_ora']
+                if row['valid_to_ora'] is not None:
+                    config_dict['valid_to_ora'] = row['valid_to_ora']
+                
+                all_active_configs.append(config_dict)
         
         # Ordina per priorità (crescente) e poi per source_order (crescente)
         # Priorità 1 = massima priorità
@@ -418,6 +488,146 @@ class ConfigDatabase:
         self.conn.commit()
         _LOGGER.debug(f"Set schedule config: {setup_name} = {setup_value} ({valid_from_ora} - {valid_to_ora}) Days: {days_of_week}")
     
+    def set_conditional_config(
+        self,
+        setup_name: str,
+        setup_value: str,
+        conditional_config: str,
+        conditional_operator: str,
+        conditional_value: str,
+        priority: int = 99,
+        valid_from_ora: float = None,
+        valid_to_ora: float = None
+    ) -> None:
+        """Imposta una configurazione condizionale."""
+        setup_name = self.validate_setup_name(setup_name)
+        conditional_config = self.validate_setup_name(conditional_config)
+        
+        # Verifica loop diretto
+        if setup_name == conditional_config:
+            raise ValueError(f"Una configurazione non può dipendere da se stessa")
+        
+        # Verifica loop ciclici
+        if self._check_circular_dependency(setup_name, conditional_config):
+            raise ValueError(
+                f"Dipendenza ciclica rilevata: '{setup_name}' non può dipendere da '{conditional_config}' "
+                f"perché creerebbe un loop infinito"
+            )
+        
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            INSERT INTO configurazioni_condizionali
+            (setup_name, setup_value, conditional_config, conditional_operator, conditional_value, 
+             valid_from_ora, valid_to_ora, priority)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (setup_name, setup_value, conditional_config, conditional_operator, conditional_value,
+              valid_from_ora, valid_to_ora, priority))
+        
+        # Salva nello storico
+        history_data = {
+            'setup_value': setup_value,
+            'conditional_config': conditional_config,
+            'conditional_operator': conditional_operator,
+            'conditional_value': conditional_value,
+            'priority': priority
+        }
+        if valid_from_ora is not None:
+            history_data['valid_from_ora'] = valid_from_ora
+        if valid_to_ora is not None:
+            history_data['valid_to_ora'] = valid_to_ora
+        
+        self._save_to_history(
+            setup_name, 'conditional',
+            history_data,
+            'INSERT'
+        )
+        
+        self.conn.commit()
+        _LOGGER.debug(f"Set conditional config: {setup_name} = {setup_value} if {conditional_config} {conditional_operator} {conditional_value}")
+    
+    def _check_circular_dependency(self, setup_name: str, conditional_config: str, visited: set = None) -> bool:
+        """Verifica se aggiungere una dipendenza creerebbe un loop ciclico.
+        
+        Args:
+            setup_name: Nome della configurazione che stiamo aggiungendo
+            conditional_config: Configurazione da cui dipende
+            visited: Set di configurazioni già visitate (per rilevare cicli)
+        
+        Returns:
+            True se esiste un ciclo, False altrimenti
+        """
+        if visited is None:
+            visited = set()
+        
+        # Se conditional_config punta direttamente a setup_name, è un ciclo diretto
+        if conditional_config == setup_name:
+            return True
+        
+        # Se abbiamo già visitato conditional_config, abbiamo trovato un ciclo
+        if conditional_config in visited:
+            return True
+        
+        visited.add(conditional_config)
+        
+        # Trova tutte le configurazioni condizionali dove conditional_config è il setup_name
+        # (cioè dove conditional_config a sua volta dipende da altre configurazioni)
+        cursor = self.conn.cursor()
+        cursor.row_factory = sqlite3.Row
+        cursor.execute("""
+            SELECT conditional_config FROM configurazioni_condizionali
+            WHERE setup_name = ?
+        """, (conditional_config,))
+        
+        for row in cursor.fetchall():
+            next_dependency = row['conditional_config']
+            # Se questa dipendenza punta a setup_name, abbiamo un ciclo
+            if next_dependency == setup_name:
+                return True
+            # Ricorsivamente controlla le dipendenze
+            if self._check_circular_dependency(setup_name, next_dependency, visited.copy()):
+                return True
+        
+        return False
+    
+    def _evaluate_condition(self, actual_value: str, operator: str, expected_value: str) -> bool:
+        """Valuta una condizione confrontando due valori.
+        
+        Args:
+            actual_value: Valore attuale della configurazione
+            operator: Operatore di confronto
+            expected_value: Valore atteso
+        
+        Returns:
+            True se la condizione è soddisfatta, False altrimenti
+        """
+        # Prova a convertire in numeri per confronti numerici
+        try:
+            actual_num = float(actual_value)
+            expected_num = float(expected_value)
+            is_numeric = True
+        except (ValueError, TypeError):
+            is_numeric = False
+        
+        if operator == '==':
+            return str(actual_value) == str(expected_value)
+        elif operator == '!=':
+            return str(actual_value) != str(expected_value)
+        elif operator == 'contains':
+            return str(expected_value).lower() in str(actual_value).lower()
+        elif operator == 'not_contains':
+            return str(expected_value).lower() not in str(actual_value).lower()
+        elif is_numeric:
+            if operator == '>':
+                return actual_num > expected_num
+            elif operator == '<':
+                return actual_num < expected_num
+            elif operator == '>=':
+                return actual_num >= expected_num
+            elif operator == '<=':
+                return actual_num <= expected_num
+        
+        return False
+    
     def delete_config(self, setup_name: str, config_type: str = "all") -> None:
         """Elimina una configurazione."""
         cursor = self.conn.cursor()
@@ -465,6 +675,27 @@ class ConfigDatabase:
                 )
             cursor.execute("DELETE FROM configurazioni_a_orario WHERE setup_name = ?", (setup_name,))
         
+        if config_type in ["all", "conditional"]:
+            # Salva nello storico prima di eliminare
+            cursor.execute("""
+                SELECT setup_name, setup_value, conditional_config, conditional_operator, 
+                       conditional_value, valid_from_ora, valid_to_ora, priority
+                FROM configurazioni_condizionali 
+                WHERE setup_name = ?
+            """, (setup_name,))
+            for row in cursor.fetchall():
+                self._save_to_history(
+                    setup_name, 'conditional',
+                    {
+                        'setup_value': row['setup_value'],
+                        'conditional_config': row['conditional_config'],
+                        'conditional_operator': row['conditional_operator'],
+                        'conditional_value': row['conditional_value']
+                    },
+                    'DELETE'
+                )
+            cursor.execute("DELETE FROM configurazioni_condizionali WHERE setup_name = ?", (setup_name,))
+        
         self.conn.commit()
         _LOGGER.debug(f"Deleted config: {setup_name} (type: {config_type})")
     
@@ -483,11 +714,15 @@ class ConfigDatabase:
         cursor.execute("SELECT DISTINCT setup_name FROM configurazioni_a_tempo")
         names.update(row['setup_name'] for row in cursor.fetchall())
         
+        cursor.execute("SELECT DISTINCT setup_name FROM configurazioni_condizionali")
+        names.update(row['setup_name'] for row in cursor.fetchall())
+        
         return sorted(list(names))
     
     def get_all_configurations_detailed(self) -> Dict[str, List[Dict[str, Any]]]:
         """Ottiene tutte le configurazioni con tutti i dettagli, raggruppate per nome."""
         cursor = self.conn.cursor()
+        cursor.row_factory = sqlite3.Row
         result = {}
         
         # Configurazioni standard (con descrizione)
@@ -518,13 +753,14 @@ class ConfigDatabase:
             name = row['setup_name']
             if name not in result:
                 result[name] = []
+            days_str = row['days_of_week'] if row['days_of_week'] else '0,1,2,3,4,5,6'  # Default a tutti i giorni se None o vuoto
             result[name].append({
                 'type': 'schedule',
                 'id': row['id'],
                 'value': row['setup_value'],
                 'valid_from_ora': row['valid_from_ora'],
                 'valid_to_ora': row['valid_to_ora'],
-                'days_of_week': [int(d) for d in row['days_of_week'].split(',')],
+                'days_of_week': [int(d) for d in days_str.split(',') if d],
                 'priority': row['priority']
             })
         
@@ -548,10 +784,36 @@ class ConfigDatabase:
             if row['valid_to_ora'] is not None:
                 config_dict['valid_to_ora'] = row['valid_to_ora']
             if row['days_of_week'] is not None:
-                config_dict['days_of_week'] = [int(d) for d in row['days_of_week'].split(',')]
+                config_dict['days_of_week'] = [int(d) for d in row['days_of_week'].split(',') if d]
             
             result[name].append(config_dict)
         
+        # Configurazioni condizionali
+        cursor.execute("""
+            SELECT id, setup_name, setup_value, conditional_config, conditional_operator, 
+                   conditional_value, valid_from_ora, valid_to_ora, priority 
+            FROM configurazioni_condizionali 
+            ORDER BY setup_name
+        """)
+        for row in cursor.fetchall():
+            name = row['setup_name']
+            if name not in result:
+                result[name] = []
+            config_dict = {
+                'type': 'conditional',
+                'id': row['id'],
+                'value': row['setup_value'],
+                'conditional_config': row['conditional_config'],
+                'conditional_operator': row['conditional_operator'],
+                'conditional_value': row['conditional_value'],
+                'priority': row['priority']
+            }
+            # Aggiungi filtri temporali se presenti
+            if row['valid_from_ora'] is not None:
+                config_dict['valid_from_ora'] = row['valid_from_ora']
+            if row['valid_to_ora'] is not None:
+                config_dict['valid_to_ora'] = row['valid_to_ora']
+            result[name].append(config_dict)
         return result
     
     def _save_to_history(self, setup_name: str, config_type: str, config_data: Dict[str, Any], operation: str) -> None:
@@ -728,6 +990,26 @@ class ConfigDatabase:
                     'DELETE'
                 )
             cursor.execute("DELETE FROM configurazioni_a_tempo WHERE id = ?", (int(config_id),))
+        elif config_type == 'conditional':
+            cursor.execute("""
+                SELECT setup_name, setup_value, conditional_config, conditional_operator, 
+                       conditional_value, valid_from_ora, valid_to_ora, priority
+                FROM configurazioni_condizionali 
+                WHERE id = ?
+            """, (int(config_id),))
+            row = cursor.fetchone()
+            if row:
+                self._save_to_history(
+                    row['setup_name'], 'conditional',
+                    {
+                        'setup_value': row['setup_value'],
+                        'conditional_config': row['conditional_config'],
+                        'conditional_operator': row['conditional_operator'],
+                        'conditional_value': row['conditional_value']
+                    },
+                    'DELETE'
+                )
+            cursor.execute("DELETE FROM configurazioni_condizionali WHERE id = ?", (int(config_id),))
         elif config_type == 'standard':
             # Per standard usiamo il nome come identificatore
             cursor.execute("SELECT * FROM configurazioni WHERE setup_name = ?", (config_id,))
@@ -808,7 +1090,8 @@ class ConfigDatabase:
         
         schedule_configs = []
         for row in cursor.fetchall():
-            days_list = [int(d) for d in row['days_of_week'].split(',')]
+            days_str = row['days_of_week'] if row['days_of_week'] else '0,1,2,3,4,5,6'
+            days_list = [int(d) for d in days_str.split(',') if d]
             
             # Controlla oggi, domani e dopodomani
             for day_offset in range(3):
@@ -870,7 +1153,7 @@ class ConfigDatabase:
                                 is_valid = (from_ora <= current_time < to_ora)
                         
                         if is_valid and cfg['days_of_week']:
-                            valid_days = [int(d) for d in cfg['days_of_week'].split(',')]
+                            valid_days = [int(d) for d in cfg['days_of_week'].split(',') if d]
                             if check_time.weekday() not in valid_days:
                                 is_valid = False
                         
@@ -989,7 +1272,7 @@ class ConfigDatabase:
         
         for row in cursor.fetchall():
             days_of_week = row['days_of_week'] if row['days_of_week'] else '0,1,2,3,4,5,6'
-            valid_days = [int(d) for d in days_of_week.split(',')]
+            valid_days = [int(d) for d in days_of_week.split(',') if d]
             
             valid_from = row['valid_from_ora']
             valid_to = row['valid_to_ora']
@@ -1120,6 +1403,449 @@ class ConfigDatabase:
             _LOGGER.info(f"Rimossi {deleted_count} valori validi orfani")
         
         return deleted_count
+    
+    def simulate_configuration_schedule(
+        self,
+        setup_name: str,
+        start_date: datetime,
+        days: int = 14
+    ) -> List[Dict[str, Any]]:
+        """Simula la configurazione per un periodo di tempo specificato.
+        
+        Args:
+            setup_name: Nome della configurazione da simulare
+            start_date: Data di inizio simulazione
+            days: Numero di giorni da simulare (default 14)
+        
+        Returns:
+            Lista di segmenti, ognuno con:
+            - date: Data del giorno (YYYY-MM-DD)
+            - day_of_week: Giorno della settimana (0=Lun, 6=Dom)
+            - start_minute: Minuto di inizio (0-1439)
+            - end_minute: Minuto di fine (0-1440, esclusivo)
+            - value: Valore della configurazione
+            - type: Tipo (standard, schedule, time, conditional)
+            - priority: Priorità
+            - metadata: Dati aggiuntivi specifici per tipo
+        """
+        cursor = self.conn.cursor()
+        segments = []
+
+        # Carica TUTTE le configurazioni in memoria una sola volta (molto più efficiente)
+        cursor.execute("SELECT * FROM configurazioni")
+        all_standards = [dict(row) for row in cursor.fetchall()]
+        
+        cursor.execute("SELECT * FROM configurazioni_a_orario")
+        all_schedules = [dict(row) for row in cursor.fetchall()]
+        
+        cursor.execute("SELECT * FROM configurazioni_a_tempo")
+        all_times = [dict(row) for row in cursor.fetchall()]
+        
+        cursor.execute("""
+            SELECT id, setup_name, setup_value, conditional_config, conditional_operator,
+                   conditional_value, valid_from_ora, valid_to_ora, priority
+            FROM configurazioni_condizionali
+        """)
+        all_conditionals = [dict(row) for row in cursor.fetchall()]
+        
+        # Organizza per setup_name per accesso rapido
+        standard_by_setup = {}
+        for cfg in all_standards:
+            name = cfg['setup_name']
+            if name not in standard_by_setup:
+                standard_by_setup[name] = []
+            standard_by_setup[name].append(cfg)
+        
+        schedule_by_setup = {}
+        for cfg in all_schedules:
+            name = cfg['setup_name']
+            if name not in schedule_by_setup:
+                schedule_by_setup[name] = []
+            schedule_by_setup[name].append(cfg)
+        
+        time_by_setup = {}
+        for cfg in all_times:
+            name = cfg['setup_name']
+            if name not in time_by_setup:
+                time_by_setup[name] = []
+            time_by_setup[name].append(cfg)
+        
+        conditional_by_setup = {}
+        for cfg in all_conditionals:
+            name = cfg['setup_name']
+            if name not in conditional_by_setup:
+                conditional_by_setup[name] = []
+            conditional_by_setup[name].append(cfg)
+        
+        # Recupera configurazioni del setup principale
+        standard_configs = standard_by_setup.get(setup_name, [])
+        schedule_configs = schedule_by_setup.get(setup_name, [])
+        time_configs = time_by_setup.get(setup_name, [])
+        conditional_configs = conditional_by_setup.get(setup_name, [])
+
+        def build_minute_map_for_setup(target_setup: str, current_date: datetime, day_of_week: int, visited: set = None) -> List[Optional[Dict[str, Any]]]:
+            """Costruisce la mappa minuti (0-1439) per un setup specifico, inclusi condizionali annidati.
+            
+            Args:
+                target_setup: Nome del setup da risolvere
+                current_date: Data corrente della simulazione
+                day_of_week: Giorno della settimana (0=Lun, 6=Dom)
+                visited: Set di setup già visitati per prevenire cicli
+            """
+            if visited is None:
+                visited = set()
+            if target_setup in visited:
+                # Prevenzione cicli: ritorna mappa vuota
+                return [None] * 1440
+            visited.add(target_setup)
+            
+            minute_map_local: List[Optional[Dict[str, Any]]] = [None] * 1440
+            std_cfgs = standard_by_setup.get(target_setup, [])
+            sched_cfgs = schedule_by_setup.get(target_setup, [])
+            time_cfgs = time_by_setup.get(target_setup, [])
+            cond_cfgs = conditional_by_setup.get(target_setup, [])
+
+            # Standard
+            if std_cfgs:
+                standard_cfg = min(std_cfgs, key=lambda x: x['priority'])
+                for m in range(1440):
+                    minute_map_local[m] = {
+                        'value': standard_cfg['setup_value'],
+                        'priority': standard_cfg['priority'],
+                        'source_order': 4,
+                        'id': standard_cfg['id']
+                    }
+
+            # Schedule
+            for sched_config in sched_cfgs:
+                days_str = sched_config['days_of_week'] if isinstance(sched_config['days_of_week'], str) else ','.join(map(str, sched_config['days_of_week']))
+                days_of_week = [int(d) for d in days_str.split(',') if d]
+                if day_of_week not in days_of_week:
+                    continue
+                from_minute = int(sched_config['valid_from_ora'] * 60)
+                to_minute = int(sched_config['valid_to_ora'] * 60)
+                priority = sched_config['priority']
+                minutes_range = list(range(from_minute, 1440)) + list(range(0, to_minute + 1)) if to_minute < from_minute else range(from_minute, to_minute + 1)
+                for minute in minutes_range:
+                    if minute >= 1440:
+                        continue
+                    existing = minute_map_local[minute]
+                    if (not existing) or priority < existing['priority'] or (priority == existing['priority'] and 2 < existing['source_order']):
+                        minute_map_local[minute] = {
+                            'value': sched_config['setup_value'],
+                            'priority': priority,
+                            'source_order': 2,
+                            'id': sched_config['id'],
+                            'valid_from_ora': sched_config['valid_from_ora'],
+                            'valid_to_ora': sched_config['valid_to_ora'],
+                            'days_of_week': days_of_week
+                        }
+
+            # Time
+            for time_config in time_cfgs:
+                valid_from = datetime.strptime(time_config['valid_from_date'], '%Y-%m-%d %H:%M:%S')
+                valid_to = datetime.strptime(time_config['valid_to_date'], '%Y-%m-%d %H:%M:%S')
+                day_start = current_date.replace(hour=0, minute=0, second=0, microsecond=0)
+                day_end = current_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+                if not (valid_from <= day_end and valid_to >= day_start):
+                    continue
+                start_minute = 0 if valid_from <= day_start else valid_from.hour * 60 + valid_from.minute
+                end_minute = 1439 if valid_to >= day_end else valid_to.hour * 60 + valid_to.minute
+                if time_config['valid_from_ora'] is not None and time_config['valid_to_ora'] is not None:
+                    filter_from = int(time_config['valid_from_ora'] * 60)
+                    filter_to = int(time_config['valid_to_ora'] * 60)
+                    if filter_to < filter_from:
+                        valid_minutes = set(range(filter_from, 1440)) | set(range(0, filter_to + 1))
+                    else:
+                        valid_minutes = set(range(filter_from, filter_to + 1))
+                    minutes_range = [m for m in range(start_minute, end_minute + 1) if m in valid_minutes]
+                else:
+                    minutes_range = range(start_minute, end_minute + 1)
+                if time_config['days_of_week']:
+                    days_str = time_config['days_of_week'] if isinstance(time_config['days_of_week'], str) else ','.join(map(str, time_config['days_of_week']))
+                    filter_days = [int(d) for d in days_str.split(',') if d]
+                    if day_of_week not in filter_days:
+                        continue
+                priority = time_config['priority']
+                for minute in minutes_range:
+                    if minute >= 1440:
+                        continue
+                    existing = minute_map_local[minute]
+                    if (not existing) or priority < existing['priority'] or (priority == existing['priority'] and 1 < existing['source_order']):
+                        minute_map_local[minute] = {
+                            'value': time_config['setup_value'],
+                            'priority': priority,
+                            'source_order': 1,
+                            'id': time_config['id'],
+                            'valid_from_date': time_config['valid_from_date'],
+                            'valid_to_date': time_config['valid_to_date']
+                        }
+            
+            # Conditional (annidati) - risolve ricorsivamente il setup di riferimento
+            for cond_config in cond_cfgs:
+                base_config_name = cond_config['conditional_config']
+                operator = cond_config['conditional_operator']
+                expected_value = cond_config['conditional_value']
+                priority = cond_config['priority']
+                valid_from_ora = cond_config['valid_from_ora']
+                valid_to_ora = cond_config['valid_to_ora']
+                
+                # Risolvi ricorsivamente il setup di riferimento per questo giorno
+                base_map = build_minute_map_for_setup(base_config_name, current_date, day_of_week, visited.copy())
+                
+                # Prepara filtro orario se presente
+                if valid_from_ora is not None and valid_to_ora is not None:
+                    start_min = int(valid_from_ora * 60)
+                    end_min = int(valid_to_ora * 60)
+                    if end_min < start_min:
+                        valid_minutes_set = set(range(start_min, 1440)) | set(range(0, end_min + 1))
+                    else:
+                        valid_minutes_set = set(range(start_min, end_min + 1))
+                else:
+                    valid_minutes_set = None  # Tutto il giorno
+                
+                for minute in range(1440):
+                    if valid_minutes_set is not None and minute not in valid_minutes_set:
+                        continue
+                    base_entry = base_map[minute]
+                    if not base_entry:
+                        continue
+                    base_value = base_entry['value']
+                    if self._evaluate_condition(base_value, operator, expected_value):
+                        existing = minute_map_local[minute]
+                        if (not existing) or priority < existing['priority'] or (priority == existing['priority'] and 0 < existing['source_order']):
+                            minute_map_local[minute] = {
+                                'value': cond_config['setup_value'],
+                                'priority': priority,
+                                'source_order': 0,
+                                'id': cond_config['id']
+                            }
+            
+            return minute_map_local
+        
+        # Simula giorno per giorno
+        for day_offset in range(days):
+            current_date = start_date + timedelta(days=day_offset)
+            day_of_week = current_date.weekday()  # 0=Lun, 6=Dom
+            date_str = current_date.strftime('%Y-%m-%d')
+            
+            # Crea mappa minuti per questo giorno (0-1439)
+            minute_map = [None] * 1440
+            
+            # 1. Applica configurazione standard (base)
+            if standard_configs:
+                standard_config = min(standard_configs, key=lambda x: x['priority'])
+                for minute in range(1440):
+                    minute_map[minute] = {
+                        'value': standard_config['setup_value'],
+                        'type': 'standard',
+                        'priority': standard_config['priority'],
+                        'source_order': 4,
+                        'id': standard_config['id']
+                    }
+            
+            # 2. Applica configurazioni a orario
+            for sched_config in schedule_configs:
+                days_str = sched_config['days_of_week'] if isinstance(sched_config['days_of_week'], str) else ','.join(map(str, sched_config['days_of_week']))
+                days_of_week = [int(d) for d in days_str.split(',') if d]
+                if day_of_week not in days_of_week:
+                    continue
+                
+                from_minute = int(sched_config['valid_from_ora'] * 60)
+                to_minute = int(sched_config['valid_to_ora'] * 60)
+                priority = sched_config['priority']
+                
+                # Attraversa mezzanotte?
+                if to_minute < from_minute:
+                    minutes_range = list(range(from_minute, 1440)) + list(range(0, to_minute + 1))
+                else:
+                    minutes_range = range(from_minute, to_minute + 1)
+                
+                for minute in minutes_range:
+                    if minute >= 1440:
+                        continue
+                    existing = minute_map[minute]
+                    # Sovrascrivi se priorità migliore o sourceOrder migliore
+                    if not existing or priority < existing['priority'] or \
+                       (priority == existing['priority'] and 2 < existing['source_order']):
+                        minute_map[minute] = {
+                            'value': sched_config['setup_value'],
+                            'type': 'schedule',
+                            'priority': priority,
+                            'source_order': 2,
+                            'id': sched_config['id'],
+                            'valid_from_ora': sched_config['valid_from_ora'],
+                            'valid_to_ora': sched_config['valid_to_ora'],
+                            'days_of_week': days_of_week
+                        }
+            
+            # 3. Applica configurazioni a tempo
+            for time_config in time_configs:
+                valid_from = datetime.strptime(time_config['valid_from_date'], '%Y-%m-%d %H:%M:%S')
+                valid_to = datetime.strptime(time_config['valid_to_date'], '%Y-%m-%d %H:%M:%S')
+                
+                day_start = current_date.replace(hour=0, minute=0, second=0, microsecond=0)
+                day_end = current_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+                
+                # Verifica sovrapposizione con questo giorno
+                if not (valid_from <= day_end and valid_to >= day_start):
+                    continue
+                
+                # Calcola range minuti per questo giorno
+                if valid_from <= day_start:
+                    start_minute = 0
+                else:
+                    start_minute = valid_from.hour * 60 + valid_from.minute
+                
+                if valid_to >= day_end:
+                    end_minute = 1439
+                else:
+                    end_minute = valid_to.hour * 60 + valid_to.minute
+                
+                # Applica filtri opzionali ora
+                if time_config['valid_from_ora'] is not None and time_config['valid_to_ora'] is not None:
+                    filter_from = int(time_config['valid_from_ora'] * 60)
+                    filter_to = int(time_config['valid_to_ora'] * 60)
+                    
+                    # Interseca con filtro orario
+                    if filter_to < filter_from:
+                        # Attraversa mezzanotte
+                        valid_minutes = set(range(filter_from, 1440)) | set(range(0, filter_to + 1))
+                    else:
+                        valid_minutes = set(range(filter_from, filter_to + 1))
+                    
+                    minutes_range = [m for m in range(start_minute, end_minute + 1) if m in valid_minutes]
+                else:
+                    minutes_range = range(start_minute, end_minute + 1)
+                
+                # Applica filtro giorni
+                if time_config['days_of_week']:
+                    days_str = time_config['days_of_week'] if isinstance(time_config['days_of_week'], str) else ','.join(map(str, time_config['days_of_week']))
+                    filter_days = [int(d) for d in days_str.split(',') if d]
+                    if day_of_week not in filter_days:
+                        continue
+                
+                priority = time_config['priority']
+                
+                for minute in minutes_range:
+                    if minute >= 1440:
+                        continue
+                    existing = minute_map[minute]
+                    if not existing or priority < existing['priority'] or \
+                       (priority == existing['priority'] and 1 < existing['source_order']):
+                        minute_map[minute] = {
+                            'value': time_config['setup_value'],
+                            'type': 'time',
+                            'priority': priority,
+                            'source_order': 1,
+                            'id': time_config['id'],
+                            'valid_from_date': time_config['valid_from_date'],
+                            'valid_to_date': time_config['valid_to_date']
+                        }
+            
+            # 4. Valuta e applica configurazioni condizionali per minuto, usando il valore del setup di riferimento al minuto specifico
+            base_cache: Dict[str, List[Optional[Dict[str, Any]]]] = {}
+            for cond_config in conditional_configs:
+                base_config_name = cond_config['conditional_config']
+                operator = cond_config['conditional_operator']
+                expected_value = cond_config['conditional_value']
+                priority = cond_config['priority']
+                valid_from_ora = cond_config['valid_from_ora']
+                valid_to_ora = cond_config['valid_to_ora']
+
+                # Recupera o costruisce la mappa minuti del setup di riferimento per il giorno corrente (con condizionali annidati)
+                if base_config_name not in base_cache:
+                    base_cache[base_config_name] = build_minute_map_for_setup(base_config_name, current_date, day_of_week, set())
+                base_map = base_cache[base_config_name]
+
+                # Prepara filtro orario se presente
+                if valid_from_ora is not None and valid_to_ora is not None:
+                    start_min = int(valid_from_ora * 60)
+                    end_min = int(valid_to_ora * 60)
+                    if end_min < start_min:
+                        valid_minutes = set(range(start_min, 1440)) | set(range(0, end_min + 1))
+                    else:
+                        valid_minutes = set(range(start_min, end_min + 1))
+                else:
+                    valid_minutes = None  # Tutto il giorno
+
+                for minute in range(1440):
+                    if valid_minutes is not None and minute not in valid_minutes:
+                        continue
+                    base_entry = base_map[minute]
+                    if not base_entry:
+                        continue
+                    base_value = base_entry['value']
+                    if self._evaluate_condition(base_value, operator, expected_value):
+                        existing = minute_map[minute]
+                        if (not existing) or priority < existing['priority'] or (priority == existing['priority'] and 0 < existing['source_order']):
+                            minute_map[minute] = {
+                                'value': cond_config['setup_value'],
+                                'type': 'conditional',
+                                'priority': priority,
+                                'source_order': 0,
+                                'id': cond_config['id'],
+                                'conditional_config': base_config_name,
+                                'conditional_operator': operator,
+                                'conditional_value': expected_value
+                            }
+            
+            # Converti la mappa in segmenti
+            current_segment = None
+            for minute in range(1440):
+                config = minute_map[minute]
+                
+                if not config:
+                    if current_segment:
+                        segments.append(current_segment)
+                        current_segment = None
+                    continue
+                
+                # Stesso segmento?
+                if current_segment and \
+                   current_segment['value'] == config['value'] and \
+                   current_segment['type'] == config['type'] and \
+                   current_segment['priority'] == config['priority']:
+                    current_segment['end_minute'] = minute + 1
+                else:
+                    if current_segment:
+                        segments.append(current_segment)
+                    
+                    current_segment = {
+                        'date': date_str,
+                        'day_of_week': day_of_week,
+                        'start_minute': minute,
+                        'end_minute': minute + 1,
+                        'value': config['value'],
+                        'type': config['type'],
+                        'priority': config['priority'],
+                        'id': config['id']
+                    }
+                    
+                    # Aggiungi metadata specifici per tipo
+                    if config['type'] == 'schedule':
+                        current_segment['metadata'] = {
+                            'valid_from_ora': config.get('valid_from_ora'),
+                            'valid_to_ora': config.get('valid_to_ora'),
+                            'days_of_week': config.get('days_of_week')
+                        }
+                    elif config['type'] == 'time':
+                        current_segment['metadata'] = {
+                            'valid_from_date': config.get('valid_from_date'),
+                            'valid_to_date': config.get('valid_to_date')
+                        }
+                    elif config['type'] == 'conditional':
+                        current_segment['metadata'] = {
+                            'conditional_config': config.get('conditional_config'),
+                            'conditional_operator': config.get('conditional_operator'),
+                            'conditional_value': config.get('conditional_value')
+                        }
+            
+            # Aggiungi l'ultimo segmento del giorno
+            if current_segment:
+                segments.append(current_segment)
+        
+        return segments
     
     def close(self) -> None:
         """Chiude la connessione al database."""
