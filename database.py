@@ -210,7 +210,10 @@ class ConfigDatabase:
                 valid_to = row['valid_to_ora']
                 
                 is_valid_time = False
-                if valid_to < valid_from:  # Attraversa la mezzanotte
+                # Caso speciale: se from == to significa 24 ore (sempre attivo)
+                if valid_from == valid_to:
+                    is_valid_time = True
+                elif valid_to < valid_from:  # Attraversa la mezzanotte
                     is_valid_time = (current_time >= valid_from or current_time <= valid_to)
                 else:
                     is_valid_time = (valid_from <= current_time <= valid_to)
@@ -248,7 +251,10 @@ class ConfigDatabase:
             
             # Verifica validità oraria
             is_valid = False
-            if valid_to < valid_from:  # Attraversa la mezzanotte
+            # Caso speciale: se from == to significa 24 ore (sempre attivo)
+            if valid_from == valid_to:
+                is_valid = True
+            elif valid_to < valid_from:  # Attraversa la mezzanotte
                 is_valid = (current_time >= valid_from or current_time <= valid_to)
             else:
                 is_valid = (valid_from <= current_time <= valid_to)
@@ -298,42 +304,15 @@ class ConfigDatabase:
             if name not in temp_result:
                 temp_result[name] = config['value']
         
-        # Valuta le configurazioni condizionali ricorsivamente per gestire nested conditionals
-        def evaluate_conditional_recursive(config_row, resolved_values, visited=None):
-            """Valuta ricorsivamente una configurazione condizionale risolvendo prima le dipendenze."""
-            if visited is None:
-                visited = set()
-            
+        # BUGFIX: Valutazione iterativa dei condizionali per risolvere dipendenze tra condizionali
+        # Es: Se profilo_temperatura dipende da tipo_sveglia (condizionale 1)
+        #     E accensione_automatica dipende da profilo_temperatura (condizionale 2)
+        #     Il condizionale 2 deve usare il valore del condizionale 1, non il valore standard
+        
+        def evaluate_single_conditional(config_row, current_values):
+            """Valuta un singolo condizionale usando i valori correnti."""
             base_config = config_row['conditional_config']
-            
-            # Prevenzione cicli
-            if base_config in visited:
-                return None
-            visited.add(base_config)
-            
-            # Se il valore è già risolto, usalo
-            if base_config in resolved_values:
-                actual_value = resolved_values[base_config]
-            else:
-                # Cerca se ci sono altri condizionali che risolvono base_config
-                dependent_conditional = None
-                for other_row in conditional_configs:
-                    if other_row['setup_name'] == base_config:
-                        dependent_conditional = other_row
-                        break
-                
-                if dependent_conditional:
-                    # Risolvi ricorsivamente la dipendenza
-                    result = evaluate_conditional_recursive(dependent_conditional, resolved_values, visited.copy())
-                    if result:
-                        resolved_values[base_config] = result['value']
-                        actual_value = result['value']
-                    else:
-                        # Se la ricorsione fallisce, usa temp_result
-                        actual_value = temp_result.get(base_config)
-                else:
-                    # Nessun altro condizionale, usa temp_result
-                    actual_value = temp_result.get(base_config)
+            actual_value = current_values.get(base_config)
             
             if actual_value is None:
                 return None
@@ -352,7 +331,10 @@ class ConfigDatabase:
                 valid_to = config_row['valid_to_ora']
                 
                 is_valid_time = False
-                if valid_to < valid_from:  # Attraversa la mezzanotte
+                # Caso speciale: se from == to significa 24 ore (sempre attivo)
+                if valid_from == valid_to:
+                    is_valid_time = True
+                elif valid_to < valid_from:  # Attraversa la mezzanotte
                     is_valid_time = (current_time >= valid_from or current_time <= valid_to)
                 else:
                     is_valid_time = (valid_from <= current_time <= valid_to)
@@ -372,12 +354,33 @@ class ConfigDatabase:
                 'id': config_row['id']
             }
         
-        # Valuta ogni configurazione condizionale con risoluzione ricorsiva
-        resolved_conditional_values = {}
-        for row in conditional_configs:
-            result = evaluate_conditional_recursive(row, resolved_conditional_values)
-            if result:
-                all_active_configs.append(result)
+        # Valutazione iterativa: ripeti fino a convergenza (max 10 iterazioni per sicurezza)
+        max_iterations = 10
+        for iteration in range(max_iterations):
+            previous_values = temp_result.copy()
+            
+            # Valuta tutti i condizionali con i valori correnti
+            evaluated_conditionals = []
+            for row in conditional_configs:
+                result = evaluate_single_conditional(row, temp_result)
+                if result:
+                    evaluated_conditionals.append(result)
+            
+            # Aggiungi i condizionali valutati a all_active_configs (rimuovi quelli precedenti)
+            all_active_configs = [c for c in all_active_configs if c['source'] != 'conditional']
+            all_active_configs.extend(evaluated_conditionals)
+            
+            # Riordina e aggiorna temp_result
+            all_active_configs.sort(key=lambda x: (x['priority'], x['source_order']))
+            temp_result = {}
+            for config in all_active_configs:
+                name = config['setup_name']
+                if name not in temp_result:
+                    temp_result[name] = config['value']
+            
+            # Controlla convergenza: se i valori non cambiano, abbiamo finito
+            if temp_result == previous_values:
+                break
         
         # Ordina per priorità (crescente) e poi per source_order (crescente)
         all_active_configs.sort(key=lambda x: (x['priority'], x['source_order']))
@@ -1385,7 +1388,10 @@ class ConfigDatabase:
             
             # Verifica se è attiva ora
             is_valid = False
-            if valid_to < valid_from:  # Attraversa la mezzanotte
+            # Caso speciale: se from == to significa 24 ore (sempre attivo)
+            if valid_from == valid_to:
+                is_valid = True
+            elif valid_to < valid_from:  # Attraversa la mezzanotte
                 is_valid = (current_time >= valid_from or current_time <= valid_to)
             else:
                 is_valid = (valid_from <= current_time <= valid_to)

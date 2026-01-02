@@ -28,10 +28,14 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def validate_time_format(value):
-    """Valida il formato orario HH.MM (0.00 - 23.59)."""
+    """Valida il formato orario in formato decimale (0.0 - 23.983333)."""
     time_value = float(value)
     hours = int(time_value)
-    minutes = int((time_value - hours) * 100)
+    minutes = round((time_value - hours) * 60)  # CORRETTO: decimale ore -> minuti
+    
+    # Caso speciale: 24.0 (mezzanotte del giorno dopo) è valido
+    if time_value == 24.0:
+        return time_value
     
     if hours < 0 or hours > 23:
         raise vol.Invalid(f"Le ore devono essere tra 0 e 23, ricevuto: {hours}")

@@ -1,5 +1,5 @@
-// Version 1.3.11 - Show time filter details in conditional override items - 20260101020000
-console.log('MIA-CONFIG-CARD Loading Version 1.3.11 - 20260101020000');
+// Version 1.3.14 - Fix 24h schedule with any time + improve tooltip positioning + remove hover band - 20260102020000
+console.log('MIA-CONFIG-CARD Loading Version 1.3.14 - 20260102020000');
 
 class MiaConfigCard extends HTMLElement {
     constructor() {
@@ -139,8 +139,8 @@ class MiaConfigCard extends HTMLElement {
                 .mia-config-card .dc-weekly-day-header { height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--primary-color); color: white; border-bottom: 2px solid var(--divider-color); font-weight: bold; font-size: 12px; position: sticky; top: 0; z-index: 10; }
                 .mia-config-card .dc-weekly-day-content { position: relative; height: 1440px; min-height: 1440px; overflow: visible; }
                 .mia-config-card .dc-weekly-hour-line { position: absolute; left: 0; right: 0; height: 1px; background: var(--divider-color); pointer-events: none; }
-                .mia-config-card .dc-weekly-bar { position: absolute; left: 2px; right: 2px; border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; cursor: pointer; transition: all 0.2s; overflow: visible; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; box-sizing: border-box; border-top: 2px solid rgba(0,0,0,0.3); border-bottom: 2px solid rgba(0,0,0,0.3); z-index: 1; }
-                .mia-config-card .dc-weekly-bar:hover { left: 0; right: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 9999 !important; transform: scaleY(1.05); }
+                .mia-config-card .dc-weekly-bar { position: absolute; left: 2px; right: 2px; border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; cursor: pointer; transition: box-shadow 0.2s; overflow: visible; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; box-sizing: border-box; border-top: 2px solid rgba(0,0,0,0.3); border-bottom: 2px solid rgba(0,0,0,0.3); z-index: 1; }
+                .mia-config-card .dc-weekly-bar:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 9999 !important; }
                 .mia-config-card .dc-weekly-bar-time { background: #2196f3; color: white; border-left: 3px solid #0d47a1; border-right: 3px solid #0d47a1; }
                 .mia-config-card .dc-weekly-bar-schedule { background: #ff9800; color: white; border-left: 3px solid #e65100; border-right: 3px solid #e65100; }
                 .mia-config-card .dc-weekly-bar-conditional { background: #9c27b0; color: white; border-left: 3px solid #7b1fa2; border-right: 3px solid #7b1fa2; }
@@ -1420,6 +1420,7 @@ class MiaConfigCard extends HTMLElement {
                             <span class="dc-badge ${badgeClass}">${sourceLabel}</span>
                             Valore: <strong>${cfg.value}</strong><br>
                             <small>${extra}</small>
+                            <small style="color: var(--secondary-text-color); display: block; margin-top: 2px;">ID: ${configId}</small>
                         </div>
                         <div style="display: flex; gap: 5px;">
                             <button class="dc-btn" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcEditConfig('${name}', '${type}', ${configId}, '${cfgData}')">✏️</button>
@@ -2602,6 +2603,7 @@ class MiaConfigCard extends HTMLElement {
                         <div style="flex: 1;">
                             <strong>${name}</strong>: ${cfg.value}
                             <br><small>${extraDetails}</small>
+                            <small style="color: var(--secondary-text-color); display: block; margin-top: 2px;">ID: ${cfg.id}</small>
                         </div>
                         <div style="display: flex; gap: 5px;">
                             <button class="dc-btn" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcEditConfig('${name}', '${cfg.type}', ${cfg.id}, '${cfgData}')">✏️</button>
@@ -2983,7 +2985,8 @@ class MiaConfigCard extends HTMLElement {
                         endTime: seg.end_minute,
                         value: seg.value,
                         type: seg.type,
-                        priority: seg.priority
+                        priority: seg.priority,
+                        id: seg.id  // Aggiungi ID per debug
                     };
                     
                     // Aggiungi metadata specifici per tipo per i tooltip
@@ -3074,12 +3077,16 @@ class MiaConfigCard extends HTMLElement {
                         }
                         
                         // STEP 2: Allineamento verticale (sopra o sotto)
-                        // Ottieni la posizione top della barra dal suo style (in px)
+                        // Ottieni la posizione top e height della barra
                         const barTopPx = parseFloat(this.style.top) || 0;
+                        const barHeight = parseFloat(this.style.height) || 0;
                         
-                        // Se la barra inizia nei primi 200px del giorno (circa 3 ore), mostra SEMPRE sotto
-                        // Questo evita che il tooltip scompaia in alto per le configurazioni di inizio giornata
-                        if (barTopPx < 200) {
+                        // Se la barra occupa tutto il giorno (1440px = 24 ore), mostra SEMPRE sopra
+                        // per evitare che il tooltip vada fuori schermo in basso
+                        if (barHeight >= 1430) {
+                            this.classList.remove('tooltip-below');
+                        } else if (barTopPx < 200) {
+                            // Se la barra inizia nei primi 200px del giorno (circa 3 ore), mostra sotto
                             this.classList.add('tooltip-below');
                         } else {
                             // Altrimenti usa logica basata su spazio disponibile nel viewport
@@ -3415,7 +3422,11 @@ class MiaConfigCard extends HTMLElement {
         const endMin = segment.endTime % 60;
         
         let tooltip = `<strong>Valore: ${segment.value}</strong><br><br>`;
-        tooltip += `<strong>Orario:</strong> ${String(startHour).padStart(2,'0')}:${String(startMin).padStart(2,'0')} - ${String(endHour).padStart(2,'0')}:${String(endMin).padStart(2,'0')}<br><br>`;
+        tooltip += `<strong>Orario:</strong> ${String(startHour).padStart(2,'0')}:${String(startMin).padStart(2,'0')} - ${String(endHour).padStart(2,'0')}:${String(endMin).padStart(2,'0')}<br>`;
+        if (segment.id) {
+            tooltip += `<small>Config ID: ${segment.id}</small><br>`;
+        }
+        tooltip += '<br>';
         
         if (segment.type === 'time') {
             const hasDates = segment.from instanceof Date && segment.to instanceof Date && !Number.isNaN(segment.from) && !Number.isNaN(segment.to);
@@ -3461,6 +3472,8 @@ class MiaConfigCard extends HTMLElement {
                 if (segment.validTo < segment.validFrom) {
                     tooltip += '<br><small>(attraversa la mezzanotte)</small>';
                 }
+            } else {
+                tooltip += `<small>⓵ Il condizionale si applica quando la condizione è soddisfatta (nessun filtro orario)</small>`;
             }
         } else if (segment.type === 'standard') {
             tooltip += `<strong>⚙️ Valore Standard</strong><br>`;

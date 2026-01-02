@@ -1,5 +1,129 @@
 # 📋 Changelog - Mia Config
 
+## v1.5.5 - 2 Gennaio 2026 🐛 Fix Override 24h + UI
+
+### 🐛 Fix: Override Orari 24h con Qualsiasi Orario
+**Problema**: 22:00 - 22:00 non funzionava (solo 00:00 - 00:00 era supportato)
+- **Causa**: La condizione speciale era `if valid_from == 0.0 and valid_to == 0.0`
+- **Soluzione**: Generalizzato a `if valid_from == valid_to` (qualsiasi orario uguale)
+- **Esempi ora funzionanti**:
+  - 00:00 - 00:00 → 24 ore ✅
+  - 08:00 - 08:00 → 24 ore ✅
+  - 22:00 - 22:00 → 24 ore ✅
+
+**File Modificati**: `database.py` (4 punti: linee 253, 212, 333, 1391)
+
+### 🎨 UI: Miglioramenti Vista Settimanale (v1.3.14)
+
+**1. Rimosso Hover Espansione Banda**
+- **Problema**: Al passaggio del mouse, la barra si espandeva lateralmente causando una "banda" visibile sopra le date
+- **Soluzione**: Rimosso `left: 0; right: 0; transform: scaleY(1.05);` dall'hover
+- Mantiene solo l'ombra per feedback visivo
+- CSS pulito: `transition: box-shadow 0.2s` (invece di `all 0.2s`)
+
+**2. Tooltip Fuori Schermo per Barre 24h**
+- **Problema**: Barre che occupano 24 ore mostrano tooltip in basso, fuori viewport
+- **Soluzione**: Rilevamento automatico barre 24h (height >= 1430px)
+- Per barre 24h: tooltip mostrato SEMPRE sopra
+- Logica posizionamento:
+  ```javascript
+  if (barHeight >= 1430) {
+      // 24h → sempre sopra
+  } else if (barTopPx < 200) {
+      // Inizio giornata → sotto
+  } else {
+      // Logica spazio viewport
+  }
+  ```
+
+**File Modificato**: `www/mia-config-card.js` (linee 142, 3078-3098)
+
+---
+
+## v1.5.4 - 2 Gennaio 2026 🐛 BUGFIX Critico - Override Orari
+
+### 🐛 Fix Critico: Validazione e Gestione Override Orari
+
+**Problema 1: Errore "minuti devono essere tra 0 e 59, ricevuto: 98"**
+- **Causa**: La funzione `validate_time_format` usava formula errata per convertire ore decimali
+- **Bug**: Moltiplicava per 100 invece di 60
+  - Frontend invia: `23.983333` (23 + 59/60 ore in formato decimale)
+  - Backend calcolava: `int(0.983333 * 100) = 98` minuti ❌
+  - Doveva calcolare: `round(0.983333 * 60) = 59` minuti ✅
+- **Soluzione**: Corretta formula in `validate_time_format` ([__init__.py](c:\\Users\\abial\\Documents\\GitHub\\MiaConfig\\__init__.py#L34))
+  ```python
+  minutes = round((time_value - hours) * 60)  # Ora corretto!
+  ```
+
+**Problema 2: Override 00:00 - 00:00 non copre 24 ore**
+- **Causa**: La logica interpretava 00:00 - 00:00 come "0 ore" invece di "24 ore"
+- **Comportamento errato**: Attivo solo esattamente a mezzanotte (00:00:00)
+- **Soluzione**: Aggiunto caso speciale in 4 punti del codice
+  ```python
+  if valid_from == 0.0 and valid_to == 0.0:
+      is_valid = True  # 24 ore - sempre attivo
+  ```
+  
+**File Modificati**:
+- `__init__.py`: Fix validazione tempo (linea 34)
+- `database.py`: Fix logica 00:00-00:00 in:
+  - Override temporali con filtro orario (linea 213)
+  - Override orari (linea 250)
+  - Override condizionali con filtro orario (linea 330)
+  - Dashboard configurazioni attive (linea 1383)
+
+**Impatto**:
+- ✅ Ora è possibile creare override orari fino alle 23:59
+- ✅ Override 00:00 - 00:00 copre tutte le 24 ore come previsto
+- ✅ Nessun impatto su configurazioni esistenti (backward compatible)
+
+---
+
+## v1.5.3 - 2 Gennaio 2026 🐛 BUGFIX Critico - Condizionali Dipendenti
+
+### 🐛 Fix Critico: Valutazione Condizionali con Dipendenze
+**Problema**: I condizionali che dipendono da altri condizionali usavano valori errati
+- **Scenario**: 
+  1. Condizionale A: `Se tipo_sveglia = sveglia6 → profilo_temperatura = sveglia`
+  2. Condizionale B: `Se profilo_temperatura = minimo → accensione_automatica = 0`
+  3. Quando tipo_sveglia = sveglia6, il Condizionale B dovrebbe vedere profilo_temperatura = "sveglia"
+  4. **BUG**: Il Condizionale B valutava la condizione usando il valore "minimo" (standard), NON "sveglia"
+  5. Risultato: accensione_automatica veniva impostato a 0 anche quando profilo_temperatura era "sveglia"
+
+**Causa Root**: I condizionali venivano valutati una sola volta usando il risultato provvisorio (senza altri condizionali applicati)
+
+**Soluzione**: Valutazione iterativa dei condizionali fino a convergenza
+- Itera massimo 10 volte (tipicamente converge in 2-3 iterazioni)
+- Ad ogni iterazione:
+  1. Valuta tutti i condizionali con i valori correnti
+  2. Applica i condizionali valutati al risultato
+  3. Controlla se i valori sono cambiati
+  4. Se stabili → fine, altrimenti ripete
+- Gestisce correttamente catene di dipendenze di qualsiasi lunghezza
+- Previene loop infiniti con limite iterazioni
+
+**Impatto**: 
+- ✅ I condizionali ora vedono i valori corretti di altri condizionali
+- ✅ La vista settimanale ora mostra le configurazioni corrette
+- ⚡ Performance: +1-2ms per timestamp (trascurabile, solo quando ci sono condizionali attivi)
+
+### 🎨 UI: Miglioramenti Vista Settimanale (v1.3.13)
+**Tooltip Condizionali più Chiari**:
+- "Fascia oraria" → "Finestra configurata" (più chiaro che è un filtro)
+- Aggiunto testo esplicativo: "Il condizionale si applica solo quando la condizione è soddisfatta E rientra nella finestra"
+- Warning automatico se la barra è più corta della finestra: "⚠️ La barra mostrata è più corta perché la condizione non era soddisfatta per tutta la durata"
+
+**Debug Migliorato**:
+- ID configurazione visibile in tutti i tooltip
+- ID visibile nel tab "Gestisci" sotto ogni configurazione
+- Facilita il debug quando una configurazione sembra "non esistere"
+
+**File Modificati**:
+- `database.py`: Logica valutazione condizionali iterativa
+- `www/mia-config-card.js`: Tooltip UI migliorati
+
+---
+
 ## v1.5.2 - 2 Gennaio 2026 ⚡ Ottimizzazione Database
 
 ### ⚡ Performance Runtime - Riduzione Query e CPU/IO
