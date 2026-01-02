@@ -126,6 +126,8 @@ class MiaConfigCard extends HTMLElement {
                 .mia-config-card .dc-weekly-tooltip { position: relative; cursor: help; }
                 .mia-config-card .dc-weekly-tooltip .dc-tooltip-text { visibility: hidden; opacity: 0; width: 300px; max-width: 90vw; background-color: rgba(0,0,0,0.95); color: #fff; text-align: left; border-radius: 6px; padding: 12px; position: absolute; z-index: 999999; left: 50%; bottom: 100%; transform: translateX(-50%); margin-bottom: 8px; font-size: 12px; line-height: 1.5; box-shadow: 0 4px 16px rgba(0,0,0,0.6); pointer-events: none; transition: opacity 0.2s, visibility 0.2s; white-space: normal; }
                 .mia-config-card .dc-weekly-tooltip.tooltip-below .dc-tooltip-text { bottom: auto; top: 100%; margin-bottom: 0; margin-top: 8px; }
+                .mia-config-card .dc-weekly-tooltip.tooltip-left .dc-tooltip-text { left: 0; transform: translateX(0); }
+                .mia-config-card .dc-weekly-tooltip.tooltip-right .dc-tooltip-text { left: auto; right: 0; transform: translateX(0); }
                 .mia-config-card .dc-weekly-tooltip:hover .dc-tooltip-text { visibility: visible; opacity: 1; }
                 .mia-config-card .dc-weekly-container { overflow-x: auto; margin: 15px 0; position: relative; }
                 .mia-config-card .dc-weekly-grid { display: flex; min-width: 1000px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); position: relative; overflow: visible; }
@@ -3021,7 +3023,7 @@ class MiaConfigCard extends HTMLElement {
                     const widthPercent = overlapping > 1 ? (100 / overlapping) : 100;
                     const leftPercent = overlapping > 1 ? (segIdx % overlapping) * widthPercent : 0;
                     
-                    html += `<div class="${barClass} dc-weekly-tooltip" style="top: ${topPos}px; height: ${height}px; left: ${leftPercent}%; width: ${widthPercent}%;">`;
+                    html += `<div class="${barClass} dc-weekly-tooltip" data-day-index="${dayIdx}" data-total-days="${days.length}" style="top: ${topPos}px; height: ${height}px; left: ${leftPercent}%; width: ${widthPercent}%;">`;
                     if (height > 20) {
                         html += seg.value;
                     }
@@ -3055,6 +3057,18 @@ class MiaConfigCard extends HTMLElement {
                         const rect = this.getBoundingClientRect();
                         const parent = this.closest('.dc-weekly-day-content');
                         const parentRect = parent ? parent.getBoundingClientRect() : null;
+                        
+                        // Ottieni indice colonna e totale colonne
+                        const dayIndex = parseInt(this.getAttribute('data-day-index')) || 0;
+                        const totalDays = parseInt(this.getAttribute('data-total-days')) || 1;
+                        
+                        // Allineamento orizzontale: prima colonna a sinistra, ultima a destra, altre centrate
+                        this.classList.remove('tooltip-left', 'tooltip-right');
+                        if (dayIndex === 0) {
+                            this.classList.add('tooltip-left');
+                        } else if (dayIndex === totalDays - 1) {
+                            this.classList.add('tooltip-right');
+                        }
                         
                         // Ottieni la posizione top della barra dal suo style (in px)
                         const barTopPx = parseFloat(this.style.top) || 0;
