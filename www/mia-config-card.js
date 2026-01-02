@@ -3062,7 +3062,10 @@ class MiaConfigCard extends HTMLElement {
                         const dayIndex = parseInt(this.getAttribute('data-day-index')) || 0;
                         const totalDays = parseInt(this.getAttribute('data-total-days')) || 1;
                         
-                        // Allineamento orizzontale: prima colonna a sinistra, ultima a destra, altre centrate
+                        // STEP 1: Allineamento orizzontale (sempre applicato)
+                        // Prima colonna: allinea a sinistra per evitare taglio
+                        // Ultima colonna: allinea a destra per evitare taglio
+                        // Altre colonne: centrato (default)
                         this.classList.remove('tooltip-left', 'tooltip-right');
                         if (dayIndex === 0) {
                             this.classList.add('tooltip-left');
@@ -3070,6 +3073,7 @@ class MiaConfigCard extends HTMLElement {
                             this.classList.add('tooltip-right');
                         }
                         
+                        // STEP 2: Allineamento verticale (sopra o sotto)
                         // Ottieni la posizione top della barra dal suo style (in px)
                         const barTopPx = parseFloat(this.style.top) || 0;
                         
@@ -3077,22 +3081,21 @@ class MiaConfigCard extends HTMLElement {
                         // Questo evita che il tooltip scompaia in alto per le configurazioni di inizio giornata
                         if (barTopPx < 200) {
                             this.classList.add('tooltip-below');
-                            return;
-                        }
-                        
-                        // Altrimenti usa logica basata su spazio disponibile nel viewport
-                        const viewportHeight = window.innerHeight;
-                        const tooltipHeight = 200; // Altezza stimata del tooltip + margine
-                        const headerHeight = 100; // Spazio per header Home Assistant
-                        
-                        const spaceAbove = rect.top - headerHeight;
-                        const spaceBelow = viewportHeight - rect.bottom;
-                        
-                        // Mostra sotto se non c'è abbastanza spazio sopra E c'è più spazio sotto che sopra
-                        if (spaceAbove < tooltipHeight && spaceBelow > spaceAbove) {
-                            this.classList.add('tooltip-below');
                         } else {
-                            this.classList.remove('tooltip-below');
+                            // Altrimenti usa logica basata su spazio disponibile nel viewport
+                            const viewportHeight = window.innerHeight;
+                            const tooltipHeight = 200; // Altezza stimata del tooltip + margine
+                            const headerHeight = 100; // Spazio per header Home Assistant
+                            
+                            const spaceAbove = rect.top - headerHeight;
+                            const spaceBelow = viewportHeight - rect.bottom;
+                            
+                            // Mostra sotto se non c'è abbastanza spazio sopra E c'è più spazio sotto che sopra
+                            if (spaceAbove < tooltipHeight && spaceBelow > spaceAbove) {
+                                this.classList.add('tooltip-below');
+                            } else {
+                                this.classList.remove('tooltip-below');
+                            }
                         }
                     });
                 });

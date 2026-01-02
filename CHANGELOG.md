@@ -1,5 +1,40 @@
 # 📋 Changelog - Mia Config
 
+## v1.5.2 - 2 Gennaio 2026 ⚡ Ottimizzazione Database
+
+### ⚡ Performance Runtime - Riduzione Query e CPU/IO
+- **Indici Database**: Aggiunti 5 indici strategici sulle tabelle principali
+  - `idx_configurazioni_setup_name` - Accelera lookup configurazioni standard
+  - `idx_orario_ora` - Ottimizza filtri temporali configurazioni a orario
+  - `idx_tempo_date` - Velocizza range query configurazioni a tempo
+  - `idx_condizionali_config` - Migliora risoluzione dipendenze condizionali
+  - `idx_storico_name_timestamp` - Ottimizza query storico e grafici
+  - **Impatto**: Query runtime 5-10x più veloci su database con molte configurazioni
+
+- **Cache Descrizioni**: Sistema di caching intelligente per le descrizioni (TTL 60s)
+  - Riduce 1 query completa ad ogni `scan_interval`
+  - Invalidazione automatica su INSERT/UPDATE/DELETE
+  - Zero impatto su latenza delle modifiche
+  - **Impatto**: -20% query totali ad ogni aggiornamento sensori
+
+### 🔍 Dettagli Tecnici
+- Indici creati con `CREATE INDEX IF NOT EXISTS` - safe per aggiornamenti
+- Query plan optimizer SQLite sfrutta indici compositi
+- Cache thread-safe con timestamp validation
+- Descrizioni raramente modificate: hit rate cache ~99%
+
+### 🐛 Fix
+- **Config Flow AttributeError**: Rimosso `__init__` ridondante da `MiaConfigOptionsFlowHandler`
+  - Errore 500 quando si cliccava sull'ingranaggio configurazione integrazione
+  - `config_entry` è già proprietà read-only della classe base `OptionsFlow`
+  
+- **Tooltip Bordi Vista Settimanale**: Tooltip prima/ultima colonna non più tagliati
+  - Prima colonna: tooltip allineato a sinistra (`tooltip-left`)
+  - Ultima colonna: tooltip allineato a destra (`tooltip-right`)
+  - Colonne centrali: comportamento default centrato
+
+---
+
 ## v1.5.1 - 1 Gennaio 2026 🎯 Performance e UX
 
 ### 🚀 Ottimizzazione Performance

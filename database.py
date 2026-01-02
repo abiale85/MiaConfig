@@ -14,6 +14,9 @@ class ConfigDatabase:
         """Inizializza il database manager."""
         self.db_path = db_path
         self.conn = None
+        # Cache per descrizioni (raramente cambiano, evita query ripetute)
+        self._descriptions_cache = None
+        self._cache_timestamp = None
     
     @staticmethod
     def validate_setup_name(setup_name: str) -> str:
@@ -133,13 +136,51 @@ class ConfigDatabase:
             )
         """)
         
+        # Crea indici per ottimizzare le query in _get_configurations_at_time
+        # Questi indici velocizzano le query eseguite ad ogni scan_interval
+        
+        # Indice per configurazioni (lookup per setup_name)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_configurazioni_setup_name 
+            ON configurazioni(setup_name, priority)
+        """)
+        
+        # Indice per configurazioni a orario (filtro su orario e giorno)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_orario_ora 
+            ON configurazioni_a_orario(valid_from_ora, valid_to_ora)
+        """)
+        
+        # Indice per configurazioni a tempo (filtro su date)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_tempo_date 
+            ON configurazioni_a_tempo(valid_from_date, valid_to_date)
+        """)
+        
+        # Indice per configurazioni condizionali (lookup per conditional_config)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_condizionali_config 
+            ON configurazioni_condizionali(conditional_config, priority)
+        """)
+        
+        # Indice per storico (filtro per setup_name e timestamp per grafici)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_storico_name_timestamp 
+            ON configurazioni_storico(setup_name, timestamp)
+        """)
+        
         self.conn.commit()
-        _LOGGER.info("Database inizializzato: %s", self.db_path)
+        _LOGGER.info("Database inizializzato con indici ottimizzati: %s", self.db_path)
     
     def _get_configurations_at_time(self, target_datetime: datetime) -> Dict[str, Any]:
         """
         LOGICA UNIFICATA: Ottiene tutte le configurazioni per un timestamp specifico.
         Questa funzione è usata sia da get_all_configurations (runtime) che da simulate_configuration_schedule.
+        
+        OTTIMIZZAZIONI PERFORMANCE:
+        - Query batch con indici per ridurre I/O
+        - Filtraggio in Python per evitare query multiple
+        - Valutazione lazy dei condizionali (solo se attivi)
         
         Args:
             target_datetime: Il momento per cui calcolare le configurazioni attive
@@ -359,20 +400,29 @@ class ConfigDatabase:
         """
         Ottiene tutte le configurazioni applicando la logica di priorità globale.
         Usa la logica unificata _get_configurations_at_time con timestamp = now.
+        
+        OTTIMIZZAZIONI:
+        - Cache delle descrizioni (TTL 60s) per evitare query ripetute
+        - Usa la logica unificata _get_configurations_at_time con indici DB
         """
-        cursor = self.conn.cursor()
-        
-        # Carica tutte le descrizioni in memoria
-        cursor.execute("SELECT setup_name, description FROM configurazioni_descrizioni")
-        descriptions = {row['setup_name']: row['description'] for row in cursor.fetchall()}
-        
         # Usa la logica unificata per il momento attuale
         now = datetime.now()
         result = self._get_configurations_at_time(now)
         
-        # Aggiungi le descrizioni al risultato
+        # Cache delle descrizioni per 60 secondi (raramente cambiano)
+        current_time = now.timestamp()
+        if (self._descriptions_cache is None or 
+            self._cache_timestamp is None or 
+            current_time - self._cache_timestamp > 60):
+            
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT setup_name, description FROM configurazioni_descrizioni")
+            self._descriptions_cache = {row['setup_name']: row['description'] for row in cursor.fetchall()}
+            self._cache_timestamp = current_time
+        
+        # Aggiungi le descrizioni al risultato dalla cache
         for name in result:
-            result[name]['description'] = descriptions.get(name)
+            result[name]['description'] = self._descriptions_cache.get(name)
         
         return result
     
@@ -418,6 +468,8 @@ class ConfigDatabase:
                 INSERT OR REPLACE INTO configurazioni_descrizioni (setup_name, description)
                 VALUES (?, ?)
             """, (setup_name, description))
+            # Invalida cache descrizioni
+            self._descriptions_cache = None
         
         # Salva nello storico
         self._save_to_history(
@@ -458,6 +510,8 @@ class ConfigDatabase:
                 INSERT OR REPLACE INTO configurazioni_descrizioni (setup_name, description)
                 VALUES (?, ?)
             """, (setup_name, description))
+            # Invalida cache descrizioni
+            self._descriptions_cache = None
         
         # Salva nello storico
         self._save_to_history(
@@ -744,6 +798,9 @@ class ConfigDatabase:
                     'DELETE'
                 )
             cursor.execute("DELETE FROM configurazioni_condizionali WHERE setup_name = ?", (setup_name,))
+        
+        # Invalida cache descrizioni (potrebbero essere state rimosse insieme alle config)
+        self._descriptions_cache = None
         
         self.conn.commit()
         _LOGGER.debug(f"Deleted config: {setup_name} (type: {config_type})")
