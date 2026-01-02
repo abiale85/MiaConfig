@@ -200,19 +200,57 @@ service: mia_config.set_schedule_config
 data:
   setup_name: "temperatura_target"
   setup_value: "20"
-  valid_from_ora: "8.30"  # 08:30
-  valid_to_ora: "18.00"   # 18:00
-  days_of_week: ["0", "1", "2", "3", "4"]  # Lun-Ven
+  valid_from_ora: 8.5  # 08:30 in formato decimale (8 + 30/60)
+  valid_to_ora: 18.0   # 18:00 in formato decimale
+  days_of_week: [0, 1, 2, 3, 4]  # Lun-Ven (array di numeri)
   priority: 80  # Opzionale, default: 99
   description: "Orario lavorativo"  # Opzionale
   entity_id: sensor.miahomeconfig_main  # Opzionale
 ```
 
-**Nota**: 
-- L'orario va specificato in formato `HH.MM`: `8.30` = 08:30, `14.15` = 14:15, `23.55` = 23:55
+**Nota Formato Orario**: 
+- L'orario va specificato in **formato decimale**: ore + (minuti/60)
+  - Esempi: `8.5` = 08:30, `14.25` = 14:15, `23.983333` = 23:59
 - Ore valide: 0-23, Minuti validi: 0-59
+- **Override 24 ore**: Se `valid_from_ora` = `valid_to_ora`, la configurazione è attiva 24 ore
+  - Esempi: `0.0` - `0.0` = 24h, `22.0` - `22.0` = 24h, `8.5` - `8.5` = 24h
 - I giorni: 0=Lunedì, 1=Martedì, 2=Mercoledì, 3=Giovedì, 4=Venerdì, 5=Sabato, 6=Domenica
 - Se ometti `days_of_week`, la configurazione sarà valida tutti i giorni
+- **Attraversa mezzanotte**: Se `valid_to_ora` < `valid_from_ora` (es. 22:00 - 06:00), la fascia attraversa la mezzanotte
+
+#### `mia_config.set_conditional_config`
+
+Imposta una configurazione condizionale che si attiva solo quando un'altra configurazione ha un valore specifico.
+
+```yaml
+service: mia_config.set_conditional_config
+data:
+  setup_name: "accensione_automatica_riscaldamenti"
+  setup_value: "0"
+  conditional_config: "profilo_temperatura"  # Configurazione da monitorare
+  conditional_operator: "=="  # Operatore: ==, !=, >, <, >=, <=, contains, not_contains
+  conditional_value: "minimo"  # Valore atteso
+  priority: 50  # Opzionale, default: 99
+  valid_from_ora: 5.5  # Opzionale: filtro orario inizio (05:30)
+  valid_to_ora: 8.25   # Opzionale: filtro orario fine (08:15)
+  entity_id: sensor.miahomeconfig_main  # Opzionale
+```
+
+**Configurazioni Condizionali Avanzate**:
+- **Dipendenze a catena**: Supporto completo per condizionali che dipendono da altri condizionali
+  - Esempio: `tipo_sveglia` = "sveglia6" → `profilo_temperatura` = "sveglia" → `accensione_automatica` = "1"
+- **Valutazione iterativa**: Il sistema risolve automaticamente le dipendenze fino a convergenza (max 10 iterazioni)
+- **Filtro orario opzionale**: Puoi limitare il condizionale a una fascia oraria specifica
+  - Se omesso, il condizionale è attivo 24h quando la condizione è soddisfatta
+  - Se specificato, il condizionale è attivo solo nella fascia oraria E quando la condizione è vera
+- **Source order**: I condizionali hanno source_order = 0 (massima priorità tra i tipi)
+
+**Operatori disponibili**:
+- `==`: Uguale (es. temperatura = "22")
+- `!=`: Diverso (es. modalità != "vacanza")
+- `>`, `<`, `>=`, `<=`: Confronti numerici (es. temperatura > "20")
+- `contains`: Contiene sottostringa (es. stato contains "attivo")
+- `not_contains`: Non contiene (es. stato not_contains "errore")
 
 #### `mia_config.delete_single_config`
 
@@ -496,7 +534,98 @@ CREATE TABLE IF NOT EXISTS configurazioni_valori_validi (
 )
 ```
 
+## 🔧 Note Importanti e Fix Recenti
+
+### v1.5.5 (Gennaio 2026) - Fix Critici
+
+#### ✅ Override Orari 24 Ore
+**Problema Risolto**: Gli override orari con stesso orario di inizio e fine ora funzionano correttamente come configurazioni attive 24 ore.
+
+**Esempi funzionanti**:
+- `00:00 - 00:00` → Attivo 24 ore
+- `08:00 - 08:00` → Attivo 24 ore  
+- `22:00 - 22:00` → Attivo 24 ore
+
+**Come funziona**: Se `valid_from_ora == valid_to_ora`, il sistema interpreta come "sempre attivo" per quei giorni.
+
+#### ✅ Validazione Formato Tempo Corretta
+**Problema Risolto**: Errore "minuti devono essere tra 0 e 59, ricevuto: 98" quando si inseriva 23:59.
+
+**Causa**: La validazione usava formula errata (moltiplicava per 100 invece di 60).
+
+**Fix**: Ora la conversione decimale → minuti è corretta:
+- `23.983333` → `round(0.983333 * 60)` = 59 minuti ✅
+
+#### ✅ Configurazioni Condizionali Dipendenti
+**Problema Risolto**: I condizionali che dipendono da altri condizionali ora usano i valori corretti.
+
+**Esempio scenario risolto**:
+1. Condizionale A: `tipo_sveglia = sveglia6` → `profilo_temperatura = sveglia`
+2. Condizionale B: `profilo_temperatura = minimo` → `accensione_automatica = 0`
+
+**Prima**: Il Condizionale B vedeva sempre il valore "minimo" (standard), anche quando A lo cambiava in "sveglia"  
+**Ora**: Il Condizionale B vede "sveglia" quando A è attivo, quindi non si applica ✅
+
+**Implementazione**: Valutazione iterativa fino a convergenza (max 10 iterazioni).
+
+### Vista Settimanale - Miglioramenti UI
+
+#### Tooltip Intelligente
+- **Barre 24h**: Tooltip sempre visualizzato sopra per evitare di andare fuori schermo
+- **Barre inizio giornata** (0-3h): Tooltip sotto per evitare taglio in alto
+- **Altre barre**: Logica automatica basata su spazio disponibile nel viewport
+
+#### Hover Pulito
+- Rimosso effetto di espansione laterale della banda all'hover
+- Mantenuto solo l'ombra per feedback visivo
+- Nessuna interferenza con le date della timeline
+
+#### Tooltip Condizionali Chiari
+- Distinzione tra "Finestra configurata" (filtro) e "Orario effettivo" (durata barra)
+- Warning automatico quando la barra è più corta della finestra configurata
+- ID configurazione visibile per debug e troubleshooting
+
+### Performance
+
+#### Indici Database (v1.5.2)
+- 5 indici strategici per query 5-10x più veloci
+- Cache descrizioni (TTL 60s) per -20% query totali
+- Zero impatto su operazioni di scrittura
+
+#### Vista Settimanale Backend
+- Calcolo delegato completamente al backend via `simulate_schedule`
+- Granularità automatica basata su `scan_interval`
+- Supporto configurazioni complesse con dipendenze
+
 ## Troubleshooting
+
+### Hard Refresh dopo Aggiornamenti
+Dopo un aggiornamento del componente, esegui un **hard refresh** del browser:
+- Chrome/Edge: `Ctrl + F5` o `Ctrl + Shift + R`
+- Firefox: `Ctrl + F5`
+- Safari: `Cmd + Shift + R`
+
+Questo forza il reload della card JavaScript bypassando la cache del browser.
+
+### Debug Configurazioni Condizionali
+1. Apri il tab "Gestisci" nella card
+2. Gli ID delle configurazioni sono visibili sotto ogni elemento
+3. Nella Vista Settimanale, passa il mouse su una barra per vedere l'ID nel tooltip
+4. Verifica che l'ID nella vista corrisponda a una configurazione esistente
+
+### Verificare Priorità e Source Order
+Nel tab Dashboard, ogni configurazione mostra:
+- Valore corrente
+- Tipo (source): `time`, `schedule`, `conditional`, `standard`
+- Priorità numerica
+
+L'ordine di valutazione è:
+1. Conditional (source_order = 0)
+2. Time (source_order = 1)  
+3. Schedule (source_order = 2)
+4. Standard (source_order = 4)
+
+A parità di source_order, vince la priorità numerica più bassa.
 
 ### I sensori non vengono creati
 
@@ -513,9 +642,12 @@ CREATE TABLE IF NOT EXISTS configurazioni_valori_validi (
 
 ### Errori di formato orario
 
-- Gli orari devono essere in formato decimale base 60: `8.5` per 08:30, `14.25` per 14:15, `22.85` per 22:51 (calcolo: ora + minuti/60)
-- **Non usare il formato base 100** (es: `8.30` NON è 08:30, ma 08:18!)
+- Gli orari devono essere in **formato decimale**: ore + (minuti/60)
+  - Corretto: `8.5` per 08:30, `14.25` per 14:15, `23.983333` per 23:59
+  - Calcolo: `ora + (minuti / 60)`
+- **Override 24 ore**: Se inizio = fine (es. `22.0 - 22.0`), la configurazione è attiva 24 ore
 - Le date devono essere in formato ISO: `2025-12-25 00:00:00`
+- Il frontend (card UI) converte automaticamente i selettori HH:MM in formato decimale
 
 ## Supporto
 
