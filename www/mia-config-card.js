@@ -1,5 +1,5 @@
-// Version 1.3.14 - Fix 24h schedule with any time + improve tooltip positioning + remove hover band - 20260102020000
-console.log('MIA-CONFIG-CARD Loading Version 1.3.14 - 20260102020000');
+// Version 2.0.0 - Major UX refresh: modal-only insertion, backup manager, override grouping fixes, history enable/disable logging - 20260103
+console.log('MIA-CONFIG-CARD Loading Version 2.0.0 - 20260103');
 
 class MiaConfigCard extends HTMLElement {
     constructor() {
@@ -182,6 +182,138 @@ class MiaConfigCard extends HTMLElement {
                 .mia-config-card .dc-section-header:hover { background: var(--divider-color); }
                 .mia-config-card .dc-section-content { border-left: 3px solid var(--primary-color); margin-bottom: 15px; border-radius: 0 4px 4px 0; }
                 .mia-config-card .dc-toggle-arrow { transition: transform 0.3s ease; display: inline-block; }
+                
+                /* Modal styles (outside mia-config-card scope) */
+                #dc-add-config-modal, #dc-edit-modal { 
+                    display: none; 
+                    position: fixed; 
+                    top: 0; 
+                    left: 0; 
+                    width: 100%; 
+                    height: 100%; 
+                    background: rgba(0,0,0,0.5); 
+                    z-index: 9999; 
+                    justify-content: center; 
+                    align-items: center;
+                    font-family: inherit;
+                }
+                #dc-add-config-modal.active, #dc-edit-modal.active { 
+                    display: flex !important; 
+                }
+                /* Unscoped form styles for modals */
+                .dc-form-group {
+                    margin-bottom: 16px;
+                }
+                .dc-form-group label {
+                    display: block;
+                    margin-bottom: 4px;
+                    font-weight: 500;
+                    font-size: 14px;
+                    color: var(--primary-text-color);
+                }
+                .dc-form-group input,
+                .dc-form-group select,
+                .dc-form-group textarea {
+                    width: 100%;
+                    padding: 8px;
+                    border: 1px solid var(--divider-color);
+                    border-radius: 4px;
+                    background: var(--card-background-color);
+                    color: var(--primary-text-color);
+                    font-size: 14px;
+                    box-sizing: border-box;
+                    font-family: inherit;
+                }
+                .dc-form-group input:focus,
+                .dc-form-group select:focus,
+                .dc-form-group textarea:focus {
+                    outline: none;
+                    border-color: var(--primary-color);
+                    box-shadow: 0 0 0 2px rgba(var(--rgb-primary-color), 0.1);
+                }
+                .dc-time-picker {
+                    display: flex;
+                    gap: 15px;
+                    align-items: flex-start;
+                }
+                .dc-time-input {
+                    display: flex;
+                    gap: 4px;
+                    align-items: center;
+                }
+                .dc-time-separator {
+                    font-weight: bold;
+                    color: var(--primary-text-color);
+                }
+                .dc-checkbox-group {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+                    gap: 8px;
+                }
+                .dc-checkbox-label {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    cursor: pointer;
+                    font-size: 14px;
+                }
+                .dc-checkbox-label input[type="checkbox"] {
+                    width: auto;
+                    margin: 0;
+                    cursor: pointer;
+                }
+                .dc-modal-content {
+                    background: var(--card-background-color);
+                    border-radius: 8px;
+                    max-height: 85vh;
+                    overflow-y: auto;
+                    box-shadow: 0 5px 33px rgba(0,0,0,0.3);
+                    width: 95%;
+                    max-width: 600px;
+                    color: var(--primary-text-color);
+                }
+                .dc-modal-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 20px;
+                    border-bottom: 1px solid var(--divider-color);
+                    position: sticky;
+                    top: 0;
+                    background: var(--secondary-background-color);
+                }
+                .dc-modal-header h3 {
+                    margin: 0;
+                    font-size: 20px;
+                    font-weight: 500;
+                }
+                .dc-modal-close {
+                    background: none;
+                    border: none;
+                    font-size: 28px;
+                    cursor: pointer;
+                    padding: 0;
+                    width: 32px;
+                    height: 32px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: var(--primary-text-color);
+                    transition: background 0.2s;
+                }
+                .dc-modal-close:hover {
+                    background: rgba(0,0,0,0.1);
+                    border-radius: 4px;
+                }
+
+                @media (max-width: 768px) {
+                    .mia-config-card .dc-section-content { padding: 8px 10px !important; }
+                    .mia-config-card .dc-tab { padding: 8px 12px; }
+                    .mia-config-card .dc-tabs { flex-wrap: wrap; }
+                    .mia-config-card .dc-modal-content { width: 98%; padding: 10px; }
+                    .mia-config-card .dc-btn { width: 100%; max-width: none; }
+                    .mia-config-card .dc-view-mode-toggle { flex-wrap: wrap; }
+                }
             </style>
         `;
     }
@@ -204,336 +336,24 @@ class MiaConfigCard extends HTMLElement {
             </div>
 
             <div id="dc-tab-config" class="dc-tab-content">
-                <!-- Sottosezioni collassabili -->
-                <div class="dc-section-header" onclick="window.dcToggleSection(this, 'insert-config')">
-                    <span style="font-size: 18px; font-weight: bold;">➕ Inserisci Nuova Configurazione</span>
-                    <span class="dc-toggle-arrow" style="float: right; font-size: 14px;">▼</span>
-                </div>
-                <div id="dc-section-insert-config" class="dc-section-content" style="display: block; padding: 15px; border-left: 3px solid var(--primary-color);">
-                    <h3 style="margin-top: 0;">Seleziona Tipo</h3>
-                
-                <div class="dc-form-group">
-                    <label>Tipo di Configurazione:</label>
-                    <select id="config-type-selector" onchange="window.dcShowConfigForm(this.value)">
-                        <option value="standard">⚙️ Standard</option>
-                        <option value="schedule">🕐 Override Orario</option>
-                        <option value="time" selected>⏰ Override Temporale</option>
-                        <option value="conditional">🎯 Override Condizionale</option>
-                    </select>
-                </div>
-
-                <div id="dc-form-container-standard" class="dc-form-container" style="display: none;">
-                <form id="dc-form-standard">
-                    <div class="dc-form-group">
-                        <label>Nome Configurazione:</label>
-                        <input type="text" name="setup_name" required placeholder="es. temperatura_target">
-                    </div>
-                    <div class="dc-form-group">
-                        <label>Valore:</label>
-                        <input type="text" name="setup_value" required placeholder="es. 22">
-                    </div>
-                    <div class="dc-form-group">
-                        <label>Priorità (1-999):</label>
-                        <input type="number" name="priority" min="1" max="999" value="99">
-                    </div>
-                    <div class="dc-form-group">
-                        <label>Descrizione (opzionale):</label>
-                        <input type="text" name="description" placeholder="Descrizione della configurazione">
-                    </div>
-                    <button type="submit" class="dc-btn">Salva</button>
-                </form>
-                </div>
-
-                <div id="dc-form-container-schedule" class="dc-form-container" style="display: none;">
-                <form id="dc-form-schedule">
-                    <div class="dc-form-group">
-                        <label>Configurazione da Override:</label>
-                        <select id="schedule-config-select" name="setup_name" required onchange="window.dcLoadValidValuesForForm('schedule')">
-                            <option value="">-- Caricamento... --</option>
-                        </select>
-                        <small style="color: var(--secondary-text-color);">Seleziona una configurazione standard esistente</small>
-                    </div>
-                    <div class="dc-form-group">
-                        <label>Valore Override:</label>
-                        <div id="schedule-value-container">
-                            <input type="text" id="schedule-setup-value" name="setup_value" required placeholder="es. 20">
-                        </div>
-                    </div>
-                    <div class="dc-form-group">
-                        <label>Fascia Oraria:</label>
-                        <div class="dc-time-picker">
-                            <div>
-                                <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
-                                <div class="dc-time-input">
-                                    <select id="from-hour" required>
-                                        ${this.generateHourOptions(0, 23)}
-                                    </select>
-                                    <span class="dc-time-separator">:</span>
-                                    <select id="from-minute" required>
-                                        ${this.generateMinuteOptions()}
-                                    </select>
-                                </div>
-                            </div>
-                            <span style="font-size: 18px; align-self: flex-end; padding-bottom: 8px;">→</span>
-                            <div>
-                                <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
-                                <div class="dc-time-input">
-                                    <select id="to-hour" required>
-                                        ${this.generateHourOptions(0, 23)}
-                                    </select>
-                                    <span class="dc-time-separator">:</span>
-                                    <select id="to-minute" required>
-                                        ${this.generateMinuteOptions()}
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                        <small style="color: var(--secondary-text-color); display: block; margin-top: 4px;">
-                            💡 Se l'ora di fine è minore dell'inizio (es. 22:00-02:00), l'orario attraversa la mezzanotte
-                        </small>
-                    </div>
-                    <div class="dc-form-group">
-                        <label>Giorni della Settimana:</label>
-                        <div class="dc-checkbox-group">
-                            <label class="dc-checkbox-label">
-                                <input type="checkbox" name="days" value="0" checked> Lun
-                            </label>
-                            <label class="dc-checkbox-label">
-                                <input type="checkbox" name="days" value="1" checked> Mar
-                            </label>
-                            <label class="dc-checkbox-label">
-                                <input type="checkbox" name="days" value="2" checked> Mer
-                            </label>
-                            <label class="dc-checkbox-label">
-                                <input type="checkbox" name="days" value="3" checked> Gio
-                            </label>
-                            <label class="dc-checkbox-label">
-                                <input type="checkbox" name="days" value="4" checked> Ven
-                            </label>
-                            <label class="dc-checkbox-label">
-                                <input type="checkbox" name="days" value="5" checked> Sab
-                            </label>
-                            <label class="dc-checkbox-label">
-                                <input type="checkbox" name="days" value="6" checked> Dom
-                            </label>
-                        </div>
-                    </div>
-                    <div class="dc-form-group">
-                        <label>Priorità (1-999):</label>
-                        <input type="number" name="priority" min="1" max="999" value="99">
-                        <small style="color: var(--secondary-text-color);">Più basso = più prioritario (1 = massima)</small>
-                    </div>
-                    <button type="submit" class="dc-btn">Aggiungi Override Orario</button>
-                </form>
-                </div>
-
-                <div id="dc-form-container-time" class="dc-form-container" style="display: block;">
-                <form id="dc-form-time">
-                    <div class="dc-form-group">
-                        <label>Configurazione da Override:</label>
-                        <select id="time-config-select" name="setup_name" required onchange="window.dcLoadValidValuesForForm('time')">
-                            <option value="">-- Caricamento... --</option>
-                        </select>
-                        <small style="color: var(--secondary-text-color);">Seleziona una configurazione standard esistente</small>
-                    </div>
-                    <div class="dc-form-group">
-                        <label>Valore Override:</label>
-                        <div id="time-value-container">
-                            <input type="text" id="time-setup-value" name="setup_value" required placeholder="es. 18">
-                        </div>
-                    </div>
-                    <div class="dc-form-group">
-                        <label>Data/Ora Inizio:</label>
-                        <input type="datetime-local" name="valid_from" required>
-                    </div>
-                    <div class="dc-form-group">
-                        <label>Data/Ora Fine:</label>
-                        <input type="datetime-local" name="valid_to" required>
-                    </div>
-                    <div class="dc-form-group">
-                        <label>Priorità (1-999):</label>
-                        <input type="number" name="priority" min="1" max="999" value="99">
-                        <small style="color: var(--secondary-text-color);">Più basso = più prioritario (1 = massima)</small>
-                    </div>
-                    
-                    <hr style="margin: 15px 0; border: none; border-top: 1px solid var(--divider-color);">
-                    <h4 style="margin: 10px 0; font-size: 14px;">🎯 Filtri Opzionali</h4>
-                    <small style="color: var(--secondary-text-color); display: block; margin-bottom: 10px;">
-                        Puoi limitare l'override solo a certi orari o giorni della settimana
-                    </small>
-                    
-                    <div class="dc-form-group">
-                        <label>
-                            <input type="checkbox" id="time-enable-hours"> Limita a fascia oraria
-                        </label>
-                        <div id="time-hours-container" style="display: none; margin-top: 10px;">
-                            <div class="dc-time-picker">
-                                <div>
-                                    <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
-                                    <div class="dc-time-input">
-                                        <select id="time-from-hour">
-                                            ${this.generateHourOptions(0, 23)}
-                                        </select>
-                                        <span class="dc-time-separator">:</span>
-                                        <select id="time-from-minute">
-                                            ${this.generateMinuteOptions()}
-                                        </select>
-                                    </div>
-                                </div>
-                                <span style="font-size: 18px; align-self: flex-end; padding-bottom: 8px;">→</span>
-                                <div>
-                                    <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
-                                    <div class="dc-time-input">
-                                        <select id="time-to-hour">
-                                            ${this.generateHourOptions(0, 23)}
-                                        </select>
-                                        <span class="dc-time-separator">:</span>
-                                        <select id="time-to-minute">
-                                            ${this.generateMinuteOptions()}
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="dc-form-group">
-                        <label>
-                            <input type="checkbox" id="time-enable-days"> Limita a giorni specifici
-                        </label>
-                        <div id="time-days-container" style="display: none; margin-top: 10px;">
-                            <div class="dc-checkbox-group">
-                                <label class="dc-checkbox-label">
-                                    <input type="checkbox" name="time-days" value="0" checked> Lun
-                                </label>
-                                <label class="dc-checkbox-label">
-                                    <input type="checkbox" name="time-days" value="1" checked> Mar
-                                </label>
-                                <label class="dc-checkbox-label">
-                                    <input type="checkbox" name="time-days" value="2" checked> Mer
-                                </label>
-                                <label class="dc-checkbox-label">
-                                    <input type="checkbox" name="time-days" value="3" checked> Gio
-                                </label>
-                                <label class="dc-checkbox-label">
-                                    <input type="checkbox" name="time-days" value="4" checked> Ven
-                                </label>
-                                <label class="dc-checkbox-label">
-                                    <input type="checkbox" name="time-days" value="5" checked> Sab
-                                </label>
-                                <label class="dc-checkbox-label">
-                                    <input type="checkbox" name="time-days" value="6" checked> Dom
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <button type="submit" class="dc-btn">Aggiungi Override Temporale</button>
-                </form>
-                </div>
-                
-                <div id="dc-form-container-conditional" class="dc-form-container" style="display: none;">
-                <form id="dc-form-conditional">
-                    <div class="dc-form-group">
-                        <label>Configurazione da Override:</label>
-                        <select id="conditional-config-select" name="setup_name" required onchange="window.dcLoadValidValuesForForm('conditional')">
-                            <option value="">-- Caricamento... --</option>
-                        </select>
-                        <small style="color: var(--secondary-text-color);">Seleziona una configurazione standard esistente</small>
-                    </div>
-                    <div class="dc-form-group">
-                        <label>Valore Override:</label>
-                        <div id="conditional-value-container">
-                            <input type="text" id="conditional-setup-value" name="setup_value" required placeholder="es. 18">
-                        </div>
-                    </div>
-                    <div class="dc-form-group">
-                        <label>🎯 Condizione Basata Su:</label>
-                        <select id="conditional-source-config" name="conditional_config" required onchange="window.dcUpdateConditionalOptions()">
-                            <option value="">-- Seleziona configurazione --</option>
-                        </select>
-                        <small style="color: var(--secondary-text-color);">L'override si attiverà quando questa configurazione ha un valore specifico</small>
-                    </div>
-                    <div class="dc-form-group">
-                        <label>Operatore:</label>
-                        <select id="conditional-operator" name="conditional_operator" required>
-                            <option value="==">=== (uguale)</option>
-                            <option value="!=">!= (diverso)</option>
-                            <option value=">">  > (maggiore)</option>
-                            <option value="<">  < (minore)</option>
-                            <option value=">=">>= (maggiore o uguale)</option>
-                            <option value="<="><= (minore o uguale)</option>
-                        </select>
-                    </div>
-                    <div class="dc-form-group">
-                        <label>Valore di Confronto:</label>
-                        <div id="conditional-comparison-container">
-                            <input type="text" id="conditional-comparison-value" name="conditional_value" required placeholder="es. 1">
-                        </div>
-                        <small style="color: var(--secondary-text-color);">L'override si attiva se: <strong id="conditional-preview">configurazione operatore valore</strong></small>
-                    </div>
-                    <div class="dc-form-group">
-                        <label>Priorità (1-999):</label>
-                        <input type="number" name="priority" min="1" max="999" value="50">
-                        <small style="color: var(--secondary-text-color);">Gli override condizionali hanno priorità intermedia (default 50)</small>
-                    </div>
-                    
-                    <div class="dc-form-group">
-                        <label>
-                            <input type="checkbox" id="conditional-enable-hours"> Limita a fascia oraria
-                        </label>
-                        <div id="conditional-hours-container" style="display: none; margin-top: 10px;">
-                            <div class="dc-time-picker">
-                                <div>
-                                    <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
-                                    <div class="dc-time-input">
-                                        <select id="conditional-from-hour">
-                                            ${this.generateHourOptions(0, 23)}
-                                        </select>
-                                        <span class="dc-time-separator">:</span>
-                                        <select id="conditional-from-minute">
-                                            ${this.generateMinuteOptions()}
-                                        </select>
-                                    </div>
-                                </div>
-                                <span style="font-size: 18px; align-self: flex-end; padding-bottom: 8px;">→</span>
-                                <div>
-                                    <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
-                                    <div class="dc-time-input">
-                                        <select id="conditional-to-hour">
-                                            ${this.generateHourOptions(0, 23)}
-                                        </select>
-                                        <span class="dc-time-separator">:</span>
-                                        <select id="conditional-to-minute">
-                                            ${this.generateMinuteOptions()}
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div style="padding: 10px; background: var(--secondary-background-color); border-radius: 4px; margin: 10px 0;">
-                        <strong>⚠️ Nota:</strong> Il sistema previene loop infiniti. Non puoi creare dipendenze circolari.
-                    </div>
-                    <button type="submit" class="dc-btn">Aggiungi Override Condizionale</button>
-                </form>
-                </div>
+                <!-- Pulsante per aprire modal inserimento -->
+                <div style="margin-bottom: 20px;">
+                    <button class="dc-btn" onclick="window.dcOpenAddConfigModal()" style="font-size: 16px; padding: 12px 24px;">➕ Aggiungi Nuova Configurazione</button>
                 </div>
                 
                 <!-- Sezione Configurazioni Database -->
                 <div class="dc-section-header" onclick="window.dcToggleSection(this, 'db-config')">
                     <span style="font-size: 18px; font-weight: bold;">🗂️ Configurazioni Database</span>
-                    <span class="dc-toggle-arrow" style="float: right; font-size: 14px;">▶</span>
+                    <span class="dc-toggle-arrow" style="float: right; font-size: 14px;">▼</span>
                 </div>
-                <div id="dc-section-db-config" class="dc-section-content" style="display: none; padding: 15px; border-left: 3px solid var(--warning-color);">
+                <div id="dc-section-db-config" class="dc-section-content" style="display: block; padding: 10px 12px; border-left: 3px solid var(--warning-color);">
                     <div class="dc-view-mode-toggle" style="margin-bottom: 15px;">
                         <button class="dc-view-btn active" data-mode="name" onclick="window.dcSwitchConfigView('name')">Per Nome</button>
                         <button class="dc-view-btn" data-mode="override" onclick="window.dcSwitchConfigView('override')">Per Override</button>
                     </div>
                     <div id="dc-config-list">Caricamento...</div>
                 </div>
-                
+
                 <!-- Sezione Valori Validi -->
                 <div class="dc-section-header" onclick="window.dcToggleSection(this, 'valid-values')">
                     <span style="font-size: 18px; font-weight: bold;">✓ Valori Validi</span>
@@ -580,11 +400,20 @@ class MiaConfigCard extends HTMLElement {
                     <p style="color: var(--secondary-text-color); margin-bottom: 15px; font-size: 14px;">
                         Crea backup del database o ripristina da una versione precedente
                     </p>
-                    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                        <button class="dc-btn" onclick="window.dcBackupDatabase()" style="flex: 1;">📦 Crea Backup</button>
-                        <button class="dc-btn" onclick="window.dcShowRestoreForm()" style="flex: 1;">📥 Ripristina da Backup</button>
+                    <div style="display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;">
+                        <button class="dc-btn" onclick="window.dcBackupDatabase()" style="flex: 1; min-width: 180px;">📦 Crea Backup</button>
+                        <button class="dc-btn" onclick="window.dcShowRestoreForm()" style="flex: 1; min-width: 200px;">📥 Ripristina da Backup</button>
+                        <button class="dc-btn" onclick="window.dcRefreshBackupList()" style="flex: 1; min-width: 180px;">🔄 Aggiorna elenco</button>
+                        <button class="dc-btn-secondary" onclick="window.dcDeleteAllBackups()" style="flex: 1; min-width: 200px;">🗑️ Elimina tutti i backup</button>
                     </div>
-                    <div id="dc-backup-status"></div>
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
+                        <input type="file" id="dc-backup-upload-input" accept=".db" style="flex: 2; min-width: 240px;">
+                        <button class="dc-btn" onclick="window.dcUploadBackup()" style="flex: 1; min-width: 160px;">⬆️ Carica backup</button>
+                    </div>
+                    <div id="dc-backup-status" style="margin-bottom: 10px;"></div>
+                    <div id="dc-backup-list" style="border: 1px solid var(--divider-color); border-radius: 8px; padding: 12px; background: var(--card-background-color);">
+                        <p style="margin: 0; color: var(--secondary-text-color);">Nessun backup caricato.</p>
+                    </div>
                     
                     <div id="dc-restore-form" style="display: none; margin-top: 20px; padding: 15px; border: 2px solid var(--primary-color); border-radius: 8px; background: var(--card-background-color);">
                         <h4 style="margin-top: 0;">Ripristina da Backup</h4>
@@ -622,7 +451,280 @@ class MiaConfigCard extends HTMLElement {
                 </div>
                 <div id="dc-history-list">Clicca "Carica Storico" per visualizzare</div>
             </div>
+            </div>
             
+            <!-- Modal per aggiungere nuove configurazioni -->
+            <div id="dc-add-config-modal" class="dc-modal">
+                <div class="dc-modal-content" style="max-width: 600px; padding: 20px;">
+                    <div class="dc-modal-header">
+                        <h3>Aggiungi Nuova Configurazione</h3>
+                        <button class="dc-modal-close" onclick="window.dcCloseAddConfigModal()">×</button>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label style="font-weight: 500; font-size: 16px;">Seleziona Tipo:</label>
+                        <select id="modal-config-type-selector" onchange="window.dcShowModalConfigForm(this.value)" style="width: 100%; padding: 10px; margin-top: 8px; border: 1px solid var(--divider-color); border-radius: 4px;">
+                            <option value="standard">⚙️ Standard</option>
+                            <option value="schedule">🕐 Override Orario</option>
+                            <option value="time">⏰ Override Temporale</option>
+                            <option value="conditional">🎯 Override Condizionale</option>
+                        </select>
+                    </div>
+
+                    <div id="modal-form-container-standard" class="dc-form-container" style="display: none;">
+                    <form id="modal-dc-form-standard">
+                        <div class="dc-form-group">
+                            <label>Nome Configurazione:</label>
+                            <input type="text" name="setup_name" required placeholder="es. temperatura_target">
+                        </div>
+                        <div class="dc-form-group">
+                            <label>Valore:</label>
+                            <input type="text" name="setup_value" required placeholder="es. 22">
+                        </div>
+                        <div class="dc-form-group">
+                            <label>Priorità (1-999):</label>
+                            <input type="number" name="priority" min="1" max="999" value="99">
+                        </div>
+                        <div class="dc-form-group">
+                            <label>Descrizione (opzionale):</label>
+                            <input type="text" name="description" placeholder="Descrizione della configurazione">
+                        </div>
+                        <button type="submit" class="dc-btn">Salva</button>
+                        <button type="button" class="dc-btn-secondary" onclick="window.dcCloseAddConfigModal()" style="margin-left: 10px;">Annulla</button>
+                    </form>
+                    </div>
+
+                    <div id="modal-form-container-schedule" class="dc-form-container" style="display: none;">
+                    <form id="modal-dc-form-schedule">
+                        <div class="dc-form-group">
+                            <label>Configurazione da Override:</label>
+                            <select id="modal-schedule-config-select" name="setup_name" required onchange="window.dcLoadValidValuesForForm('schedule')">
+                                <option value="">-- Caricamento... --</option>
+                            </select>
+                            <small style="color: var(--secondary-text-color);">Seleziona una configurazione standard esistente</small>
+                        </div>
+                        <div class="dc-form-group">
+                            <label>Valore Override:</label>
+                            <div id="modal-schedule-value-container">
+                                <input type="text" id="modal-schedule-setup-value" name="setup_value" required placeholder="es. 20">
+                            </div>
+                        </div>
+                        <div class="dc-form-group">
+                            <label>Fascia Oraria:</label>
+                            <div class="dc-time-picker">
+                                <div>
+                                    <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
+                                    <div class="dc-time-input">
+                                        <select id="modal-from-hour" required>
+                                            ${this.generateHourOptions(0, 23)}
+                                        </select>
+                                        <span class="dc-time-separator">:</span>
+                                        <select id="modal-from-minute" required>
+                                            ${this.generateMinuteOptions()}
+                                        </select>
+                                    </div>
+                                </div>
+                                <span style="font-size: 18px; align-self: flex-end; padding-bottom: 8px;">→</span>
+                                <div>
+                                    <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
+                                    <div class="dc-time-input">
+                                        <select id="modal-to-hour" required>
+                                            ${this.generateHourOptions(0, 23)}
+                                        </select>
+                                        <span class="dc-time-separator">:</span>
+                                        <select id="modal-to-minute" required>
+                                            ${this.generateMinuteOptions()}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <small style="color: var(--secondary-text-color); display: block; margin-top: 4px;">
+                                💡 Se l'ora di fine è minore dell'inizio (es. 22:00-02:00), l'orario attraversa la mezzanotte
+                            </small>
+                        </div>
+                        <div class="dc-form-group">
+                            <label>Giorni della Settimana:</label>
+                            <div class="dc-checkbox-group">
+                                <label class="dc-checkbox-label"><input type="checkbox" name="days" value="0" checked> Lun</label>
+                                <label class="dc-checkbox-label"><input type="checkbox" name="days" value="1" checked> Mar</label>
+                                <label class="dc-checkbox-label"><input type="checkbox" name="days" value="2" checked> Mer</label>
+                                <label class="dc-checkbox-label"><input type="checkbox" name="days" value="3" checked> Gio</label>
+                                <label class="dc-checkbox-label"><input type="checkbox" name="days" value="4" checked> Ven</label>
+                                <label class="dc-checkbox-label"><input type="checkbox" name="days" value="5" checked> Sab</label>
+                                <label class="dc-checkbox-label"><input type="checkbox" name="days" value="6" checked> Dom</label>
+                            </div>
+                        </div>
+                        <div class="dc-form-group">
+                            <label>Priorità (1-999):</label>
+                            <input type="number" name="priority" min="1" max="999" value="99">
+                            <small style="color: var(--secondary-text-color);">Più basso = più prioritario (1 = massima)</small>
+                        </div>
+                        <button type="submit" class="dc-btn">Aggiungi Override Orario</button>
+                        <button type="button" class="dc-btn-secondary" onclick="window.dcCloseAddConfigModal()" style="margin-left: 10px;">Annulla</button>
+                    </form>
+                    </div>
+
+                    <div id="modal-form-container-time" class="dc-form-container" style="display: block;">
+                    <form id="modal-dc-form-time">
+                        <div class="dc-form-group">
+                            <label>Configurazione da Override:</label>
+                            <select id="modal-time-config-select" name="setup_name" required onchange="window.dcLoadValidValuesForForm('time')">
+                                <option value="">-- Caricamento... --</option>
+                            </select>
+                            <small style="color: var(--secondary-text-color);">Seleziona una configurazione standard esistente</small>
+                        </div>
+                        <div class="dc-form-group">
+                            <label>Valore Override:</label>
+                            <div id="modal-time-value-container">
+                                <input type="text" id="modal-time-setup-value" name="setup_value" required placeholder="es. 18">
+                            </div>
+                        </div>
+                        <div class="dc-form-group">
+                            <label>Data/Ora Inizio:</label>
+                            <input type="datetime-local" name="valid_from" required>
+                        </div>
+                        <div class="dc-form-group">
+                            <label>Data/Ora Fine:</label>
+                            <input type="datetime-local" name="valid_to" required>
+                        </div>
+                        <div class="dc-form-group">
+                            <label>Priorità (1-999):</label>
+                            <input type="number" name="priority" min="1" max="999" value="99">
+                            <small style="color: var(--secondary-text-color);">Più basso = più prioritario (1 = massima)</small>
+                        </div>
+                        
+                        <hr style="margin: 15px 0; border: none; border-top: 1px solid var(--divider-color);">
+                        <h4 style="margin: 10px 0; font-size: 14px;">🎯 Filtri Opzionali</h4>
+                        <small style="color: var(--secondary-text-color); display: block; margin-bottom: 10px;">
+                            Puoi limitare l'override solo a certi orari o giorni della settimana
+                        </small>
+                        
+                        <div class="dc-form-group">
+                            <label><input type="checkbox" id="modal-time-enable-hours"> Limita a fascia oraria</label>
+                            <div id="modal-time-hours-container" style="display: none; margin-top: 10px;">
+                                <div class="dc-time-picker">
+                                    <div>
+                                        <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
+                                        <div class="dc-time-input">
+                                            <select id="modal-time-from-hour">${this.generateHourOptions(0, 23)}</select>
+                                            <span class="dc-time-separator">:</span>
+                                            <select id="modal-time-from-minute">${this.generateMinuteOptions()}</select>
+                                        </div>
+                                    </div>
+                                    <span style="font-size: 18px; align-self: flex-end; padding-bottom: 8px;">→</span>
+                                    <div>
+                                        <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
+                                        <div class="dc-time-input">
+                                            <select id="modal-time-to-hour">${this.generateHourOptions(0, 23)}</select>
+                                            <span class="dc-time-separator">:</span>
+                                            <select id="modal-time-to-minute">${this.generateMinuteOptions()}</select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="dc-form-group">
+                            <label><input type="checkbox" id="modal-time-enable-days"> Limita a giorni specifici</label>
+                            <div id="modal-time-days-container" style="display: none; margin-top: 10px;">
+                                <div class="dc-checkbox-group">
+                                    <label class="dc-checkbox-label"><input type="checkbox" name="time-days" value="0" checked> Lun</label>
+                                    <label class="dc-checkbox-label"><input type="checkbox" name="time-days" value="1" checked> Mar</label>
+                                    <label class="dc-checkbox-label"><input type="checkbox" name="time-days" value="2" checked> Mer</label>
+                                    <label class="dc-checkbox-label"><input type="checkbox" name="time-days" value="3" checked> Gio</label>
+                                    <label class="dc-checkbox-label"><input type="checkbox" name="time-days" value="4" checked> Ven</label>
+                                    <label class="dc-checkbox-label"><input type="checkbox" name="time-days" value="5" checked> Sab</label>
+                                    <label class="dc-checkbox-label"><input type="checkbox" name="time-days" value="6" checked> Dom</label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button type="submit" class="dc-btn">Aggiungi Override Temporale</button>
+                        <button type="button" class="dc-btn-secondary" onclick="window.dcCloseAddConfigModal()" style="margin-left: 10px;">Annulla</button>
+                    </form>
+                    </div>
+
+                    <div id="modal-form-container-conditional" class="dc-form-container" style="display: none;">
+                    <form id="modal-dc-form-conditional">
+                        <div class="dc-form-group">
+                            <label>Configurazione da Override:</label>
+                            <select id="modal-conditional-config-select" name="setup_name" required onchange="window.dcLoadValidValuesForForm('conditional')">
+                                <option value="">-- Caricamento... --</option>
+                            </select>
+                            <small style="color: var(--secondary-text-color);">Seleziona una configurazione standard esistente</small>
+                        </div>
+                        <div class="dc-form-group">
+                            <label>Valore Override:</label>
+                            <div id="modal-conditional-value-container">
+                                <input type="text" id="modal-conditional-setup-value" name="setup_value" required placeholder="es. 18">
+                            </div>
+                        </div>
+                        <div class="dc-form-group">
+                            <label>🎯 Condizione Basata Su:</label>
+                            <select id="modal-conditional-source-config" name="conditional_config" required onchange="window.dcUpdateConditionalOptions()">
+                                <option value="">-- Seleziona configurazione --</option>
+                            </select>
+                            <small style="color: var(--secondary-text-color);">L'override si attiverà quando questa configurazione ha un valore specifico</small>
+                        </div>
+                        <div class="dc-form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end;">
+                            <div>
+                                <label>Operatore:</label>
+                                <select id="modal-conditional-operator" name="conditional_operator" required>
+                                    <option value="==">=== (uguale)</option>
+                                    <option value="!=">!= (diverso)</option>
+                                    <option value=">">  > (maggiore)</option>
+                                    <option value="<">  < (minore)</option>
+                                    <option value=">=">>= (maggiore o uguale)</option>
+                                    <option value="<="><= (minore o uguale)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label>Valore di Confronto:</label>
+                                <div id="modal-conditional-comparison-container">
+                                    <input type="text" id="modal-conditional-comparison-value" name="conditional_value" required placeholder="es. 1">
+                                </div>
+                                <small style="color: var(--secondary-text-color); display: block; margin-top: 4px;">L'override si attiva se: <strong id="modal-conditional-preview">configurazione operatore valore</strong></small>
+                            </div>
+                        </div>
+                        <div class="dc-form-group">
+                            <label>Priorità (1-999):</label>
+                            <input type="number" name="priority" min="1" max="999" value="50">
+                            <small style="color: var(--secondary-text-color);">Gli override condizionali hanno priorità intermedia (default 50)</small>
+                        </div>
+                        
+                        <div class="dc-form-group">
+                            <label><input type="checkbox" id="modal-conditional-enable-hours"> Limita a fascia oraria</label>
+                            <div id="modal-conditional-hours-container" style="display: none; margin-top: 10px;">
+                                <div class="dc-time-picker">
+                                    <div>
+                                        <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
+                                        <div class="dc-time-input">
+                                            <select id="modal-conditional-from-hour">${this.generateHourOptions(0, 23)}</select>
+                                            <span class="dc-time-separator">:</span>
+                                            <select id="modal-conditional-from-minute">${this.generateMinuteOptions()}</select>
+                                        </div>
+                                    </div>
+                                    <span style="font-size: 18px; align-self: flex-end; padding-bottom: 8px;">→</span>
+                                    <div>
+                                        <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
+                                        <div class="dc-time-input">
+                                            <select id="modal-conditional-to-hour">${this.generateHourOptions(0, 23)}</select>
+                                            <span class="dc-time-separator">:</span>
+                                            <select id="modal-conditional-to-minute">${this.generateMinuteOptions()}</select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="padding: 10px; background: var(--secondary-background-color); border-radius: 4px; margin: 10px 0;">
+                            <strong>⚠️ Nota:</strong> Il sistema previene loop infiniti. Non puoi creare dipendenze circolari.
+                        </div>
+                        <button type="submit" class="dc-btn">Aggiungi Override Condizionale</button>
+                        <button type="button" class="dc-btn-secondary" onclick="window.dcCloseAddConfigModal()" style="margin-left: 10px;">Annulla</button>
+                    </form>
+                    </div>
+                </div>
             <!-- Modal per editare configurazioni -->
             <div id="dc-edit-modal" class="dc-modal">
                 <div class="dc-modal-content">
@@ -674,8 +776,8 @@ class MiaConfigCard extends HTMLElement {
             return `${year}-${month}-${day}T${hours}:${minutes}`;
         };
         
-        const validFromInput = this.content.querySelector('#dc-form-time input[name="valid_from"]');
-        const validToInput = this.content.querySelector('#dc-form-time input[name="valid_to"]');
+        const validFromInput = this.content.querySelector('#modal-dc-form-time input[name="valid_from"]');
+        const validToInput = this.content.querySelector('#modal-dc-form-time input[name="valid_to"]');
         
         if (validFromInput) validFromInput.value = formatDateTime(now);
         if (validToInput) validToInput.value = formatDateTime(midnight);
@@ -759,208 +861,197 @@ class MiaConfigCard extends HTMLElement {
             }
         };
         
-        window.dcQuickOverride = (setupName) => {
-            if (!this.content) {
-                setTimeout(() => window.dcQuickOverride(setupName), 100);
-                return;
-            }
-            
-            window.dcSwitchTab('configs', { target: this.content.querySelector('.dc-tab:nth-child(2)') });
-            
-            setTimeout(() => {
-                const nameInput = this.content.querySelector('#dc-form-standard input[name="setup_name"]');
-                if (nameInput) {
-                    nameInput.value = setupName;
-                    nameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-            }, 100);
-        };
+        // Quick Override è definito più avanti usando i form modal
     }
 
     setupEventListeners() {
-        // Form Standard
-        this.content.querySelector('#dc-form-standard').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const formData = new FormData(form);
-            try {
-                const serviceData = {
-                    setup_name: formData.get('setup_name'),
-                    setup_value: formData.get('setup_value'),
-                    priority: parseInt(formData.get('priority'))
-                };
-                
-                // Aggiungi descrizione solo se presente
-                const description = formData.get('description');
-                if (description && description.trim()) {
-                    serviceData.description = description.trim();
+        // Form handlers per modal di inserimento
+        const modalStandardForm = this.content.querySelector('#modal-dc-form-standard');
+        if (modalStandardForm) {
+            modalStandardForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const form = e.target;
+                const formData = new FormData(form);
+                try {
+                    const serviceData = {
+                        setup_name: formData.get('setup_name'),
+                        setup_value: formData.get('setup_value'),
+                        priority: parseInt(formData.get('priority'))
+                    };
+                    const description = formData.get('description');
+                    if (description && description.trim()) {
+                        serviceData.description = description.trim();
+                    }
+                    await this.callMiaConfigService('set_config', serviceData);
+                    form.reset();
+                    window.dcCloseAddConfigModal();
+                    this.showToast('Configurazione salvata!');
+                    setTimeout(() => this.loadConfigurations(), 500);
+                } catch (err) {
+                    console.error('Errore salvataggio:', err);
+                    this.showToast('Errore: ' + err.message, true);
                 }
-                
-                await this.callMiaConfigService('set_config', serviceData);
-                form.reset();
-                this.showToast('Configurazione salvata!');
-                setTimeout(() => this.loadConfigurations(), 500);
-            } catch (err) {
-                console.error('Errore salvataggio:', err);
-                this.showToast('Errore: ' + err.message, true);
-            }
-        });
+            });
+        }
+        
+        const modalScheduleForm = this.content.querySelector('#modal-dc-form-schedule');
+        if (modalScheduleForm) {
+            modalScheduleForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const form = e.target;
+                const setupName = this.content.querySelector('#modal-schedule-config-select').value;
+                const setupValue = this.content.querySelector('#modal-schedule-setup-value').value;
+                const fromHour = this.content.querySelector('#modal-from-hour').value;
+                const fromMinute = this.content.querySelector('#modal-from-minute').value;
+                const toHour = this.content.querySelector('#modal-to-hour').value;
+                const toMinute = this.content.querySelector('#modal-to-minute').value;
+                const selectedDays = Array.from(this.content.querySelectorAll('#modal-dc-form-schedule input[name="days"]:checked')).map(el => el.value);
+                const priority = this.content.querySelector('#modal-dc-form-schedule input[name="priority"]').value;
+                try {
+                    const validFromOra = parseFloat(fromHour) + parseFloat(fromMinute) / 60;
+                    const validToOra = parseFloat(toHour) + parseFloat(toMinute) / 60;
+                    const serviceData = {
+                        setup_name: setupName,
+                        setup_value: setupValue,
+                        valid_from_ora: validFromOra,
+                        valid_to_ora: validToOra,
+                        days_of_week: selectedDays.join(','),
+                        priority: parseInt(priority)
+                    };
+                    await this.callMiaConfigService('set_schedule_config', serviceData);
+                    form.reset();
+                    window.dcCloseAddConfigModal();
+                    this.showToast('Override orario aggiunto!');
+                    setTimeout(() => this.loadConfigurations(), 500);
+                } catch (err) {
+                    console.error('Errore:', err);
+                    this.showToast('Errore: ' + err.message, true);
+                }
+            });
+        }
+        
+        const modalTimeForm = this.content.querySelector('#modal-dc-form-time');
+        if (modalTimeForm) {
+            modalTimeForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const form = e.target;
+                const setupName = this.content.querySelector('#modal-time-config-select').value;
+                const setupValue = this.content.querySelector('#modal-time-setup-value').value;
+                const validFrom = this.content.querySelector('#modal-dc-form-time input[name="valid_from"]').value;
+                const validTo = this.content.querySelector('#modal-dc-form-time input[name="valid_to"]').value;
+                const priority = this.content.querySelector('#modal-dc-form-time input[name="priority"]').value;
+                const enableHours = this.content.querySelector('#modal-time-enable-hours').checked;
+                const enableDays = this.content.querySelector('#modal-time-enable-days').checked;
+                try {
+                    const serviceData = {
+                        setup_name: setupName,
+                        setup_value: setupValue,
+                        valid_from: validFrom,
+                        valid_to: validTo,
+                        priority: parseInt(priority)
+                    };
+                    if (enableHours) {
+                        const fromHour = this.content.querySelector('#modal-time-from-hour').value;
+                        const fromMinute = this.content.querySelector('#modal-time-from-minute').value;
+                        const toHour = this.content.querySelector('#modal-time-to-hour').value;
+                        const toMinute = this.content.querySelector('#modal-time-to-minute').value;
+                        serviceData.valid_from_ora = parseFloat(fromHour) + parseFloat(fromMinute) / 60;
+                        serviceData.valid_to_ora = parseFloat(toHour) + parseFloat(toMinute) / 60;
+                    }
+                    if (enableDays) {
+                        const selectedDays = Array.from(this.content.querySelectorAll('#modal-dc-form-time input[name="time-days"]:checked')).map(el => el.value);
+                        serviceData.days_of_week = selectedDays.join(',');
+                    }
+                    await this.callMiaConfigService('set_time_config', serviceData);
+                    form.reset();
+                    window.dcCloseAddConfigModal();
+                    this.showToast('Override temporale aggiunto!');
+                    setTimeout(() => this.loadConfigurations(), 500);
+                } catch (err) {
+                    console.error('Errore:', err);
+                    this.showToast('Errore: ' + err.message, true);
+                }
+            });
+        }
+        
+        const modalConditionalForm = this.content.querySelector('#modal-dc-form-conditional');
+        if (modalConditionalForm) {
+            modalConditionalForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const form = e.target;
+                const setupName = this.content.querySelector('#modal-conditional-config-select').value;
+                const setupValue = this.content.querySelector('#modal-conditional-setup-value').value;
+                const conditionalConfig = this.content.querySelector('#modal-conditional-source-config').value;
+                const conditionalOperator = this.content.querySelector('#modal-conditional-operator').value;
+                const conditionalValue = this.content.querySelector('#modal-conditional-comparison-value').value;
+                const priority = this.content.querySelector('#modal-dc-form-conditional input[name="priority"]').value;
+                const enableHours = this.content.querySelector('#modal-conditional-enable-hours').checked;
+                try {
+                    const serviceData = {
+                        setup_name: setupName,
+                        setup_value: setupValue,
+                        conditional_config: conditionalConfig,
+                        conditional_operator: conditionalOperator,
+                        conditional_value: conditionalValue,
+                        priority: parseInt(priority)
+                    };
+                    if (enableHours) {
+                        const fromHour = this.content.querySelector('#modal-conditional-from-hour').value;
+                        const fromMinute = this.content.querySelector('#modal-conditional-from-minute').value;
+                        const toHour = this.content.querySelector('#modal-conditional-to-hour').value;
+                        const toMinute = this.content.querySelector('#modal-conditional-to-minute').value;
+                        serviceData.valid_from_ora = parseFloat(fromHour) + parseFloat(fromMinute) / 60;
+                        serviceData.valid_to_ora = parseFloat(toHour) + parseFloat(toMinute) / 60;
+                    }
+                    await this.callMiaConfigService('set_conditional_config', serviceData);
+                    form.reset();
+                    window.dcCloseAddConfigModal();
+                    this.showToast('Override condizionale aggiunto!');
+                    setTimeout(() => this.loadConfigurations(), 500);
+                } catch (err) {
+                    console.error('Errore:', err);
+                    this.showToast('Errore: ' + err.message, true);
+                }
+            });
+        }
 
-        // Form Schedule
-        this.content.querySelector('#dc-form-schedule').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const formData = new FormData(form);
-            const days = Array.from(this.content.querySelectorAll('#dc-form-schedule input[name="days"]:checked'))
-                .map(cb => parseInt(cb.value));  // Converti a numero
-            
-            // Ottieni valori dai selettori
-            const fromHour = parseInt(this.content.querySelector('#from-hour').value);
-            const fromMinute = parseInt(this.content.querySelector('#from-minute').value);
-            const toHour = parseInt(this.content.querySelector('#to-hour').value);
-            const toMinute = parseInt(this.content.querySelector('#to-minute').value);
-            
-            const validFromOra = this.timeSelectorsToDecimal(fromHour, fromMinute);
-            const validToOra = this.timeSelectorsToDecimal(toHour, toMinute);
-            
-            try {
-                await this.callMiaConfigService('set_schedule_config', {
-                    setup_name: formData.get('setup_name'),
-                    setup_value: formData.get('setup_value'),
-                    valid_from_ora: validFromOra,
-                    valid_to_ora: validToOra,
-                    days_of_week: days,
-                    priority: parseInt(formData.get('priority'))
-                });
-                form.reset();
-                // Reset selettori a valori di default
-                this.content.querySelector('#from-hour').value = '0';
-                this.content.querySelector('#from-minute').value = '0';
-                this.content.querySelector('#to-hour').value = '23';
-                this.content.querySelector('#to-minute').value = '59';
-                this.content.querySelectorAll('#dc-form-schedule input[name="days"]').forEach(cb => cb.checked = true);
-                this.showToast('Configurazione salvata!');
-                setTimeout(() => this.loadConfigurations(), 500);
-            } catch (err) {
-                console.error('Errore salvataggio:', err);
-                this.showToast('Errore: ' + err.message, true);
-            }
-        });
+        // Toggle per filtri opzionali nel modal Time
+        const modalTimeHoursToggle = this.content.querySelector('#modal-time-enable-hours');
+        const modalTimeHoursContainer = this.content.querySelector('#modal-time-hours-container');
+        if (modalTimeHoursToggle && modalTimeHoursContainer) {
+            modalTimeHoursToggle.addEventListener('change', (e) => {
+                modalTimeHoursContainer.style.display = e.target.checked ? 'block' : 'none';
+            });
+        }
+        const modalTimeDaysToggle = this.content.querySelector('#modal-time-enable-days');
+        const modalTimeDaysContainer = this.content.querySelector('#modal-time-days-container');
+        if (modalTimeDaysToggle && modalTimeDaysContainer) {
+            modalTimeDaysToggle.addEventListener('change', (e) => {
+                modalTimeDaysContainer.style.display = e.target.checked ? 'block' : 'none';
+            });
+        }
 
-        // Form Time
-        this.content.querySelector('#dc-form-time').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const formData = new FormData(form);
-            const formatDateTime = (dt) => dt.replace('T', ' ') + ':00';
-            
-            try {
-                const serviceData = {
-                    setup_name: formData.get('setup_name'),
-                    setup_value: formData.get('setup_value'),
-                    valid_from: formatDateTime(formData.get('valid_from')),
-                    valid_to: formatDateTime(formData.get('valid_to')),
-                    priority: parseInt(formData.get('priority'))
-                };
-                
-                // Aggiungi filtro orario se abilitato
-                const enableHours = this.content.querySelector('#time-enable-hours').checked;
-                if (enableHours) {
-                    const fromHour = parseInt(this.content.querySelector('#time-from-hour').value);
-                    const fromMinute = parseInt(this.content.querySelector('#time-from-minute').value);
-                    const toHour = parseInt(this.content.querySelector('#time-to-hour').value);
-                    const toMinute = parseInt(this.content.querySelector('#time-to-minute').value);
-                    
-                    serviceData.valid_from_ora = this.timeSelectorsToDecimal(fromHour, fromMinute);
-                    serviceData.valid_to_ora = this.timeSelectorsToDecimal(toHour, toMinute);
+        // Toggle per filtri opzionali nel modal Conditional
+        const modalConditionalHoursToggle = this.content.querySelector('#modal-conditional-enable-hours');
+        const modalConditionalHoursContainer = this.content.querySelector('#modal-conditional-hours-container');
+        if (modalConditionalHoursToggle && modalConditionalHoursContainer) {
+            modalConditionalHoursToggle.addEventListener('change', (e) => {
+                modalConditionalHoursContainer.style.display = e.target.checked ? 'block' : 'none';
+            });
+        }
+        
+        // Update conditional preview on operator change (modal)
+        const modalConditionalOperator = this.content.querySelector('#modal-conditional-operator');
+        if (modalConditionalOperator) {
+            modalConditionalOperator.addEventListener('change', () => {
+                const sourceSelect = this.content.querySelector('#modal-conditional-source-config');
+                const operator = modalConditionalOperator.value;
+                const previewSpan = this.content.querySelector('#modal-conditional-preview');
+                if (sourceSelect && sourceSelect.value && previewSpan) {
+                    previewSpan.textContent = `${sourceSelect.value} ${operator} [valore]`;
                 }
-                
-                // Aggiungi filtro giorni se abilitato
-                const enableDays = this.content.querySelector('#time-enable-days').checked;
-                if (enableDays) {
-                    const days = Array.from(this.content.querySelectorAll('#dc-form-time input[name="time-days"]:checked'))
-                        .map(cb => parseInt(cb.value));
-                    serviceData.days_of_week = days.join(',');
-                }
-                
-                await this.callMiaConfigService('set_time_config', serviceData);
-                form.reset();
-                this.showToast('Configurazione salvata!');
-                setTimeout(() => this.loadConfigurations(), 500);
-            } catch (err) {
-                console.error('Errore salvataggio:', err);
-                this.showToast('Errore: ' + err.message, true);
-            }
-        });
-        
-        // Toggle per filtri opzionali nel form Time
-        this.content.querySelector('#time-enable-hours').addEventListener('change', (e) => {
-            const container = this.content.querySelector('#time-hours-container');
-            container.style.display = e.target.checked ? 'block' : 'none';
-        });
-        
-        this.content.querySelector('#time-enable-days').addEventListener('change', (e) => {
-            const container = this.content.querySelector('#time-days-container');
-            container.style.display = e.target.checked ? 'block' : 'none';
-        });
-        
-        // Toggle per filtri opzionali nel form Conditional
-        this.content.querySelector('#conditional-enable-hours').addEventListener('change', (e) => {
-            const container = this.content.querySelector('#conditional-hours-container');
-            container.style.display = e.target.checked ? 'block' : 'none';
-        });
-        
-        // Form Conditional
-        this.content.querySelector('#dc-form-conditional').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const formData = new FormData(form);
-            
-            try {
-                const serviceData = {
-                    setup_name: formData.get('setup_name'),
-                    setup_value: formData.get('setup_value'),
-                    conditional_config: formData.get('conditional_config'),
-                    conditional_operator: formData.get('conditional_operator'),
-                    conditional_value: formData.get('conditional_value'),
-                    priority: parseInt(formData.get('priority'))
-                };
-                
-                // Aggiungi filtro orario se abilitato
-                const enableHours = this.content.querySelector('#conditional-enable-hours').checked;
-                if (enableHours) {
-                    const fromHour = parseInt(this.content.querySelector('#conditional-from-hour').value);
-                    const fromMinute = parseInt(this.content.querySelector('#conditional-from-minute').value);
-                    const toHour = parseInt(this.content.querySelector('#conditional-to-hour').value);
-                    const toMinute = parseInt(this.content.querySelector('#conditional-to-minute').value);
-                    
-                    serviceData.valid_from_ora = this.timeSelectorsToDecimal(fromHour, fromMinute);
-                    serviceData.valid_to_ora = this.timeSelectorsToDecimal(toHour, toMinute);
-                }
-                
-                await this.callMiaConfigService('set_conditional_config', serviceData);
-                form.reset();
-                // Reset checkbox e contenitori
-                this.content.querySelector('#conditional-enable-hours').checked = false;
-                this.content.querySelector('#conditional-hours-container').style.display = 'none';
-                this.showToast('Override condizionale salvato!');
-                setTimeout(() => this.loadConfigurations(), 500);
-            } catch (err) {
-                console.error('Errore salvataggio:', err);
-                const errorMsg = err?.message || err?.error?.message || JSON.stringify(err);
-                this.showToast('Errore: ' + errorMsg, true);
-            }
-        });
-        
-        // Update conditional preview on operator change
-        this.content.querySelector('#conditional-operator').addEventListener('change', () => {
-            const sourceSelect = this.content.querySelector('#conditional-source-config');
-            const operator = this.content.querySelector('#conditional-operator').value;
-            const previewSpan = this.content.querySelector('#conditional-preview');
-            if (sourceSelect && sourceSelect.value && previewSpan) {
-                previewSpan.textContent = `${sourceSelect.value} ${operator} [valore]`;
-            }
-        });
+            });
+        }
 
         // Switch Tab Function
         window.dcSwitchTab = (tabName, event) => {
@@ -1057,6 +1148,7 @@ class MiaConfigCard extends HTMLElement {
                 
                 if (result.response?.success) {
                     statusDiv.innerHTML = `<p style="color: var(--success-color);">✅ ${result.response.message}</p><p style="color: var(--secondary-text-color); font-size: 12px;">File: ${result.response.backup_file}</p>`;
+                    window.dcRefreshBackupList();
                     setTimeout(() => { statusDiv.innerHTML = ''; }, 5000);
                 } else {
                     statusDiv.innerHTML = `<p style="color: var(--error-color);">❌ ${result.response?.message || 'Errore sconosciuto'}</p>`;
@@ -1126,14 +1218,186 @@ class MiaConfigCard extends HTMLElement {
             }
         };
         
+        const getAuthToken = () => this._hass?.auth?.accessToken || this._hass?.connection?.options?.accessToken || this._hass?.connection?.options?.authToken;
+
+        const humanFileSize = (size) => {
+            if (size === 0) return '0 B';
+            if (!size) return '-';
+            const i = Math.floor(Math.log(size) / Math.log(1024));
+            const value = size / Math.pow(1024, i);
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[i]}`;
+        };
+
+        window.dcRefreshBackupList = async () => {
+            const listDiv = this.content.querySelector('#dc-backup-list');
+            if (!listDiv) return;
+            listDiv.innerHTML = '<p style="margin: 0; color: var(--secondary-text-color);">Caricamento elenco backup...</p>';
+            try {
+                const entityId = this.getSelectedEntityId();
+                const serviceData = entityId ? { entity_id: entityId } : {};
+                const result = await this._hass.callWS({
+                    type: 'call_service',
+                    domain: 'mia_config',
+                    service: 'list_backups',
+                    service_data: serviceData,
+                    return_response: true
+                });
+                const backups = result?.response?.backups || [];
+                if (!backups.length) {
+                    listDiv.innerHTML = '<p style="margin: 0; color: var(--secondary-text-color);">Nessun backup trovato.</p>';
+                    return;
+                }
+                const rows = backups.map((backup) => {
+                    const safeName = backup.file_name.replace(/"/g, '&quot;');
+                    const sizeLabel = humanFileSize(backup.size);
+                    const dateLabel = backup.modified ? new Date(backup.modified).toLocaleString() : '-';
+                    return `
+                        <div style="display: grid; grid-template-columns: 1.5fr 1fr 1fr auto; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--divider-color);">
+                            <div style="overflow: hidden; text-overflow: ellipsis;">${safeName}</div>
+                            <div style="color: var(--secondary-text-color);">${dateLabel}</div>
+                            <div style="color: var(--secondary-text-color);">${sizeLabel}</div>
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;">
+                                <button class="dc-btn" onclick="window.dcDownloadBackup(\"${safeName}\")" style="padding: 6px 10px;">⬇️ Scarica</button>
+                                <button class="dc-btn-secondary" onclick="window.dcPrefillRestorePath(\"${backup.path.replace(/"/g, '&quot;')}\")" style="padding: 6px 10px;">📥 Usa per restore</button>
+                                <button class="dc-btn-secondary" onclick="window.dcDeleteBackup(\"${safeName}\")" style="padding: 6px 10px;">🗑️ Elimina</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                listDiv.innerHTML = rows;
+            } catch (err) {
+                console.error('Errore durante la lettura dei backup:', err);
+                listDiv.innerHTML = `<p style="color: var(--error-color);">Errore: ${err.message || err}</p>`;
+            }
+        };
+
+        window.dcDownloadBackup = async (fileName) => {
+            const statusDiv = this.content.querySelector('#dc-backup-status');
+            const token = getAuthToken();
+            try {
+                statusDiv.innerHTML = '<p style="color: var(--info-color);">⬇️ Download backup...</p>';
+                const url = this._hass.hassUrl(`/api/mia_config/backups/${encodeURIComponent(fileName)}`);
+                const resp = await fetch(url, {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {}
+                });
+                if (!resp.ok) {
+                    throw new Error(`Download fallito (${resp.status})`);
+                }
+                const blob = await resp.blob();
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(link.href), 1500);
+                statusDiv.innerHTML = '';
+            } catch (err) {
+                console.error('Errore download backup:', err);
+                statusDiv.innerHTML = `<p style="color: var(--error-color);">❌ ${err.message || 'Errore download'}</p>`;
+            }
+        };
+
+        window.dcUploadBackup = async () => {
+            const input = this.content.querySelector('#dc-backup-upload-input');
+            const statusDiv = this.content.querySelector('#dc-backup-status');
+            if (!input || !input.files || !input.files.length) {
+                alert('Seleziona un file di backup (.db) da caricare');
+                return;
+            }
+            const token = getAuthToken();
+            const formData = new FormData();
+            formData.append('file', input.files[0]);
+            statusDiv.innerHTML = '<p style="color: var(--info-color);">⬆️ Caricamento backup...</p>';
+            try {
+                const resp = await fetch(this._hass.hassUrl('/api/mia_config/backups/upload'), {
+                    method: 'POST',
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                    body: formData
+                });
+                const data = await resp.json();
+                if (!resp.ok || !data.success) {
+                    throw new Error(data?.message || 'Upload fallito');
+                }
+                statusDiv.innerHTML = `<p style="color: var(--success-color);">✅ ${data.message} (${data.file_name})</p>`;
+                input.value = '';
+                window.dcRefreshBackupList();
+            } catch (err) {
+                console.error('Errore upload backup:', err);
+                statusDiv.innerHTML = `<p style="color: var(--error-color);">❌ ${err.message || 'Errore upload'}</p>`;
+            }
+        };
+
+        window.dcDeleteBackup = async (fileName) => {
+            if (!confirm(`Eliminare il backup "${fileName}"?`)) return;
+            const statusDiv = this.content.querySelector('#dc-backup-status');
+            statusDiv.innerHTML = '<p style="color: var(--info-color);">🗑️ Eliminazione backup...</p>';
+            try {
+                const entityId = this.getSelectedEntityId();
+                const serviceData = { file_name: fileName };
+                if (entityId) serviceData.entity_id = entityId;
+                const result = await this._hass.callWS({
+                    type: 'call_service',
+                    domain: 'mia_config',
+                    service: 'delete_backup',
+                    service_data: serviceData,
+                    return_response: true
+                });
+                if (result.response?.success) {
+                    statusDiv.innerHTML = `<p style="color: var(--success-color);">✅ ${result.response.message}</p>`;
+                } else {
+                    statusDiv.innerHTML = `<p style="color: var(--error-color);">❌ ${result.response?.message || 'Errore eliminazione'}</p>`;
+                }
+                window.dcRefreshBackupList();
+            } catch (err) {
+                console.error('Errore eliminazione backup:', err);
+                statusDiv.innerHTML = `<p style="color: var(--error-color);">❌ ${err.message || 'Errore eliminazione'}</p>`;
+            }
+        };
+
+        window.dcDeleteAllBackups = async () => {
+            if (!confirm('Eliminare tutti i backup locali?')) return;
+            const statusDiv = this.content.querySelector('#dc-backup-status');
+            statusDiv.innerHTML = '<p style="color: var(--info-color);">🗑️ Eliminazione di tutti i backup...</p>';
+            try {
+                const entityId = this.getSelectedEntityId();
+                const serviceData = entityId ? { entity_id: entityId } : {};
+                const result = await this._hass.callWS({
+                    type: 'call_service',
+                    domain: 'mia_config',
+                    service: 'delete_all_backups',
+                    service_data: serviceData,
+                    return_response: true
+                });
+                if (result.response?.success) {
+                    statusDiv.innerHTML = `<p style="color: var(--success-color);">✅ ${result.response.message}</p>`;
+                } else {
+                    statusDiv.innerHTML = `<p style="color: var(--error-color);">❌ ${result.response?.message || 'Errore eliminazione'}</p>`;
+                }
+                window.dcRefreshBackupList();
+            } catch (err) {
+                console.error('Errore eliminazione backup:', err);
+                statusDiv.innerHTML = `<p style="color: var(--error-color);">❌ ${err.message || 'Errore eliminazione'}</p>`;
+            }
+        };
+
+        window.dcPrefillRestorePath = (path) => {
+            const input = this.content.querySelector('#restore-backup-path');
+            if (input) {
+                input.value = path;
+                window.dcShowRestoreForm();
+            }
+        };
+
         window.dcLoadValidValuesForForm = async (formType) => {
             await this.dcLoadValidValuesForForm(formType);
         };
         
         window.dcUpdateConditionalOptions = async () => {
-            const sourceSelect = this.content.querySelector('#conditional-source-config');
-            const comparisonContainer = this.content.querySelector('#conditional-comparison-container');
-            const previewSpan = this.content.querySelector('#conditional-preview');
+            const sourceSelect = this.content.querySelector('#modal-conditional-source-config');
+            const comparisonContainer = this.content.querySelector('#modal-conditional-comparison-container');
+            const previewSpan = this.content.querySelector('#modal-conditional-preview');
             
             if (!sourceSelect || !sourceSelect.value) return;
             
@@ -1202,16 +1466,17 @@ class MiaConfigCard extends HTMLElement {
             
             // Attendi che il tab si carichi
             setTimeout(() => {
-                // Seleziona tipo "Override Temporale"
-                const typeSelector = this.content.querySelector('#config-type-selector');
+                // Apri modal e seleziona tipo "Override Temporale"
+                window.dcOpenAddConfigModal();
+                const typeSelector = this.content.querySelector('#modal-config-type-selector');
                 if (typeSelector) {
                     typeSelector.value = 'time';
-                    window.dcShowConfigForm('time');
+                    window.dcShowModalConfigForm('time');
                 }
                 
                 // Precompila il nome configurazione nel select dopo un momento
                 setTimeout(() => {
-                    const timeSelect = this.content.querySelector('#time-config-select');
+                    const timeSelect = this.content.querySelector('#modal-time-config-select');
                     if (timeSelect) {
                         timeSelect.value = setupName;
                         // Carica i valori validi per il campo valore
@@ -1219,7 +1484,7 @@ class MiaConfigCard extends HTMLElement {
                     }
                     
                     // Scroll al form
-                    const formContainer = this.content.querySelector('#dc-form-container-time');
+                    const formContainer = this.content.querySelector('#modal-form-container-time');
                     if (formContainer) {
                         formContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }
@@ -1246,6 +1511,11 @@ class MiaConfigCard extends HTMLElement {
             }, 100);
         };
         
+        // Precarica elenco backup se la sezione è presente
+        if (typeof window.dcRefreshBackupList === 'function') {
+            window.dcRefreshBackupList();
+        }
+
         // Carica dashboard iniziale se _hass è disponibile
         if (this._hass) {
             this.loadDashboard();
@@ -1285,10 +1555,10 @@ class MiaConfigCard extends HTMLElement {
             }
             console.log('Configurazioni standard trovate:', standardConfigs);
             
-            const scheduleSelect = this.content.querySelector('#schedule-config-select');
-            const timeSelect = this.content.querySelector('#time-config-select');
-            const conditionalSelect = this.content.querySelector('#conditional-config-select');
-            const conditionalSourceSelect = this.content.querySelector('#conditional-source-config');
+            const scheduleSelect = this.content.querySelector('#modal-schedule-config-select');
+            const timeSelect = this.content.querySelector('#modal-time-config-select');
+            const conditionalSelect = this.content.querySelector('#modal-conditional-config-select');
+            const conditionalSourceSelect = this.content.querySelector('#modal-conditional-source-config');
             
             if (standardConfigs.length === 0) {
                 const noConfigOption = '<option value="">-- Nessuna configurazione standard disponibile --</option>';
@@ -2280,6 +2550,43 @@ class MiaConfigCard extends HTMLElement {
             });
         };
         
+        // Funzioni per modal di inserimento configurazione
+        window.dcOpenAddConfigModal = () => {
+            const modal = this.content.querySelector('#dc-add-config-modal');
+            modal.classList.add('active');
+            // Carica le configurazioni standard per i select
+            this.loadStandardConfigsForSelect();
+            // Reimposta il form
+            const typeSelector = this.content.querySelector('#modal-config-type-selector');
+            if (typeSelector) {
+                typeSelector.value = 'time';
+                window.dcShowModalConfigForm('time');
+            }
+        };
+        
+        window.dcCloseAddConfigModal = () => {
+            const modal = this.content.querySelector('#dc-add-config-modal');
+            modal.classList.remove('active');
+        };
+        
+        window.dcShowModalConfigForm = (formType) => {
+            // Nascondi tutti i form
+            this.content.querySelectorAll('[id^="modal-form-container-"]').forEach(container => {
+                container.style.display = 'none';
+            });
+            
+            // Mostra il form selezionato
+            const container = this.content.querySelector(`#modal-form-container-${formType}`);
+            if (container) {
+                container.style.display = 'block';
+                
+                // Carica le configurazioni standard per i select
+                if (formType === 'schedule' || formType === 'time' || formType === 'conditional') {
+                    this.loadStandardConfigsForSelect();
+                }
+            }
+        };
+        
         window.dcCloseEditModal = () => {
             const modal = this.content.querySelector('#dc-edit-modal');
             modal.classList.remove('active');
@@ -2338,9 +2645,12 @@ class MiaConfigCard extends HTMLElement {
                 
                 for (const entry of history) {
                     const opColor = entry.operation === 'DELETE' ? '#f44336' : 
-                                   entry.operation === 'UPDATE' ? '#ff9800' : '#4caf50';
+                                   entry.operation === 'UPDATE' ? '#ff9800' : 
+                                   entry.operation === 'DISABLE' ? '#d32f2f' : 
+                                   entry.operation === 'ENABLE' ? '#2e7d32' : '#4caf50';
                     const typeLabel = entry.config_type === 'time' ? '⏰ Tempo' :
-                                     entry.config_type === 'schedule' ? '📅 Orario' : '⚙️ Standard';
+                                     entry.config_type === 'schedule' ? '📅 Orario' :
+                                     entry.config_type === 'conditional' ? '🎯 Condizionale' : '⚙️ Standard';
                     
                     let details = entry.setup_value || '-';
                     if (entry.config_type === 'schedule' && entry.valid_from_ora != null) {
@@ -2351,6 +2661,8 @@ class MiaConfigCard extends HTMLElement {
                         details += ` (${entry.valid_from_date} - ${entry.valid_to_date})`;
                     } else if (entry.config_type === 'standard' && entry.priority) {
                         details += ` (P:${entry.priority})`;
+                    } else if (entry.config_type === 'conditional' && entry.conditional_config) {
+                        details += ` (${entry.conditional_config} ${entry.conditional_operator || ''} ${entry.conditional_value || ''})`;
                     }
                     
                     html += `<tr style="border-bottom: 1px solid var(--divider-color);">`;
@@ -2512,9 +2824,9 @@ class MiaConfigCard extends HTMLElement {
         
         // Carica valori validi per i form override e cambia input in select se necessario
         window.dcLoadValidValuesForForm = async (formType) => {
-            const selectId = formType === 'schedule' ? '#schedule-config-select' : (formType === 'time' ? '#time-config-select' : '#conditional-config-select');
-            const containerId = formType === 'schedule' ? '#schedule-value-container' : (formType === 'time' ? '#time-value-container' : '#conditional-value-container');
-            const inputId = formType === 'schedule' ? '#schedule-setup-value' : (formType === 'time' ? '#time-setup-value' : '#conditional-setup-value');
+            const selectId = formType === 'schedule' ? '#modal-schedule-config-select' : (formType === 'time' ? '#modal-time-config-select' : '#modal-conditional-config-select');
+            const containerId = formType === 'schedule' ? '#modal-schedule-value-container' : (formType === 'time' ? '#modal-time-value-container' : '#modal-conditional-value-container');
+            const inputId = formType === 'schedule' ? '#modal-schedule-setup-value' : (formType === 'time' ? '#modal-time-setup-value' : '#modal-conditional-setup-value');
             
             const configSelect = this.content.querySelector(selectId);
             const container = this.content.querySelector(containerId);
@@ -2789,19 +3101,24 @@ class MiaConfigCard extends HTMLElement {
         let html = '';
         
         for (const [groupKey, group] of sortedGroups) {
+            const safeKey = groupKey.replace(/[^a-zA-Z0-9_-]/g, '_');
             const templateData = encodeURIComponent(JSON.stringify({
                 type: group.type,
                 cfg: group.configs[0].cfg,
                 name: group.configs[0].name
             }));
             html += `<div class="dc-config-group">`;
-            html += `<div class="dc-config-group-header">`;
-            html += `<span class="dc-config-group-title">${group.title}</span>`;
+            html += `<div class="dc-config-group-header" onclick="window.dcToggleOverrideGroup('${safeKey}')">`;
+            html += `<div class="dc-config-group-title">`;
+            html += `<span class="dc-config-group-toggle" id="${safeKey}-toggle">▼</span>`;
+            html += `<span>${group.title}</span>`;
+            html += `</div>`;
             if (group.type !== 'standard') {
                 // Pulsante per inserire un nuovo override con le stesse condizioni
-                html += `<button class="dc-btn" onclick="window.dcInsertOverrideGroup('${group.type}', '${templateData}')">Inserisci</button>`;
+                html += `<button class="dc-btn" onclick="event.stopPropagation(); window.dcInsertOverrideGroup('${group.type}', '${templateData}')">Inserisci</button>`;
             }
             html += `</div>`;
+            html += `<div class="dc-config-group-content" id="${safeKey}-content">`;
             
             // Lista configurazioni nel gruppo
             for (const item of group.configs) {
@@ -2839,6 +3156,7 @@ class MiaConfigCard extends HTMLElement {
             }
             
             html += `</div>`;
+            html += `</div>`;
         }
         
         container.innerHTML = html;
@@ -2852,14 +3170,17 @@ class MiaConfigCard extends HTMLElement {
             if (configTab) {
                 configTab.click();
             }
+
+            // Apri il modal e seleziona il form corretto
+            window.dcOpenAddConfigModal();
+            const selector = this.content.querySelector('#modal-config-type-selector');
+            if (selector) {
+                selector.value = groupType;
+                window.dcShowModalConfigForm(groupType);
+            }
             
             setTimeout(async () => {
-                const selector = this.content.querySelector('#config-type-selector');
-                if (!selector) return;
-                selector.value = groupType;
-                window.dcShowConfigForm(groupType);
-                
-                const configSelect = this.content.querySelector(groupType === 'schedule' ? '#schedule-config-select' : groupType === 'time' ? '#time-config-select' : '#conditional-config-select');
+                const configSelect = this.content.querySelector(groupType === 'schedule' ? '#modal-schedule-config-select' : groupType === 'time' ? '#modal-time-config-select' : '#modal-conditional-config-select');
                 if (configSelect) {
                     configSelect.value = name;
                 }
@@ -2873,47 +3194,43 @@ class MiaConfigCard extends HTMLElement {
                 await new Promise(resolve => setTimeout(resolve, 100));
                 
                 if (groupType === 'schedule') {
-                    // Pre-popola valore override
-                    const valueInput = this.content.querySelector('#schedule-config-value');
+                    const valueInput = this.content.querySelector('#modal-schedule-setup-value');
                     if (valueInput && cfg.value !== undefined) {
                         valueInput.value = cfg.value;
                     }
                     
-                    // Pre-popola fascia oraria e giorni
                     const fromHour = Math.floor(cfg.valid_from_ora || 0);
                     const fromMinute = Math.round(((cfg.valid_from_ora || 0) - fromHour) * 60);
                     const toHour = Math.floor(cfg.valid_to_ora || 0);
                     const toMinute = Math.round(((cfg.valid_to_ora || 0) - toHour) * 60);
                     const days = Array.isArray(cfg.days_of_week) ? cfg.days_of_week : (typeof cfg.days_of_week === 'string' ? cfg.days_of_week.split(',').map(d => parseInt(d)).filter(n => !Number.isNaN(n)) : [0,1,2,3,4,5,6]);
-                    const daysCheckboxes = this.content.querySelectorAll('#dc-form-schedule input[name="days"]');
+                    const daysCheckboxes = this.content.querySelectorAll('#modal-dc-form-schedule input[name="days"]');
                     if (daysCheckboxes.length) {
                         daysCheckboxes.forEach(cb => cb.checked = days.includes(parseInt(cb.value)));
                     }
-                    const fromHourSel = this.content.querySelector('#from-hour');
-                    const fromMinuteSel = this.content.querySelector('#from-minute');
-                    const toHourSel = this.content.querySelector('#to-hour');
-                    const toMinuteSel = this.content.querySelector('#to-minute');
+                    const fromHourSel = this.content.querySelector('#modal-from-hour');
+                    const fromMinuteSel = this.content.querySelector('#modal-from-minute');
+                    const toHourSel = this.content.querySelector('#modal-to-hour');
+                    const toMinuteSel = this.content.querySelector('#modal-to-minute');
                     if (fromHourSel) fromHourSel.value = fromHour;
                     if (fromMinuteSel) fromMinuteSel.value = fromMinute;
                     if (toHourSel) toHourSel.value = toHour;
                     if (toMinuteSel) toMinuteSel.value = toMinute;
                 } else if (groupType === 'time') {
-                    // Pre-popola valore override
-                    const valueInput = this.content.querySelector('#time-config-value');
+                    const valueInput = this.content.querySelector('#modal-time-setup-value');
                     if (valueInput && cfg.value !== undefined) {
                         valueInput.value = cfg.value;
                     }
                     
-                    // Pre-popola periodo temporale
                     const formatForInput = (dt) => typeof dt === 'string' ? dt.replace(' ', 'T').substring(0, 16) : '';
-                    const validFromInput = this.content.querySelector('#dc-form-time input[name="valid_from"]');
-                    const validToInput = this.content.querySelector('#dc-form-time input[name="valid_to"]');
+                    const validFromInput = this.content.querySelector('#modal-dc-form-time input[name="valid_from"]');
+                    const validToInput = this.content.querySelector('#modal-dc-form-time input[name="valid_to"]');
                     if (validFromInput && cfg.valid_from_date) validFromInput.value = formatForInput(cfg.valid_from_date);
                     if (validToInput && cfg.valid_to_date) validToInput.value = formatForInput(cfg.valid_to_date);
                     
                     const hasTimeFilter = cfg.valid_from_ora !== undefined && cfg.valid_to_ora !== undefined;
-                    const timeToggle = this.content.querySelector('#time-enable-hours');
-                    const timeContainer = this.content.querySelector('#time-hours-container');
+                    const timeToggle = this.content.querySelector('#modal-time-enable-hours');
+                    const timeContainer = this.content.querySelector('#modal-time-hours-container');
                     if (timeToggle && timeContainer) {
                         timeToggle.checked = hasTimeFilter;
                         timeContainer.style.display = hasTimeFilter ? 'block' : 'none';
@@ -2923,51 +3240,47 @@ class MiaConfigCard extends HTMLElement {
                         const fromMinute = Math.round((cfg.valid_from_ora - fromHour) * 60);
                         const toHour = Math.floor(cfg.valid_to_ora);
                         const toMinute = Math.round((cfg.valid_to_ora - toHour) * 60);
-                        const fromHourSel = this.content.querySelector('#time-from-hour');
-                        const fromMinuteSel = this.content.querySelector('#time-from-minute');
-                        const toHourSel = this.content.querySelector('#time-to-hour');
-                        const toMinuteSel = this.content.querySelector('#time-to-minute');
+                        const fromHourSel = this.content.querySelector('#modal-time-from-hour');
+                        const fromMinuteSel = this.content.querySelector('#modal-time-from-minute');
+                        const toHourSel = this.content.querySelector('#modal-time-to-hour');
+                        const toMinuteSel = this.content.querySelector('#modal-time-to-minute');
                         if (fromHourSel) fromHourSel.value = fromHour;
                         if (fromMinuteSel) fromMinuteSel.value = fromMinute;
                         if (toHourSel) toHourSel.value = toHour;
                         if (toMinuteSel) toMinuteSel.value = toMinute;
                     }
                     const hasDays = cfg.days_of_week !== undefined && cfg.days_of_week !== null;
-                    const dayToggle = this.content.querySelector('#time-enable-days');
-                    const dayContainer = this.content.querySelector('#time-days-container');
+                    const dayToggle = this.content.querySelector('#modal-time-enable-days');
+                    const dayContainer = this.content.querySelector('#modal-time-days-container');
                     if (dayToggle && dayContainer) {
                         dayToggle.checked = hasDays;
                         dayContainer.style.display = hasDays ? 'block' : 'none';
                     }
                     if (hasDays) {
                         const days = Array.isArray(cfg.days_of_week) ? cfg.days_of_week : (typeof cfg.days_of_week === 'string' ? cfg.days_of_week.split(',').map(d => parseInt(d)).filter(n => !Number.isNaN(n)) : []);
-                        this.content.querySelectorAll('#dc-form-time input[name="time-days"]').forEach(cb => {
+                        this.content.querySelectorAll('#modal-dc-form-time input[name="time-days"]').forEach(cb => {
                             cb.checked = days.includes(parseInt(cb.value));
                         });
                     }
                 } else if (groupType === 'conditional') {
-                    // Pre-popola valore override
-                    const valueInput = this.content.querySelector('#conditional-config-value');
+                    const valueInput = this.content.querySelector('#modal-conditional-setup-value');
                     if (valueInput && cfg.value !== undefined) {
                         valueInput.value = cfg.value;
                     }
                     
-                    // Pre-popola configurazione sorgente
-                    const sourceSelect = this.content.querySelector('#conditional-source-config');
+                    const sourceSelect = this.content.querySelector('#modal-conditional-source-config');
                     if (sourceSelect && cfg.conditional_config) {
                         sourceSelect.value = cfg.conditional_config;
                     }
                     
-                    // Pre-popola operatore
-                    const operatorSelect = this.content.querySelector('#conditional-operator');
+                    const operatorSelect = this.content.querySelector('#modal-conditional-operator');
                     if (operatorSelect && cfg.conditional_operator) {
                         operatorSelect.value = cfg.conditional_operator;
                     }
                     
-                    // Pre-attiva e pre-popola fascia oraria se presente
                     const enableHours = cfg.valid_from_ora !== undefined && cfg.valid_to_ora !== undefined;
-                    const hoursToggle = this.content.querySelector('#conditional-enable-hours');
-                    const hoursContainer = this.content.querySelector('#conditional-hours-container');
+                    const hoursToggle = this.content.querySelector('#modal-conditional-enable-hours');
+                    const hoursContainer = this.content.querySelector('#modal-conditional-hours-container');
                     if (hoursToggle && hoursContainer) {
                         hoursToggle.checked = enableHours;
                         hoursContainer.style.display = enableHours ? 'block' : 'none';
@@ -2977,35 +3290,40 @@ class MiaConfigCard extends HTMLElement {
                         const fromMinute = Math.round((cfg.valid_from_ora - fromHour) * 60);
                         const toHour = Math.floor(cfg.valid_to_ora);
                         const toMinute = Math.round((cfg.valid_to_ora - toHour) * 60);
-                        const fromHourSel = this.content.querySelector('#conditional-from-hour');
-                        const fromMinuteSel = this.content.querySelector('#conditional-from-minute');
-                        const toHourSel = this.content.querySelector('#conditional-to-hour');
-                        const toMinuteSel = this.content.querySelector('#conditional-to-minute');
+                        const fromHourSel = this.content.querySelector('#modal-conditional-from-hour');
+                        const fromMinuteSel = this.content.querySelector('#modal-conditional-from-minute');
+                        const toHourSel = this.content.querySelector('#modal-conditional-to-hour');
+                        const toMinuteSel = this.content.querySelector('#modal-conditional-to-minute');
                         if (fromHourSel) fromHourSel.value = fromHour;
                         if (fromMinuteSel) fromMinuteSel.value = fromMinute;
                         if (toHourSel) toHourSel.value = toHour;
                         if (toMinuteSel) toMinuteSel.value = toMinute;
                     }
                     
-                    // Aggiorna le opzioni e aspetta il completamento
                     if (typeof window.dcUpdateConditionalOptions === 'function') {
                         await window.dcUpdateConditionalOptions();
-                        // Attendi che il DOM si aggiorni
                         await new Promise(resolve => setTimeout(resolve, 100));
-                        
-                        // Ora imposta il valore di confronto
-                        const comparisonInput = this.content.querySelector('#conditional-comparison-value');
+                        const comparisonInput = this.content.querySelector('#modal-conditional-comparison-value');
                         if (comparisonInput && cfg.conditional_value !== undefined) {
                             comparisonInput.value = cfg.conditional_value;
                         }
                     }
                 }
                 
-                const targetForm = this.content.querySelector(`#dc-form-container-${groupType}`);
+                const targetForm = this.content.querySelector(`#modal-form-container-${groupType}`);
                 if (targetForm) {
                     targetForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
             }, 200);
+        };
+
+        window.dcToggleOverrideGroup = (safeKey) => {
+            const content = this.content.querySelector(`#${safeKey}-content`);
+            const toggle = this.content.querySelector(`#${safeKey}-toggle`);
+            if (!content || !toggle) return;
+            const isOpen = content.style.display !== 'none';
+            content.style.display = isOpen ? 'none' : 'block';
+            toggle.textContent = isOpen ? '▶' : '▼';
         };
     }
 
@@ -3277,23 +3595,20 @@ class MiaConfigCard extends HTMLElement {
             
             container.innerHTML = html;
             
-            // Gestione dinamica posizione tooltip
+            // Gestione dinamica posizione tooltip (evita errori se il nodo viene smontato)
             setTimeout(() => {
+                if (!container.isConnected) return;
                 const bars = container.querySelectorAll('.dc-weekly-tooltip');
                 bars.forEach(bar => {
-                    bar.addEventListener('mouseenter', function(e) {
+                    bar.addEventListener('mouseenter', function() {
+                        if (!document.body.contains(this)) return;
                         const rect = this.getBoundingClientRect();
-                        const parent = this.closest('.dc-weekly-day-content');
-                        const parentRect = parent ? parent.getBoundingClientRect() : null;
                         
                         // Ottieni indice colonna e totale colonne
                         const dayIndex = parseInt(this.getAttribute('data-day-index')) || 0;
                         const totalDays = parseInt(this.getAttribute('data-total-days')) || 1;
                         
                         // STEP 1: Allineamento orizzontale (sempre applicato)
-                        // Prima colonna: allinea a sinistra per evitare taglio
-                        // Ultima colonna: allinea a destra per evitare taglio
-                        // Altre colonne: centrato (default)
                         this.classList.remove('tooltip-left', 'tooltip-right');
                         if (dayIndex === 0) {
                             this.classList.add('tooltip-left');
@@ -3302,19 +3617,14 @@ class MiaConfigCard extends HTMLElement {
                         }
                         
                         // STEP 2: Allineamento verticale (sopra o sotto)
-                        // Ottieni la posizione top e height della barra
                         const barTopPx = parseFloat(this.style.top) || 0;
                         const barHeight = parseFloat(this.style.height) || 0;
                         
-                        // Se la barra occupa tutto il giorno (1440px = 24 ore), mostra SEMPRE sopra
-                        // per evitare che il tooltip vada fuori schermo in basso
                         if (barHeight >= 1430) {
                             this.classList.remove('tooltip-below');
                         } else if (barTopPx < 200) {
-                            // Se la barra inizia nei primi 200px del giorno (circa 3 ore), mostra sotto
                             this.classList.add('tooltip-below');
                         } else {
-                            // Altrimenti usa logica basata su spazio disponibile nel viewport
                             const viewportHeight = window.innerHeight;
                             const tooltipHeight = 200; // Altezza stimata del tooltip + margine
                             const headerHeight = 100; // Spazio per header Home Assistant
@@ -3322,7 +3632,6 @@ class MiaConfigCard extends HTMLElement {
                             const spaceAbove = rect.top - headerHeight;
                             const spaceBelow = viewportHeight - rect.bottom;
                             
-                            // Mostra sotto se non c'è abbastanza spazio sopra E c'è più spazio sotto che sopra
                             if (spaceAbove < tooltipHeight && spaceBelow > spaceAbove) {
                                 this.classList.add('tooltip-below');
                             } else {

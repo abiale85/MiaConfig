@@ -5,6 +5,8 @@ import logging
 import os
 import shutil
 from datetime import datetime, timedelta
+from pathlib import Path
+from aiohttp import web
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
 from homeassistant.helpers.typing import ConfigType
@@ -12,6 +14,7 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.exceptions import ConfigEntryNotReady
 import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
+from homeassistant.components.http import HomeAssistantView
 
 from .const import (
     DOMAIN,
@@ -792,34 +795,37 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         DOMAIN, "simulate_schedule", handle_simulate_schedule, schema=simulate_schedule_schema, supports_response=SupportsResponse.OPTIONAL
     )
     
+    def get_backup_dir() -> Path:
+        """Cartella di lavoro per i backup."""
+        return Path(hass.config.path()) / "backups" / "mia_config"
+
     # Servizi per backup e restore
     async def handle_backup_database(call: ServiceCall) -> ServiceResponse:
         """Effettua il backup del database."""
         entity_id = call.data.get("entity_id")
         db = get_db_from_entity_id(hass, entity_id)
         
-        # Crea una cartella backup se non esiste
-        backup_dir = os.path.join(hass.config.path(), "backups", "mia_config")
-        os.makedirs(backup_dir, exist_ok=True)
+        backup_dir = get_backup_dir()
+        backup_dir.mkdir(parents=True, exist_ok=True)
         
         # Crea il nome del file di backup con timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_file = os.path.join(backup_dir, f"mia_config_backup_{timestamp}.db")
+        backup_file = backup_dir / f"mia_config_backup_{timestamp}.db"
         
         try:
             # Copia il database
             await hass.async_add_executor_job(
-                shutil.copy2, db.db_path, backup_file
+                shutil.copy2, db.db_path, str(backup_file)
             )
-            _LOGGER.info(f"Backup del database creato: {backup_file}")
+            _LOGGER.info("Backup del database creato: %s", backup_file)
             return {
                 "success": True,
-                "backup_file": backup_file,
+                "backup_file": str(backup_file),
                 "timestamp": timestamp,
-                "message": f"Backup creato con successo: {os.path.basename(backup_file)}"
+                "message": f"Backup creato con successo: {backup_file.name}"
             }
         except Exception as e:
-            _LOGGER.error(f"Errore durante il backup: {e}")
+            _LOGGER.error("Errore durante il backup: %s", e)
             return {
                 "success": False,
                 "message": f"Errore durante il backup: {str(e)}"
@@ -860,7 +866,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             # Riapri la connessione
             db.conn = db._open_database()
             
-            _LOGGER.info(f"Database ripristinato da: {backup_file}")
+            _LOGGER.info("Database ripristinato da: %s", backup_file)
             return {
                 "success": True,
                 "message": f"Database ripristinato con successo",
@@ -877,6 +883,150 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 "success": False,
                 "message": f"Errore durante il ripristino: {str(e)}"
             }
+
+    async def handle_list_backups(call: ServiceCall) -> ServiceResponse:
+        """Restituisce l'elenco dei backup disponibili."""
+        backup_dir = get_backup_dir()
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            backups = []
+            for file_path in sorted(backup_dir.glob("*.db"), reverse=True):
+                try:
+                    stat_info = file_path.stat()
+                    backups.append({
+                        "file_name": file_path.name,
+                        "path": str(file_path),
+                        "size": stat_info.st_size,
+                        "modified": datetime.fromtimestamp(stat_info.st_mtime).isoformat(),
+                        "download_url": f"/api/mia_config/backups/{file_path.name}"
+                    })
+                except OSError as err:
+                    _LOGGER.warning("Impossibile leggere metadati per %s: %s", file_path, err)
+            return {"success": True, "backups": backups}
+        except Exception as err:
+            _LOGGER.error("Errore durante la lettura dei backup: %s", err)
+            return {"success": False, "message": f"Errore durante la lettura dei backup: {err}"}
+
+    async def handle_delete_backup(call: ServiceCall) -> ServiceResponse:
+        """Elimina un singolo file di backup."""
+        file_name = call.data.get("file_name")
+        backup_dir = get_backup_dir()
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            target = (backup_dir / os.path.basename(file_name)).resolve()
+            backup_dir_resolved = backup_dir.resolve()
+            try:
+                if not target.is_relative_to(backup_dir_resolved):
+                    return {"success": False, "message": "Percorso non valido"}
+            except Exception:
+                if backup_dir_resolved not in target.parents:
+                    return {"success": False, "message": "Percorso non valido"}
+            if not target.exists():
+                return {"success": False, "message": "Backup non trovato"}
+            await hass.async_add_executor_job(target.unlink)
+            return {"success": True, "message": f"Backup rimosso: {target.name}"}
+        except Exception as err:
+            _LOGGER.error("Errore durante l'eliminazione del backup %s: %s", file_name, err)
+            return {"success": False, "message": f"Errore durante l'eliminazione: {err}"}
+
+    async def handle_delete_all_backups(call: ServiceCall) -> ServiceResponse:
+        """Elimina tutti i backup locali."""
+        backup_dir = get_backup_dir()
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        deleted = 0
+        errors = 0
+        for file_path in backup_dir.glob("*.db"):
+            try:
+                await hass.async_add_executor_job(file_path.unlink)
+                deleted += 1
+            except Exception as err:
+                errors += 1
+                _LOGGER.error("Errore durante l'eliminazione di %s: %s", file_path, err)
+        message = f"Eliminati {deleted} backup"
+        if errors:
+            message += f"; errori: {errors}"
+        return {"success": errors == 0, "message": message, "deleted": deleted, "errors": errors}
+
+    class MiaConfigBackupDownloadView(HomeAssistantView):
+        """Endpoint autenticato per scaricare un backup."""
+
+        url = "/api/mia_config/backups/{file_name}"
+        name = "api:mia_config:backup_download"
+        requires_auth = True
+
+        def __init__(self, hass: HomeAssistant) -> None:
+            self.hass = hass
+
+        async def get(self, request, file_name):
+            backup_dir = get_backup_dir()
+            backup_dir.mkdir(parents=True, exist_ok=True)
+
+            safe_name = os.path.basename(file_name)
+            target = (backup_dir / safe_name).resolve()
+            try:
+                backup_dir_resolved = backup_dir.resolve()
+                try:
+                    if not target.is_relative_to(backup_dir_resolved):
+                        return web.Response(status=400, text="Percorso non valido")
+                except Exception:
+                    if backup_dir_resolved not in target.parents:
+                        return web.Response(status=400, text="Percorso non valido")
+            except Exception:
+                pass
+
+            if not target.exists():
+                return web.Response(status=404, text="Backup non trovato")
+
+            return web.FileResponse(path=str(target))
+
+    class MiaConfigBackupUploadView(HomeAssistantView):
+        """Endpoint autenticato per caricare un nuovo backup."""
+
+        url = "/api/mia_config/backups/upload"
+        name = "api:mia_config:backup_upload"
+        requires_auth = True
+
+        def __init__(self, hass: HomeAssistant) -> None:
+            self.hass = hass
+
+        async def post(self, request):
+            backup_dir = get_backup_dir()
+            backup_dir.mkdir(parents=True, exist_ok=True)
+
+            data = await request.post()
+            upload = data.get("file")
+
+            if upload is None or not getattr(upload, "file", None):
+                return web.json_response({"success": False, "message": "Nessun file di backup ricevuto"}, status=400)
+
+            filename = os.path.basename(upload.filename or "uploaded_backup.db")
+            target = (backup_dir / filename).resolve()
+
+            try:
+                backup_dir_resolved = backup_dir.resolve()
+                try:
+                    if not target.is_relative_to(backup_dir_resolved):
+                        return web.json_response({"success": False, "message": "Nome file non valido"}, status=400)
+                except Exception:
+                    if backup_dir_resolved not in target.parents:
+                        return web.json_response({"success": False, "message": "Nome file non valido"}, status=400)
+            except Exception:
+                pass
+
+            file_bytes = upload.file.read()
+            try:
+                await self.hass.async_add_executor_job(target.write_bytes, file_bytes)
+            except Exception as err:
+                _LOGGER.error("Errore durante il salvataggio del backup caricato: %s", err)
+                return web.json_response({"success": False, "message": f"Errore durante il salvataggio: {err}"}, status=500)
+
+            return web.json_response({
+                "success": True,
+                "message": "Backup caricato con successo",
+                "file_name": filename,
+                "path": str(target),
+                "download_url": f"/api/mia_config/backups/{filename}"
+            })
     
     backup_database_schema = vol.Schema({
         vol.Optional("entity_id"): cv.entity_id,
@@ -886,6 +1036,19 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         vol.Optional("entity_id"): cv.entity_id,
         vol.Required("backup_file"): cv.string,
     })
+
+    list_backups_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
+    })
+
+    delete_backup_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
+        vol.Required("file_name"): cv.string,
+    })
+
+    delete_all_backups_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
+    })
     
     hass.services.async_register(
         DOMAIN, "backup_database", handle_backup_database, schema=backup_database_schema, supports_response=SupportsResponse.OPTIONAL
@@ -894,6 +1057,21 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN, "restore_database", handle_restore_database, schema=restore_database_schema, supports_response=SupportsResponse.OPTIONAL
     )
+
+    hass.services.async_register(
+        DOMAIN, "list_backups", handle_list_backups, schema=list_backups_schema, supports_response=SupportsResponse.OPTIONAL
+    )
+
+    hass.services.async_register(
+        DOMAIN, "delete_backup", handle_delete_backup, schema=delete_backup_schema, supports_response=SupportsResponse.OPTIONAL
+    )
+
+    hass.services.async_register(
+        DOMAIN, "delete_all_backups", handle_delete_all_backups, schema=delete_all_backups_schema, supports_response=SupportsResponse.OPTIONAL
+    )
+
+    hass.http.register_view(MiaConfigBackupDownloadView(hass))
+    hass.http.register_view(MiaConfigBackupUploadView(hass))
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

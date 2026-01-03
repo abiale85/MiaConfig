@@ -533,3 +533,49 @@ restore_database:
       example: "/config/backups/mia_config/mia_config_backup_20260103_131500.db"
       selector:
         text:
+
+list_backups:
+  name: Elenca Backup
+  description: Restituisce l'elenco dei backup locali disponibili
+  fields:
+    entity_id:
+      name: Entità
+      description: Entità sensor.mia_config_* dell'istanza da utilizzare (opzionale)
+      required: false
+      example: "sensor.mia_config_temperatura_target"
+      selector:
+        entity:
+          integration: mia_config
+
+delete_backup:
+  name: Elimina Backup
+  description: Elimina un singolo file di backup
+  fields:
+    entity_id:
+      name: Entità
+      description: Entità sensor.mia_config_* dell'istanza da utilizzare (opzionale)
+      required: false
+      example: "sensor.mia_config_temperatura_target"
+      selector:
+        entity:
+          integration: mia_config
+    file_name:
+      name: Nome File
+      description: Nome del file di backup da eliminare (come restituito da list_backups)
+      required: true
+      example: "mia_config_backup_20260103_131500.db"
+      selector:
+        text:
+
+delete_all_backups:
+  name: Elimina Tutti i Backup
+  description: Rimuove tutti i file di backup locali creati dal componente
+  fields:
+    entity_id:
+      name: Entità
+      description: Entità sensor.mia_config_* dell'istanza da utilizzare (opzionale)
+      required: false
+      example: "sensor.mia_config_temperatura_target"
+      selector:
+        entity:
+          integration: mia_config

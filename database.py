@@ -1156,6 +1156,8 @@ class ConfigDatabase:
         """Abilita o disabilita una configurazione."""
         cursor = self.conn.cursor()
         enabled_value = 1 if enabled else 0
+        history_data = None
+        history_name = None
         
         table_map = {
             'schedule': 'configurazioni_a_orario',
@@ -1168,9 +1170,65 @@ class ConfigDatabase:
             raise ValueError(f"Tipo configurazione non valido: {config_type}")
         
         table = table_map[config_type]
+
+        # Recupera i dati correnti per loggare l'operazione nello storico
+        if config_type == 'schedule':
+            cursor.execute("SELECT setup_name, setup_value, valid_from_ora, valid_to_ora, days_of_week FROM configurazioni_a_orario WHERE id = ?", (config_id,))
+            row = cursor.fetchone()
+            if row:
+                history_name = row['setup_name']
+                history_data = {
+                    'setup_value': row['setup_value'],
+                    'valid_from_ora': row['valid_from_ora'],
+                    'valid_to_ora': row['valid_to_ora'],
+                    'days_of_week': row['days_of_week']
+                }
+        elif config_type == 'time':
+            cursor.execute("SELECT setup_name, setup_value, valid_from_date, valid_to_date, valid_from_ora, valid_to_ora, days_of_week FROM configurazioni_a_tempo WHERE id = ?", (config_id,))
+            row = cursor.fetchone()
+            if row:
+                history_name = row['setup_name']
+                history_data = {
+                    'setup_value': row['setup_value'],
+                    'valid_from_date': row['valid_from_date'],
+                    'valid_to_date': row['valid_to_date'],
+                    'valid_from_ora': row['valid_from_ora'],
+                    'valid_to_ora': row['valid_to_ora'],
+                    'days_of_week': row['days_of_week']
+                }
+        elif config_type == 'conditional':
+            cursor.execute("""
+                SELECT setup_name, setup_value, conditional_config, conditional_operator, conditional_value, valid_from_ora, valid_to_ora
+                FROM configurazioni_condizionali
+                WHERE id = ?
+            """, (config_id,))
+            row = cursor.fetchone()
+            if row:
+                history_name = row['setup_name']
+                history_data = {
+                    'setup_value': row['setup_value'],
+                    'conditional_config': row['conditional_config'],
+                    'conditional_operator': row['conditional_operator'],
+                    'conditional_value': row['conditional_value'],
+                    'valid_from_ora': row['valid_from_ora'],
+                    'valid_to_ora': row['valid_to_ora']
+                }
+        elif config_type == 'standard':
+            cursor.execute("SELECT setup_name, setup_value, priority FROM configurazioni WHERE id = ?", (config_id,))
+            row = cursor.fetchone()
+            if row:
+                history_name = row['setup_name']
+                history_data = {
+                    'setup_value': row['setup_value'],
+                    'priority': row['priority']
+                }
         cursor.execute(f"UPDATE {table} SET enabled = ? WHERE id = ?", (enabled_value, config_id))
         self.conn.commit()
         
+        if history_name and history_data:
+            operation = 'ENABLE' if enabled else 'DISABLE'
+            self._save_to_history(history_name, config_type, history_data, operation)
+
         status = "abilitata" if enabled else "disabilitata"
         _LOGGER.info(f"Configurazione {config_type} con ID {config_id} {status}")
     
