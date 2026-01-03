@@ -1160,6 +1160,7 @@ class MiaConfigCard extends HTMLElement {
             if (conditionalSourceSelect) conditionalSourceSelect.innerHTML = options;
         } catch (err) {
             console.error('Errore caricamento configurazioni:', err);
+            console.error('Error details:', err?.message || err?.toString() || JSON.stringify(err));
         }
     }
 
@@ -1285,7 +1286,11 @@ class MiaConfigCard extends HTMLElement {
                 return_response: true
             });
             
+            console.log('Service response:', result);
+            console.log('Response keys:', Object.keys(result || {}));
+            
             const configs = result.response || result.configurations || {};
+            console.log('Extracted configs:', configs);
             
             // Filtra configurazioni vuote o sensori principali
             const validConfigs = Object.entries(configs).filter(([name, configsList]) => {
@@ -1306,7 +1311,8 @@ class MiaConfigCard extends HTMLElement {
             
         } catch (error) {
             console.error('Error loading configurations:', error);
-            const errorMsg = error?.message || error?.toString() || 'Errore sconosciuto';
+            const errorMsg = error?.message || (typeof error === 'object' ? JSON.stringify(error) : error?.toString()) || 'Errore sconosciuto';
+            console.error('Error details:', errorMsg);
             container.innerHTML = `<p style="color: var(--error-color);">Errore nel caricamento: ${errorMsg}</p>`;
         }
     }
@@ -3944,6 +3950,7 @@ class MiaConfigCard extends HTMLElement {
                 uniqueNames.map(name => `<option value="${name}">${name}</option>`).join('');
         } catch (err) {
             console.error('Errore caricamento configurazioni per valori validi:', err);
+            console.error('Error details:', err?.message || err?.toString() || JSON.stringify(err));
         }
     }
 

@@ -502,7 +502,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         
         _LOGGER.info(f"Configurazione {config_type} con id {config_id} disabilitata")
     
-    async def handle_get_configurations(call: ServiceCall) -> None:
+    async def handle_get_configurations(call: ServiceCall) -> ServiceResponse:
         """Gestisce il servizio per ottenere le configurazioni."""
         entity_id = call.data.get("entity_id")
         db = get_db_from_entity_id(hass, entity_id)
@@ -634,6 +634,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     })
     
     get_configurations_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
         vol.Optional("setup_name"): cv.string,
     })
     
