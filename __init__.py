@@ -3,6 +3,7 @@ Mia Config - Gestione configurazioni dinamiche basate su tempo e orario.
 """
 import logging
 import os
+import shutil
 from datetime import datetime, timedelta
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
@@ -789,6 +790,109 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     
     hass.services.async_register(
         DOMAIN, "simulate_schedule", handle_simulate_schedule, schema=simulate_schedule_schema, supports_response=SupportsResponse.OPTIONAL
+    )
+    
+    # Servizi per backup e restore
+    async def handle_backup_database(call: ServiceCall) -> ServiceResponse:
+        """Effettua il backup del database."""
+        entity_id = call.data.get("entity_id")
+        db = get_db_from_entity_id(hass, entity_id)
+        
+        # Crea una cartella backup se non esiste
+        backup_dir = os.path.join(hass.config.path(), "backups", "mia_config")
+        os.makedirs(backup_dir, exist_ok=True)
+        
+        # Crea il nome del file di backup con timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_file = os.path.join(backup_dir, f"mia_config_backup_{timestamp}.db")
+        
+        try:
+            # Copia il database
+            await hass.async_add_executor_job(
+                shutil.copy2, db.db_path, backup_file
+            )
+            _LOGGER.info(f"Backup del database creato: {backup_file}")
+            return {
+                "success": True,
+                "backup_file": backup_file,
+                "timestamp": timestamp,
+                "message": f"Backup creato con successo: {os.path.basename(backup_file)}"
+            }
+        except Exception as e:
+            _LOGGER.error(f"Errore durante il backup: {e}")
+            return {
+                "success": False,
+                "message": f"Errore durante il backup: {str(e)}"
+            }
+    
+    async def handle_restore_database(call: ServiceCall) -> ServiceResponse:
+        """Ripristina il database da un backup."""
+        entity_id = call.data.get("entity_id")
+        db = get_db_from_entity_id(hass, entity_id)
+        
+        backup_file = call.data.get("backup_file")
+        
+        if not os.path.exists(backup_file):
+            return {
+                "success": False,
+                "message": f"File di backup non trovato: {backup_file}"
+            }
+        
+        try:
+            # Chiudi la connessione al database corrente
+            db.conn.close()
+            
+            # Crea un backup del database corrente prima di ripristinare
+            current_backup = os.path.join(
+                hass.config.path(), "backups", "mia_config",
+                f"mia_config_pre_restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+            )
+            os.makedirs(os.path.dirname(current_backup), exist_ok=True)
+            await hass.async_add_executor_job(
+                shutil.copy2, db.db_path, current_backup
+            )
+            
+            # Ripristina il backup
+            await hass.async_add_executor_job(
+                shutil.copy2, backup_file, db.db_path
+            )
+            
+            # Riapri la connessione
+            db.conn = db._open_database()
+            
+            _LOGGER.info(f"Database ripristinato da: {backup_file}")
+            return {
+                "success": True,
+                "message": f"Database ripristinato con successo",
+                "pre_restore_backup": current_backup
+            }
+        except Exception as e:
+            _LOGGER.error(f"Errore durante il ripristino: {e}")
+            # Prova a riaprire la connessione comunque
+            try:
+                db.conn = db._open_database()
+            except:
+                pass
+            return {
+                "success": False,
+                "message": f"Errore durante il ripristino: {str(e)}"
+            }
+    
+    backup_database_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
+    })
+    
+    restore_database_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
+        vol.Required("backup_file"): cv.string,
+    })
+    
+    hass.services.async_register(
+        DOMAIN, "backup_database", handle_backup_database, schema=backup_database_schema, supports_response=SupportsResponse.OPTIONAL
+    )
+    
+    hass.services.async_register(
+        DOMAIN, "restore_database", handle_restore_database, schema=restore_database_schema, supports_response=SupportsResponse.OPTIONAL
     )
 
 

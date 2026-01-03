@@ -500,3 +500,36 @@ disable_config:
         number:
           min: 1
           mode: box
+
+backup_database:
+  name: Backup Database
+  description: Crea un backup del database mia_config
+  fields:
+    entity_id:
+      name: Entità
+      description: Entità sensor.mia_config_* dell'istanza da utilizzare (opzionale)
+      required: false
+      example: "sensor.mia_config_temperatura_target"
+      selector:
+        entity:
+          integration: mia_config
+
+restore_database:
+  name: Ripristina Database
+  description: Ripristina il database mia_config da un file di backup
+  fields:
+    entity_id:
+      name: Entità
+      description: Entità sensor.mia_config_* dell'istanza da utilizzare (opzionale)
+      required: false
+      example: "sensor.mia_config_temperatura_target"
+      selector:
+        entity:
+          integration: mia_config
+    backup_file:
+      name: Percorso File Backup
+      description: Percorso completo al file di backup da ripristinare
+      required: true
+      example: "/config/backups/mia_config/mia_config_backup_20260103_131500.db"
+      selector:
+        text:

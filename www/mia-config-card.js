@@ -178,6 +178,10 @@ class MiaConfigCard extends HTMLElement {
                     .mia-config-card .dc-weekly-container { overflow-x: auto; }
                     .mia-config-card .dc-weekly-grid { min-width: 700px; }
                 }
+                .mia-config-card .dc-section-header { display: flex; justify-content: space-between; align-items: center; padding: 15px; background: var(--secondary-background-color); cursor: pointer; user-select: none; margin-bottom: 0; border-radius: 4px; margin-top: 15px; transition: background 0.2s ease; }
+                .mia-config-card .dc-section-header:hover { background: var(--divider-color); }
+                .mia-config-card .dc-section-content { border-left: 3px solid var(--primary-color); margin-bottom: 15px; border-radius: 0 4px 4px 0; }
+                .mia-config-card .dc-toggle-arrow { transition: transform 0.3s ease; display: inline-block; }
             </style>
         `;
     }
@@ -200,7 +204,13 @@ class MiaConfigCard extends HTMLElement {
             </div>
 
             <div id="dc-tab-config" class="dc-tab-content">
-                <h3>➕ Inserisci Nuova Configurazione</h3>
+                <!-- Sottosezioni collassabili -->
+                <div class="dc-section-header" onclick="window.dcToggleSection(this, 'insert-config')">
+                    <span style="font-size: 18px; font-weight: bold;">➕ Inserisci Nuova Configurazione</span>
+                    <span class="dc-toggle-arrow" style="float: right; font-size: 14px;">▼</span>
+                </div>
+                <div id="dc-section-insert-config" class="dc-section-content" style="display: block; padding: 15px; border-left: 3px solid var(--primary-color);">
+                    <h3 style="margin-top: 0;">Seleziona Tipo</h3>
                 
                 <div class="dc-form-group">
                     <label>Tipo di Configurazione:</label>
@@ -509,19 +519,27 @@ class MiaConfigCard extends HTMLElement {
                     <button type="submit" class="dc-btn">Aggiungi Override Condizionale</button>
                 </form>
                 </div>
-                
-                <hr style="margin: 30px 0; border: none; border-top: 2px solid var(--divider-color);">
-                
-                <h3>🗂️ Configurazioni Database</h3>
-                <div class="dc-view-mode-toggle">
-                    <button class="dc-view-btn active" data-mode="name" onclick="window.dcSwitchConfigView('name')">Per Nome</button>
-                    <button class="dc-view-btn" data-mode="override" onclick="window.dcSwitchConfigView('override')">Per Override</button>
                 </div>
-                <div id="dc-config-list">Caricamento...</div>
+                
+                <!-- Sezione Configurazioni Database -->
+                <div class="dc-section-header" onclick="window.dcToggleSection(this, 'db-config')">
+                    <span style="font-size: 18px; font-weight: bold;">🗂️ Configurazioni Database</span>
+                    <span class="dc-toggle-arrow" style="float: right; font-size: 14px;">▶</span>
+                </div>
+                <div id="dc-section-db-config" class="dc-section-content" style="display: none; padding: 15px; border-left: 3px solid var(--warning-color);">
+                    <div class="dc-view-mode-toggle" style="margin-bottom: 15px;">
+                        <button class="dc-view-btn active" data-mode="name" onclick="window.dcSwitchConfigView('name')">Per Nome</button>
+                        <button class="dc-view-btn" data-mode="override" onclick="window.dcSwitchConfigView('override')">Per Override</button>
+                    </div>
+                    <div id="dc-config-list">Caricamento...</div>
+                </div>
                 
                 <!-- Sezione Valori Validi -->
-                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid var(--divider-color);">
-                    <h3 style="margin-bottom: 15px;">✓ Valori Validi</h3>
+                <div class="dc-section-header" onclick="window.dcToggleSection(this, 'valid-values')">
+                    <span style="font-size: 18px; font-weight: bold;">✓ Valori Validi</span>
+                    <span class="dc-toggle-arrow" style="float: right; font-size: 14px;">▶</span>
+                </div>
+                <div id="dc-section-valid-values" class="dc-section-content" style="display: none; padding: 15px; border-left: 3px solid var(--success-color);">
                     <p style="color: var(--secondary-text-color); margin-bottom: 15px; font-size: 14px;">
                         Definisci opzionalmente valori consentiti con descrizioni per ogni configurazione
                     </p>
@@ -550,6 +568,35 @@ class MiaConfigCard extends HTMLElement {
                         </div>
                         <button class="dc-btn" onclick="window.dcSaveValidValue()">💾 Salva</button>
                         <button class="dc-btn-secondary" onclick="window.dcHideAddValidValueForm()">❌ Annulla</button>
+                    </div>
+                </div>
+                
+                <!-- Sezione Backup e Restore -->
+                <div class="dc-section-header" onclick="window.dcToggleSection(this, 'backup-restore')">
+                    <span style="font-size: 18px; font-weight: bold;">💾 Backup e Restore</span>
+                    <span class="dc-toggle-arrow" style="float: right; font-size: 14px;">▶</span>
+                </div>
+                <div id="dc-section-backup-restore" class="dc-section-content" style="display: none; padding: 15px; border-left: 3px solid var(--info-color);">
+                    <p style="color: var(--secondary-text-color); margin-bottom: 15px; font-size: 14px;">
+                        Crea backup del database o ripristina da una versione precedente
+                    </p>
+                    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                        <button class="dc-btn" onclick="window.dcBackupDatabase()" style="flex: 1;">📦 Crea Backup</button>
+                        <button class="dc-btn" onclick="window.dcShowRestoreForm()" style="flex: 1;">📥 Ripristina da Backup</button>
+                    </div>
+                    <div id="dc-backup-status"></div>
+                    
+                    <div id="dc-restore-form" style="display: none; margin-top: 20px; padding: 15px; border: 2px solid var(--primary-color); border-radius: 8px; background: var(--card-background-color);">
+                        <h4 style="margin-top: 0;">Ripristina da Backup</h4>
+                        <div style="margin-bottom: 10px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Percorso file backup:</label>
+                            <input type="text" id="restore-backup-path" placeholder="/config/backups/mia_config/mia_config_backup_YYYYMMDD_HHMMSS.db" style="padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); color: var(--primary-text-color); width: 100%;">
+                        </div>
+                        <div style="background: var(--warning-background-color); border-left: 4px solid var(--warning-color); padding: 10px; margin-bottom: 10px; border-radius: 4px;">
+                            <strong style="color: var(--warning-color);">⚠️ Attenzione:</strong> Il database attuale sarà salvato come backup prima di ripristinare.
+                        </div>
+                        <button class="dc-btn" onclick="window.dcRestoreDatabase()">Ripristina</button>
+                        <button class="dc-btn-secondary" onclick="window.dcHideRestoreForm()">Annulla</button>
                     </div>
                 </div>
             </div>
@@ -974,6 +1021,109 @@ class MiaConfigCard extends HTMLElement {
             
             // Ricarica le configurazioni con la nuova vista
             this.loadConfigurations();
+        };
+        
+        // Toggle sezioni collassabili
+        window.dcToggleSection = (header, sectionId) => {
+            const section = this.content.querySelector(`#dc-section-${sectionId}`);
+            const arrow = header.querySelector('.dc-toggle-arrow');
+            
+            if (section.style.display === 'none') {
+                section.style.display = 'block';
+                arrow.textContent = '▼';
+            } else {
+                section.style.display = 'none';
+                arrow.textContent = '▶';
+            }
+        };
+        
+        // Backup Database
+        window.dcBackupDatabase = async () => {
+            const statusDiv = this.content.querySelector('#dc-backup-status');
+            statusDiv.innerHTML = '<p style="color: var(--info-color);">⏳ Creazione backup...</p>';
+            
+            try {
+                const entityId = this.getSelectedEntityId();
+                const serviceData = {};
+                if (entityId) serviceData.entity_id = entityId;
+                
+                const result = await this._hass.callWS({
+                    type: 'call_service',
+                    domain: 'mia_config',
+                    service: 'backup_database',
+                    service_data: serviceData,
+                    return_response: true
+                });
+                
+                if (result.response?.success) {
+                    statusDiv.innerHTML = `<p style="color: var(--success-color);">✅ ${result.response.message}</p><p style="color: var(--secondary-text-color); font-size: 12px;">File: ${result.response.backup_file}</p>`;
+                    setTimeout(() => { statusDiv.innerHTML = ''; }, 5000);
+                } else {
+                    statusDiv.innerHTML = `<p style="color: var(--error-color);">❌ ${result.response?.message || 'Errore sconosciuto'}</p>`;
+                }
+            } catch (err) {
+                console.error('Errore backup:', err);
+                statusDiv.innerHTML = `<p style="color: var(--error-color);">❌ Errore: ${err.message || 'Errore sconosciuto'}</p>`;
+            }
+        };
+        
+        // Mostra form restore
+        window.dcShowRestoreForm = () => {
+            const form = this.content.querySelector('#dc-restore-form');
+            form.style.display = 'block';
+        };
+        
+        // Nascondi form restore
+        window.dcHideRestoreForm = () => {
+            const form = this.content.querySelector('#dc-restore-form');
+            form.style.display = 'none';
+        };
+        
+        // Restore Database
+        window.dcRestoreDatabase = async () => {
+            const pathInput = this.content.querySelector('#restore-backup-path');
+            const backupFile = pathInput.value.trim();
+            
+            if (!backupFile) {
+                alert('Inserisci il percorso del file di backup');
+                return;
+            }
+            
+            if (!confirm('Attenzione: il database attuale sarà sostituito. Proseguire?')) {
+                return;
+            }
+            
+            const statusDiv = this.content.querySelector('#dc-backup-status');
+            statusDiv.innerHTML = '<p style="color: var(--info-color);">⏳ Ripristino database...</p>';
+            
+            try {
+                const entityId = this.getSelectedEntityId();
+                const serviceData = { backup_file: backupFile };
+                if (entityId) serviceData.entity_id = entityId;
+                
+                const result = await this._hass.callWS({
+                    type: 'call_service',
+                    domain: 'mia_config',
+                    service: 'restore_database',
+                    service_data: serviceData,
+                    return_response: true
+                });
+                
+                if (result.response?.success) {
+                    statusDiv.innerHTML = `<p style="color: var(--success-color);">✅ Database ripristinato con successo</p>`;
+                    window.dcHideRestoreForm();
+                    pathInput.value = '';
+                    setTimeout(() => {
+                        this.loadDashboard();
+                        statusDiv.innerHTML = '';
+                    }, 2000);
+                } else {
+                    statusDiv.innerHTML = `<p style="color: var(--error-color);">❌ ${result.response?.message || 'Errore sconosciuto'}</p>`;
+                }
+            } catch (err) {
+                console.error('Errore restore:', err);
+                statusDiv.innerHTML = `<p style="color: var(--error-color);">❌ Errore: ${err.message || 'Errore sconosciuto'}</p>`;
+            }
         };
         
         window.dcLoadValidValuesForForm = async (formType) => {

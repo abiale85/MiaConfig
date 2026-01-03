@@ -38,10 +38,15 @@ class ConfigDatabase:
         
         return setup_name
     
+    def _open_database(self):
+        """Apre la connessione al database."""
+        conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        return conn
+    
     def initialize(self) -> None:
         """Crea le tabelle se non esistono e applica migrazioni."""
-        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
+        self.conn = self._open_database()
         
         cursor = self.conn.cursor()
         
