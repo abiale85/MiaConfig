@@ -458,6 +458,50 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         
         _LOGGER.info(f"Configurazione singola {config_type} con id {config_id} eliminata")
     
+    async def handle_enable_config(call: ServiceCall) -> None:
+        """Gestisce il servizio per abilitare una configurazione."""
+        entity_id = call.data.get("entity_id")
+        db = get_db_from_entity_id(hass, entity_id)
+        
+        config_type = call.data.get("config_type")
+        config_id = call.data.get("config_id")
+        
+        await hass.async_add_executor_job(
+            db.set_config_enabled, config_type, config_id, True
+        )
+        
+        # Forza aggiornamento e invalida cache
+        for entry_id, data in hass.data.get(DOMAIN, {}).items():
+            if isinstance(data, dict):
+                if 'clear_cache' in data:
+                    data['clear_cache']()
+                if 'coordinator' in data:
+                    await data['coordinator'].async_request_refresh()
+        
+        _LOGGER.info(f"Configurazione {config_type} con id {config_id} abilitata")
+    
+    async def handle_disable_config(call: ServiceCall) -> None:
+        """Gestisce il servizio per disabilitare una configurazione."""
+        entity_id = call.data.get("entity_id")
+        db = get_db_from_entity_id(hass, entity_id)
+        
+        config_type = call.data.get("config_type")
+        config_id = call.data.get("config_id")
+        
+        await hass.async_add_executor_job(
+            db.set_config_enabled, config_type, config_id, False
+        )
+        
+        # Forza aggiornamento e invalida cache
+        for entry_id, data in hass.data.get(DOMAIN, {}).items():
+            if isinstance(data, dict):
+                if 'clear_cache' in data:
+                    data['clear_cache']()
+                if 'coordinator' in data:
+                    await data['coordinator'].async_request_refresh()
+        
+        _LOGGER.info(f"Configurazione {config_type} con id {config_id} disabilitata")
+    
     async def handle_get_configurations(call: ServiceCall) -> None:
         """Gestisce il servizio per ottenere le configurazioni."""
         entity_id = call.data.get("entity_id")
@@ -639,6 +683,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     
     hass.services.async_register(
         DOMAIN, "delete_single_config", handle_delete_single_config, schema=delete_single_config_schema
+    )
+    
+    hass.services.async_register(
+        DOMAIN, "enable_config", handle_enable_config, schema=delete_single_config_schema
+    )
+    
+    hass.services.async_register(
+        DOMAIN, "disable_config", handle_disable_config, schema=delete_single_config_schema
     )
     
     hass.services.async_register(

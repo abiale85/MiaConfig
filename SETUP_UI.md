@@ -9,6 +9,8 @@ Ora puoi aggiungere **Mia Config** direttamente dall'interfaccia di Home Assista
 ### 1. Installa il Componente
 
 Il componente è già nella cartella corretta: `custom_components/mia_config/`
+- Include già la cartella `www/` con i file JavaScript necessari
+- Non è necessario copiare nulla manualmente nella cartella `www/` di Home Assistant
 
 ### 2. Riavvia Home Assistant
 
@@ -131,7 +133,7 @@ automation:
 
 ### La card non funziona
 
-- Verifica che il file sia in: `www/mia-config/mia-config-card.js`
+- Verifica che il file sia in: `custom_components/mia_config/www/mia-config-card.js`
 - Ricarica il browser (Ctrl+F5)
 - Controlla che la risorsa sia registrata
 

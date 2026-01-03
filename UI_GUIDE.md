@@ -2,16 +2,19 @@
 
 ## Installazione Card Lovelace
 
-### 1. Copia il file JavaScript
+### 1. Verifica il file JavaScript
 
-Il file `dynamic-config-card.js` è già nella cartella `www/dynamic-config/`
+Il file `mia-config-card.js` è già nella cartella `custom_components/mia_config/www/`
+- Non è necessario copiare nulla manualmente
 
 ### 2. Registra la risorsa in Home Assistant
 
 Vai su **Impostazioni** → **Dashboard** → **Risorse** (in alto a destra) e aggiungi:
 
-- **URL**: `/local/dynamic-config/dynamic-config-card.js`
+- **URL**: `/mia_config_local/mia-config-card.js`
 - **Tipo**: `JavaScript Module`
+
+**Nota**: Home Assistant serve automaticamente i file dalla cartella `custom_components/mia_config/www/` tramite il percorso `/mia_config_local/`
 
 Oppure aggiungi questa configurazione a `configuration.yaml`:
 
@@ -19,7 +22,7 @@ Oppure aggiungi questa configurazione a `configuration.yaml`:
 lovelace:
   mode: yaml
   resources:
-    - url: /local/dynamic-config/dynamic-config-card.js
+    - url: /mia_config_local/mia-config-card.js
       type: module
 ```
 
@@ -28,7 +31,8 @@ lovelace:
 Vai in modalità modifica del dashboard e aggiungi una nuova card con questo YAML:
 
 ```yaml
-type: custom:dynamic-config-card
+type: custom:mia-config-card
+entity_id: sensor.miahomeconfig_main  # Opzionale: specifica l'istanza
 ```
 
 ## Utilizzo dell'Interfaccia UI
@@ -155,8 +159,8 @@ I giorni seguono la numerazione Python:
 ## Troubleshooting
 
 ### La card non appare
-1. Verifica che il file JS sia in `www/dynamic-config/dynamic-config-card.js`
-2. Controlla di aver registrato la risorsa
+1. Verifica che il file JS sia in `custom_components/mia_config/www/mia-config-card.js`
+2. Controlla di aver registrato la risorsa con l'URL corretto: `/mia_config_local/mia-config-card.js`
 3. Ricarica completamente il browser (Ctrl+F5)
 
 ### Errore "Servizio non disponibile"

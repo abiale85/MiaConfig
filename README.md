@@ -1,5 +1,10 @@
 # Mia Config per Home Assistant
 
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
+[![GitHub release](https://img.shields.io/github/release/abiale85/MiaConfig.svg)](https://GitHub.com/abiale85/MiaConfig/releases/)
+[![GitHub issues](https://img.shields.io/github/issues/abiale85/MiaConfig.svg)](https://GitHub.com/abiale85/MiaConfig/issues/)
+[![License](https://img.shields.io/github/license/abiale85/MiaConfig.svg)](https://github.com/abiale85/MiaConfig/blob/main/LICENSE)
+
 Un componente custom per Home Assistant che gestisce configurazioni dinamiche con valori che cambiano automaticamente in base a regole temporali e orarie con sistema avanzato di priorità.
 
 ## Caratteristiche
@@ -21,8 +26,8 @@ Un componente custom per Home Assistant che gestisce configurazioni dinamiche co
 ### Metodo 1: Installazione Manuale
 
 1. Copia la cartella `custom_components/mia_config` nella cartella `custom_components` della tua configurazione Home Assistant
-2. Copia la cartella `www/mia-config` nella cartella `www` di Home Assistant
-3. Riavvia Home Assistant
+   - **Nota**: La cartella include già i file necessari nella sottocartella `www/`
+2. Riavvia Home Assistant
 
 ### Metodo 2: HACS (Consigliato)
 
@@ -56,8 +61,9 @@ Ogni istanza:
 ### Installazione Card Lovelace
 
 1. **Registra la risorsa**: Vai su **Impostazioni** → **Dashboard** → **Risorse** e aggiungi:
-   - URL: `/hacsfiles/mia-config/mia-config-card.js`
+   - URL: `/mia_config_local/mia-config-card.js`
    - Tipo: `JavaScript Module`
+   - **Nota**: Il percorso `/mia_config_local/` viene servito automaticamente dalla cartella `custom_components/mia_config/www/`
 
 2. **Aggiungi la card** al tuo dashboard:
 ```yaml

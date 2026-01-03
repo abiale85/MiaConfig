@@ -149,10 +149,20 @@ class MiaConfigCard extends HTMLElement {
                 .mia-config-card .dc-btn:hover { opacity: 0.9; }
                 .mia-config-card .dc-btn-delete { background-color: #f44336; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
                 .mia-config-card .dc-config-item { border: 1px solid var(--divider-color); border-radius: 4px; padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+                .mia-config-card .dc-config-item.disabled { opacity: 0.5; background: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(128, 128, 128, 0.05) 10px, rgba(128, 128, 128, 0.05) 20px); border-left: 3px solid #999; }
                 .mia-config-card .dc-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; margin-right: 8px; }
                 .mia-config-card .dc-badge-time { background-color: #e3f2fd; color: #1976d2; }
                 .mia-config-card .dc-badge-schedule { background-color: #fff3e0; color: #f57c00; }
                 .mia-config-card .dc-badge-standard { background-color: #f5f5f5; color: #616161; }
+                .mia-config-card .dc-config-group { margin-bottom: 15px; border: 1px solid var(--divider-color); border-radius: 8px; overflow: hidden; }
+                .mia-config-card .dc-config-group-header { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: var(--secondary-background-color); cursor: pointer; user-select: none; }
+                .mia-config-card .dc-config-group-header:hover { background: var(--divider-color); }
+                .mia-config-card .dc-config-group-title { display: flex; align-items: center; gap: 8px; flex: 1; }
+                .mia-config-card .dc-config-group-toggle { font-size: 16px; transition: transform 0.3s ease; color: var(--primary-color); }
+                .mia-config-card .dc-config-group-toggle.expanded { transform: rotate(90deg); }
+                .mia-config-card .dc-config-group-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+                .mia-config-card .dc-config-group-content.expanded { max-height: 5000px; }
+                .mia-config-card .dc-config-group-inner { padding: 10px; }
                 .mia-config-card .dc-dashboard-actions { display: flex; gap: 5px; flex-direction: column; }
                 .mia-config-card .dc-dashboard-actions button { white-space: nowrap; }
                 @media (max-width: 768px) {
@@ -1357,11 +1367,20 @@ class MiaConfigCard extends HTMLElement {
                 return 0;
             });
             
-            html += `<div style="margin-bottom: 15px; padding: 10px; border: 1px solid var(--divider-color); border-radius: 8px;">`;
-            html += `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">`;
+            // Genera un ID univoco per il gruppo
+            const groupId = `config-group-${name.replace(/[^a-zA-Z0-9]/g, '_')}`;
+            
+            html += `<div class="dc-config-group">`;
+            html += `<div class="dc-config-group-header" onclick="window.dcToggleConfigGroup('${groupId}')">`;
+            html += `<div class="dc-config-group-title">`;
+            html += `<span class="dc-config-group-toggle" id="${groupId}-toggle">▶</span>`;
             html += `<strong style="font-size: 1.1em;">📦 ${name}</strong>`;
-            html += `<button class="dc-btn-delete" onclick="window.dcDeleteConfig('${name}')">Elimina Tutto</button>`;
+            html += `<span style="color: var(--secondary-text-color); font-size: 0.9em; margin-left: 8px;">(${sortedConfigs.length} configurazioni)</span>`;
             html += `</div>`;
+            html += `<button class="dc-btn-delete" onclick="event.stopPropagation(); window.dcDeleteConfig('${name}')" style="margin-left: 10px;">Elimina Tutto</button>`;
+            html += `</div>`;
+            html += `<div class="dc-config-group-content" id="${groupId}-content">`;
+            html += `<div class="dc-config-group-inner">`;
             
             for (const cfg of sortedConfigs) {
                 const type = cfg.type || 'standard';
@@ -1413,16 +1432,23 @@ class MiaConfigCard extends HTMLElement {
                 
                 // Serializza i dati della configurazione per passarli alla funzione di edit
                 const cfgData = encodeURIComponent(JSON.stringify(cfg));
+                const isEnabled = cfg.enabled !== false; // Default a true se non specificato
+                const disabledClass = !isEnabled ? ' disabled' : '';
+                const disabledLabel = !isEnabled ? '<span style="color: #f44336; font-weight: bold; margin-left: 8px;">⊘ DISABILITATA</span>' : '';
                 
                 html += `
-                    <div class="dc-config-item" style="margin: 5px 0; padding: 8px; background: var(--card-background-color); display: flex; justify-content: space-between; align-items: center;">
+                    <div class="dc-config-item${disabledClass}" style="margin: 5px 0; padding: 8px; background: var(--card-background-color); display: flex; justify-content: space-between; align-items: center;">
                         <div style="flex: 1;">
                             <span class="dc-badge ${badgeClass}">${sourceLabel}</span>
-                            Valore: <strong>${cfg.value}</strong><br>
+                            Valore: <strong>${cfg.value}</strong>${disabledLabel}<br>
                             <small>${extra}</small>
                             <small style="color: var(--secondary-text-color); display: block; margin-top: 2px;">ID: ${configId}</small>
                         </div>
-                        <div style="display: flex; gap: 5px;">
+                        <div style="display: flex; gap: 5px; align-items: center;">
+                            <label style="display: flex; align-items: center; gap: 4px; cursor: pointer; font-size: 11px;" title="${isEnabled ? 'Disabilita' : 'Abilita'} configurazione">
+                                <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="window.dcToggleConfigEnabled('${type}', ${configId}, this.checked)" style="cursor: pointer;">
+                                <span style="font-size: 10px;">${isEnabled ? '✓' : '✗'}</span>
+                            </label>
                             <button class="dc-btn" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcEditConfig('${name}', '${type}', ${configId}, '${cfgData}')">✏️</button>
                             <button class="dc-btn-delete" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcDeleteSingleConfig('${type}', ${configId})">🗑️</button>
                         </div>
@@ -1430,12 +1456,48 @@ class MiaConfigCard extends HTMLElement {
                 `;
             }
             
-            html += `</div>`;
+            html += `</div>`; // dc-config-group-inner
+            html += `</div>`; // dc-config-group-content
+            html += `</div>`; // dc-config-group
         }
         
         container.innerHTML = html;
         
+        // Definisci la funzione per toggleare i gruppi
+        window.dcToggleConfigGroup = (groupId) => {
+            const content = this.content.querySelector(`#${groupId}-content`);
+            const toggle = this.content.querySelector(`#${groupId}-toggle`);
+            
+            if (content && toggle) {
+                const isExpanded = content.classList.contains('expanded');
+                if (isExpanded) {
+                    content.classList.remove('expanded');
+                    toggle.classList.remove('expanded');
+                } else {
+                    content.classList.add('expanded');
+                    toggle.classList.add('expanded');
+                }
+            }
+        };
+        
         // Definisci le funzioni window dopo aver popolato l'HTML
+        window.dcToggleConfigEnabled = async (type, configId, enabled) => {
+            try {
+                const serviceName = enabled ? 'enable_config' : 'disable_config';
+                await this.callMiaConfigService(serviceName, {
+                    config_type: type,
+                    config_id: parseInt(configId)
+                });
+                this.showToast(enabled ? 'Configurazione abilitata!' : 'Configurazione disabilitata!');
+                setTimeout(() => this.loadConfigurations(), 500);
+            } catch (err) {
+                console.error('Errore toggle enabled:', err);
+                this.showToast('Errore: ' + err.message, true);
+                // Ricarica per ripristinare lo stato corretto
+                setTimeout(() => this.loadConfigurations(), 500);
+            }
+        };
+        
         window.dcDeleteConfig = async (name) => {
             if (confirm(`Eliminare tutte le configurazioni di "${name}"?`)) {
                 await this.callMiaConfigService('delete_config', {
@@ -2589,6 +2651,9 @@ class MiaConfigCard extends HTMLElement {
             for (const item of group.configs) {
                 const { name, cfg } = item;
                 const cfgData = encodeURIComponent(JSON.stringify(cfg));
+                const isEnabled = cfg.enabled !== false;
+                const disabledClass = !isEnabled ? ' disabled' : '';
+                const disabledLabel = !isEnabled ? '<span style="color: #f44336; font-weight: bold; margin-left: 8px;">⊘ DISABILITATA</span>' : '';
                 
                 // Aggiungi dettagli fascia oraria per condizionali se presente
                 let extraDetails = `Priorità: ${cfg.priority || 99}`;
@@ -2599,13 +2664,17 @@ class MiaConfigCard extends HTMLElement {
                 }
                 
                 html += `
-                    <div class="dc-config-item" style="margin: 5px 0; padding: 8px; background: var(--card-background-color); display: flex; justify-content: space-between; align-items: center;">
+                    <div class="dc-config-item${disabledClass}" style="margin: 5px 0; padding: 8px; background: var(--card-background-color); display: flex; justify-content: space-between; align-items: center;">
                         <div style="flex: 1;">
-                            <strong>${name}</strong>: ${cfg.value}
+                            <strong>${name}</strong>: ${cfg.value}${disabledLabel}
                             <br><small>${extraDetails}</small>
                             <small style="color: var(--secondary-text-color); display: block; margin-top: 2px;">ID: ${cfg.id}</small>
                         </div>
-                        <div style="display: flex; gap: 5px;">
+                        <div style="display: flex; gap: 5px; align-items: center;">
+                            <label style="display: flex; align-items: center; gap: 4px; cursor: pointer; font-size: 11px;" title="${isEnabled ? 'Disabilita' : 'Abilita'} configurazione">
+                                <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="window.dcToggleConfigEnabled('${cfg.type}', ${cfg.id}, this.checked)" style="cursor: pointer;">
+                                <span style="font-size: 10px;">${isEnabled ? '✓' : '✗'}</span>
+                            </label>
                             <button class="dc-btn" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcEditConfig('${name}', '${cfg.type}', ${cfg.id}, '${cfgData}')">✏️</button>
                             <button class="dc-btn-delete" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcDeleteSingleConfig('${cfg.type}', ${cfg.id})">🗑️</button>
                         </div>

@@ -1,15 +1,25 @@
-# 🚀 Quick Start - Dynamic Config
+# 🚀 Quick Start - Mia Config
 
 ## Installazione Rapida
 
 ### 1. Installa il Componente
-La cartella `custom_components/dynamic_config` è già pronta!
+La cartella `custom_components/mia_config` è già pronta!
+- Include già la sottocartella `www/` con i file JavaScript necessari
 
 ### 2. Configura Home Assistant
+
+**Opzione A - Tramite UI (Consigliato)**:
+1. Vai su **Impostazioni** → **Dispositivi e Servizi**
+2. Click su **+ AGGIUNGI INTEGRAZIONE**
+3. Cerca **"Mia Config"**
+4. Inserisci il nome del database (es. "MiaHomeConfig")
+5. Configura l'intervallo di scansione (default: 60 secondi)
+
+**Opzione B - Tramite YAML** (legacy):
 Aggiungi a `configuration.yaml`:
 ```yaml
-dynamic_config:
-  db_path: "config/dynamic_config.db"
+mia_config:
+  db_name: "MiaHomeConfig"
   scan_interval: 60
 ```
 
@@ -22,7 +32,7 @@ dynamic_config:
 1. Vai su **Impostazioni** → **Dashboard**
 2. Click sui tre puntini in alto a destra → **Risorse**
 3. Click **+ Aggiungi Risorsa**
-4. URL: `/local/dynamic-config/dynamic-config-card.js`
+4. URL: `/mia_config_local/mia-config-card.js`
 5. Tipo: **JavaScript Module**
 
 **Metodo 2 - Tramite YAML:**
@@ -31,7 +41,7 @@ Aggiungi a `configuration.yaml`:
 lovelace:
   mode: yaml
   resources:
-    - url: /local/dynamic-config/dynamic-config-card.js
+    - url: /mia_config_local/mia-config-card.js
       type: module
 ```
 
@@ -42,7 +52,8 @@ lovelace:
 4. Scorri in basso e click **Manuale**
 5. Incolla:
 ```yaml
-type: custom:dynamic-config-card
+type: custom:mia-config-card
+entity_id: sensor.miahomeconfig_main  # Opzionale
 ```
 6. Salva!
 
@@ -113,7 +124,8 @@ automation:
 ## Problemi Comuni
 
 ### La card non appare
-- Verifica che il file sia in `www/dynamic-config/dynamic-config-card.js`
+- Verifica che il file sia in `custom_components/mia_config/www/mia-config-card.js`
+- Controlla di aver registrato la risorsa con l'URL: `/mia_config_local/mia-config-card.js`
 - Ricarica completamente il browser (Ctrl+F5 o Cmd+Shift+R)
 - Controlla la console del browser (F12) per errori
 

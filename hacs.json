@@ -1,0 +1,9 @@
+{
+  "name": "Mia Config",
+  "content_in_root": true,
+  "render_readme": true,
+  "homeassistant": "2024.1.0",
+  "filename": "mia_config.zip",
+  "zip_release": false,
+  "country": ["IT"]
+}

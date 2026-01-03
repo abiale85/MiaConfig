@@ -432,3 +432,71 @@ simulate_schedule:
           min: 1
           max: 30
           mode: box
+
+enable_config:
+  name: Abilita Configurazione
+  description: Abilita una configurazione precedentemente disabilitata
+  fields:
+    entity_id:
+      name: Entità
+      description: Entità sensor.mia_config_* dell'istanza da utilizzare (opzionale)
+      required: false
+      example: "sensor.mia_config_temperatura_target"
+      selector:
+        entity:
+          integration: mia_config
+    config_type:
+      name: Tipo Configurazione
+      description: Tipo di configurazione (standard, time, schedule, conditional)
+      required: true
+      example: "schedule"
+      selector:
+        select:
+          options:
+            - "standard"
+            - "time"
+            - "schedule"
+            - "conditional"
+    config_id:
+      name: ID Configurazione
+      description: ID della configurazione da abilitare
+      required: true
+      example: 5
+      selector:
+        number:
+          min: 1
+          mode: box
+
+disable_config:
+  name: Disabilita Configurazione
+  description: Disabilita temporaneamente una configurazione senza eliminarla
+  fields:
+    entity_id:
+      name: Entità
+      description: Entità sensor.mia_config_* dell'istanza da utilizzare (opzionale)
+      required: false
+      example: "sensor.mia_config_temperatura_target"
+      selector:
+        entity:
+          integration: mia_config
+    config_type:
+      name: Tipo Configurazione
+      description: Tipo di configurazione (standard, time, schedule, conditional)
+      required: true
+      example: "schedule"
+      selector:
+        select:
+          options:
+            - "standard"
+            - "time"
+            - "schedule"
+            - "conditional"
+    config_id:
+      name: ID Configurazione
+      description: ID della configurazione da disabilitare
+      required: true
+      example: 5
+      selector:
+        number:
+          min: 1
+          mode: box

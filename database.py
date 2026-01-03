@@ -51,7 +51,8 @@ class ConfigDatabase:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 setup_name TEXT NOT NULL,
                 setup_value TEXT,
-                priority INTEGER NOT NULL DEFAULT 99
+                priority INTEGER NOT NULL DEFAULT 99,
+                enabled INTEGER NOT NULL DEFAULT 1
             )
         """)
         
@@ -64,7 +65,8 @@ class ConfigDatabase:
                 valid_from_ora REAL NOT NULL,
                 valid_to_ora REAL,
                 days_of_week TEXT DEFAULT '0,1,2,3,4,5,6',
-                priority INTEGER NOT NULL DEFAULT 99
+                priority INTEGER NOT NULL DEFAULT 99,
+                enabled INTEGER NOT NULL DEFAULT 1
             )
         """)
         
@@ -79,7 +81,8 @@ class ConfigDatabase:
                 valid_from_ora REAL,
                 valid_to_ora REAL,
                 days_of_week TEXT,
-                priority INTEGER NOT NULL DEFAULT 99
+                priority INTEGER NOT NULL DEFAULT 99,
+                enabled INTEGER NOT NULL DEFAULT 1
             )
         """)
         
@@ -94,7 +97,8 @@ class ConfigDatabase:
                 conditional_value TEXT NOT NULL,
                 valid_from_ora REAL,
                 valid_to_ora REAL,
-                priority INTEGER NOT NULL DEFAULT 99
+                priority INTEGER NOT NULL DEFAULT 99,
+                enabled INTEGER NOT NULL DEFAULT 1
             )
         """)
         
@@ -170,7 +174,34 @@ class ConfigDatabase:
         """)
         
         self.conn.commit()
+        
+        # Applica migrazioni per database esistenti
+        self._apply_migrations(cursor)
+        
         _LOGGER.info("Database inizializzato con indici ottimizzati: %s", self.db_path)
+    
+    def _apply_migrations(self, cursor) -> None:
+        """Applica migrazioni al database per aggiungere nuove colonne se non esistono."""
+        # Migrazione: aggiungere colonna 'enabled' se non esiste
+        tables_to_migrate = [
+            'configurazioni',
+            'configurazioni_a_orario',
+            'configurazioni_a_tempo',
+            'configurazioni_condizionali'
+        ]
+        
+        for table in tables_to_migrate:
+            try:
+                # Controlla se la colonna esiste già
+                cursor.execute(f"PRAGMA table_info({table})")
+                columns = [row[1] for row in cursor.fetchall()]
+                
+                if 'enabled' not in columns:
+                    _LOGGER.info(f"Aggiunta colonna 'enabled' alla tabella {table}")
+                    cursor.execute(f"ALTER TABLE {table} ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
+                    self.conn.commit()
+            except Exception as e:
+                _LOGGER.error(f"Errore durante migrazione tabella {table}: {e}")
     
     def _get_configurations_at_time(self, target_datetime: datetime) -> Dict[str, Any]:
         """
@@ -201,6 +232,7 @@ class ConfigDatabase:
                    valid_from_date, valid_to_date, valid_from_ora, valid_to_ora, days_of_week, id
             FROM configurazioni_a_tempo
             WHERE datetime(?) BETWEEN datetime(valid_from_date) AND datetime(valid_to_date)
+            AND enabled = 1
         """, (target_datetime.strftime('%Y-%m-%d %H:%M:%S'),))
         
         for row in cursor.fetchall():
@@ -241,6 +273,7 @@ class ConfigDatabase:
             SELECT setup_name, setup_value, priority, valid_from_ora, valid_to_ora, 
                    days_of_week, id
             FROM configurazioni_a_orario
+            WHERE enabled = 1
         """)
         for row in cursor.fetchall():
             days_of_week = row['days_of_week'] if row['days_of_week'] else '0,1,2,3,4,5,6'
@@ -274,6 +307,7 @@ class ConfigDatabase:
         cursor.execute("""
             SELECT setup_name, setup_value, priority, id
             FROM configurazioni
+            WHERE enabled = 1
         """)
         for row in cursor.fetchall():
             all_active_configs.append({
@@ -291,6 +325,7 @@ class ConfigDatabase:
                    conditional_operator, conditional_value, 
                    valid_from_ora, valid_to_ora, id
             FROM configurazioni_condizionali
+            WHERE enabled = 1
         """)
         conditional_configs = cursor.fetchall()
         
@@ -849,7 +884,8 @@ class ConfigDatabase:
                 'type': 'standard',
                 'id': row['id'],
                 'value': row['setup_value'],
-                'priority': row['priority']
+                'priority': row['priority'],
+                'enabled': bool(row['enabled'])
             }
             # Aggiungi descrizione solo se presente
             if row['description']:
@@ -870,7 +906,8 @@ class ConfigDatabase:
                 'valid_from_ora': row['valid_from_ora'],
                 'valid_to_ora': row['valid_to_ora'],
                 'days_of_week': [int(d) for d in days_str.split(',') if d],
-                'priority': row['priority']
+                'priority': row['priority'],
+                'enabled': bool(row['enabled'])
             })
         
         # Configurazioni a tempo
@@ -885,7 +922,8 @@ class ConfigDatabase:
                 'value': row['setup_value'],
                 'valid_from_date': row['valid_from_date'],
                 'valid_to_date': row['valid_to_date'],
-                'priority': row['priority']
+                'priority': row['priority'],
+                'enabled': bool(row['enabled'])
             }
             # Aggiungi filtri opzionali se presenti
             if row['valid_from_ora'] is not None:
@@ -915,7 +953,8 @@ class ConfigDatabase:
                 'conditional_config': row['conditional_config'],
                 'conditional_operator': row['conditional_operator'],
                 'conditional_value': row['conditional_value'],
-                'priority': row['priority']
+                'priority': row['priority'],
+                'enabled': bool(row['enabled'])
             }
             # Aggiungi filtri temporali se presenti
             if row['valid_from_ora'] is not None:
@@ -1134,6 +1173,28 @@ class ConfigDatabase:
         self.conn.commit()
         _LOGGER.info(f"Configurazione {config_type} con ID {config_id} eliminata")
     
+    def set_config_enabled(self, config_type: str, config_id: int, enabled: bool) -> None:
+        """Abilita o disabilita una configurazione."""
+        cursor = self.conn.cursor()
+        enabled_value = 1 if enabled else 0
+        
+        table_map = {
+            'schedule': 'configurazioni_a_orario',
+            'time': 'configurazioni_a_tempo',
+            'conditional': 'configurazioni_condizionali',
+            'standard': 'configurazioni'
+        }
+        
+        if config_type not in table_map:
+            raise ValueError(f"Tipo configurazione non valido: {config_type}")
+        
+        table = table_map[config_type]
+        cursor.execute(f"UPDATE {table} SET enabled = ? WHERE id = ?", (enabled_value, config_id))
+        self.conn.commit()
+        
+        status = "abilitata" if enabled else "disabilitata"
+        _LOGGER.info(f"Configurazione {config_type} con ID {config_id} {status}")
+    
     def get_next_changes(self, setup_name: str, limit_hours: int = 24) -> List[Dict[str, Any]]:
         """
         Calcola i prossimi cambiamenti di valore per una configurazione.
@@ -1336,8 +1397,6 @@ class ConfigDatabase:
                 last_value = new_value
         
         return changes[:5]  # Max 5 eventi
-        
-        return events[:5]  # Max 5 eventi
     
     def get_current_config_start_time(self, setup_name: str) -> Optional[int]:
         """
