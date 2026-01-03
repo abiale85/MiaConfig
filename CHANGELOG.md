@@ -1,5 +1,31 @@
 # 📋 Changelog - Mia Config
 
+## v2.0.0 - 3 Gennaio 2026 🚀 Major UX + Backup
+
+### ✨ Novità principali
+- Modal-only per inserimento/configurazione override: tutti i form (standard/orario/temporale/condizionale) usano modali dedicati, eliminato il vecchio quick override inline.
+- Gestione backup integrata: upload/download/list/delete via nuovi endpoint HTTP e servizi dedicati, con UI nella card.
+- Storico abilitazioni: i toggle enable/disable delle configurazioni ora vengono registrati nello storico e visualizzati nella UI.
+- Override raggruppati e collassabili: gruppi per tipo con toggle rapido, migliore leggibilità.
+
+### 🎨 Frontend (mia-config-card.js)
+- Vista settimanale: tooltip protetti da "Node cannot be found" e allineamento dinamico sui bordi; legenda aggiornata.
+- Modalità mobile: padding e spaziatura ridotti, operator+valore nella stessa riga nei modali condizionali.
+- Banner/versione card aggiornata a 2.0.0; risorse backup e modali coerenti con i nuovi servizi.
+
+### 🛠️ Backend (integrazione)
+- Nuovi endpoint HTTP per backup (upload/download) e servizi di lista/eliminazione; helper per directory backup.
+- simulate_schedule esposto via WebSocket per la vista settimanale, con granularità derivata da scan_interval.
+- Log abilitazione/disabilitazione configurazioni nello storico.
+
+### 🐛 Fix
+- Override "valori validi" e select inizializzate correttamente nei modali (niente più selector null).
+- Tooltip vista settimanale non esplodono quando il DOM viene smontato.
+
+**Versioni allineate**
+- integrazione: 2.0.0
+- card: 2.0.0
+
 ## v1.5.5 - 2 Gennaio 2026 🐛 Fix Override 24h + UI
 
 ### 🐛 Fix: Override Orari 24h con Qualsiasi Orario
