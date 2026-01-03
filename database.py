@@ -938,7 +938,7 @@ class ConfigDatabase:
         # Configurazioni condizionali
         cursor.execute("""
             SELECT id, setup_name, setup_value, conditional_config, conditional_operator, 
-                   conditional_value, valid_from_ora, valid_to_ora, priority 
+                   conditional_value, valid_from_ora, valid_to_ora, priority, enabled 
             FROM configurazioni_condizionali 
             ORDER BY setup_name
         """)
