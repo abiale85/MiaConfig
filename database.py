@@ -180,33 +180,7 @@ class ConfigDatabase:
         
         self.conn.commit()
         
-        # Applica migrazioni per database esistenti
-        self._apply_migrations(cursor)
-        
         _LOGGER.info("Database inizializzato con indici ottimizzati: %s", self.db_path)
-    
-    def _apply_migrations(self, cursor) -> None:
-        """Applica migrazioni al database per aggiungere nuove colonne se non esistono."""
-        # Migrazione: aggiungere colonna 'enabled' se non esiste
-        tables_to_migrate = [
-            'configurazioni',
-            'configurazioni_a_orario',
-            'configurazioni_a_tempo',
-            'configurazioni_condizionali'
-        ]
-        
-        for table in tables_to_migrate:
-            try:
-                # Controlla se la colonna esiste già
-                cursor.execute(f"PRAGMA table_info({table})")
-                columns = [row[1] for row in cursor.fetchall()]
-                
-                if 'enabled' not in columns:
-                    _LOGGER.info(f"Aggiunta colonna 'enabled' alla tabella {table}")
-                    cursor.execute(f"ALTER TABLE {table} ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
-                    self.conn.commit()
-            except Exception as e:
-                _LOGGER.error(f"Errore durante migrazione tabella {table}: {e}")
     
     def _get_configurations_at_time(self, target_datetime: datetime) -> Dict[str, Any]:
         """
