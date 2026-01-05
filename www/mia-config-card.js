@@ -1148,15 +1148,20 @@ class MiaConfigCard extends HTMLElement {
         
         // Backup Database
         window.dcBackupDatabase = async () => {
-            const statusDiv = this.content.querySelector('#dc-backup-status');
+            const card = MiaConfigCard.getCardInstance();
+            if (!card || !card.content || !card._hass) {
+                console.error('Card instance not available for backup');
+                return;
+            }
+            const statusDiv = card.content.querySelector('#dc-backup-status');
             statusDiv.innerHTML = '<p style="color: var(--info-color);">⏳ Creazione backup...</p>';
             
             try {
-                const entityId = this.getSelectedEntityId();
+                const entityId = card.getSelectedEntityId();
                 const serviceData = {};
                 if (entityId) serviceData.entity_id = entityId;
                 
-                const result = await this._hass.callWS({
+                const result = await card._hass.callWS({
                     type: 'call_service',
                     domain: 'mia_config',
                     service: 'backup_database',
@@ -1281,18 +1286,20 @@ class MiaConfigCard extends HTMLElement {
                     return;
                 }
                 const rows = backups.map((backup) => {
-                    const safeName = backup.file_name.replace(/"/g, '&quot;');
+                    const safeName = backup.file_name.replace(/\\/g, '\\\\').replace(/'/g, "\\''");
+                    const safePath = backup.path.replace(/\\/g, '\\\\').replace(/'/g, "\\''");
+                    const displayName = backup.file_name;
                     const sizeLabel = humanFileSize(backup.size);
                     const dateLabel = backup.modified ? new Date(backup.modified).toLocaleString() : '-';
                     return `
                         <div style="display: grid; grid-template-columns: 1.5fr 1fr 1fr auto; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--divider-color);">
-                            <div style="overflow: hidden; text-overflow: ellipsis;">${safeName}</div>
+                            <div style="overflow: hidden; text-overflow: ellipsis;">${displayName}</div>
                             <div style="color: var(--secondary-text-color);">${dateLabel}</div>
                             <div style="color: var(--secondary-text-color);">${sizeLabel}</div>
                             <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;">
-                                <button class="dc-btn" onclick="window.dcDownloadBackup(\"${safeName}\")" style="padding: 6px 10px;">⬇️ Scarica</button>
-                                <button class="dc-btn-secondary" onclick="window.dcPrefillRestorePath(\"${backup.path.replace(/"/g, '&quot;')}\")" style="padding: 6px 10px;">📥 Usa per restore</button>
-                                <button class="dc-btn-secondary" onclick="window.dcDeleteBackup(\"${safeName}\")" style="padding: 6px 10px;">🗑️ Elimina</button>
+                                <button class="dc-btn" onclick="window.dcDownloadBackup('${safeName}')" style="padding: 6px 10px;">⬇️ Scarica</button>
+                                <button class="dc-btn-secondary" onclick="window.dcPrefillRestorePath('${safePath}')" style="padding: 6px 10px;">📥 Usa per restore</button>
+                                <button class="dc-btn-secondary" onclick="window.dcDeleteBackup('${safeName}')" style="padding: 6px 10px;">🗑️ Elimina</button>
                             </div>
                         </div>
                     `;
@@ -1337,8 +1344,13 @@ class MiaConfigCard extends HTMLElement {
         };
 
         window.dcUploadBackup = async () => {
-            const input = this.content.querySelector('#dc-backup-upload-input');
-            const statusDiv = this.content.querySelector('#dc-backup-status');
+            const card = MiaConfigCard.getCardInstance();
+            if (!card || !card.content || !card._hass) {
+                console.error('Card instance not available for upload');
+                return;
+            }
+            const input = card.content.querySelector('#dc-backup-upload-input');
+            const statusDiv = card.content.querySelector('#dc-backup-status');
             if (!input || !input.files || !input.files.length) {
                 alert('Seleziona un file di backup (.db) da caricare');
                 return;
@@ -1348,7 +1360,7 @@ class MiaConfigCard extends HTMLElement {
             formData.append('file', input.files[0]);
             statusDiv.innerHTML = '<p style="color: var(--info-color);">⬆️ Caricamento backup...</p>';
             try {
-                const resp = await fetch(this._hass.hassUrl('/api/mia_config/backups/upload'), {
+                const resp = await fetch(card._hass.hassUrl('/api/mia_config/backups/upload'), {
                     method: 'POST',
                     headers: token ? { Authorization: `Bearer ${token}` } : {},
                     body: formData
@@ -1447,9 +1459,15 @@ class MiaConfigCard extends HTMLElement {
         };
         
         window.dcUpdateConditionalOptions = async () => {
-            const sourceSelect = this.content.querySelector('#modal-conditional-source-config');
-            const comparisonContainer = this.content.querySelector('#modal-conditional-comparison-container');
-            const previewSpan = this.content.querySelector('#modal-conditional-preview');
+            const card = MiaConfigCard.getCardInstance();
+            if (!card || !card.content || !card._hass) {
+                console.error('Card instance not available for dcUpdateConditionalOptions');
+                return;
+            }
+            
+            const sourceSelect = card.content.querySelector('#modal-conditional-source-config');
+            const comparisonContainer = card.content.querySelector('#modal-conditional-comparison-container');
+            const previewSpan = card.content.querySelector('#modal-conditional-preview');
             
             if (!sourceSelect || !sourceSelect.value) return;
             
@@ -1457,11 +1475,11 @@ class MiaConfigCard extends HTMLElement {
             
             // Carica valori validi per questa configurazione
             try {
-                const entityId = this.getSelectedEntityId();
+                const entityId = card.getSelectedEntityId();
                 const serviceData = { setup_name: configName };
                 if (entityId) serviceData.entity_id = entityId;
                 
-                const result = await this._hass.callWS({
+                const result = await card._hass.callWS({
                     type: 'call_service',
                     domain: 'mia_config',
                     service: 'get_valid_values',
@@ -1473,8 +1491,8 @@ class MiaConfigCard extends HTMLElement {
                 const allowFreeText = validValues.some(vv => vv.value === '%');
                 
                 if (validValues.length > 0 && allowFreeText) {
-                    const datalistId = 'conditional-comparison-datalist';
-                    let html = `<input type="text" id="conditional-comparison-value" name="conditional_value" required list="${datalistId}" placeholder="Inserisci o seleziona valore" style="width: 100%; padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px;">`;
+                    const datalistId = 'modal-conditional-comparison-datalist';
+                    let html = `<input type="text" id="modal-conditional-comparison-value" name="conditional_value" required list="${datalistId}" placeholder="Inserisci o seleziona valore" style="width: 100%; padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px;">`;
                     html += `<datalist id="${datalistId}">`;
                     validValues.forEach(vv => {
                         const label = vv.description ? `${vv.value} (${vv.description})` : vv.value;
@@ -1485,7 +1503,7 @@ class MiaConfigCard extends HTMLElement {
                     comparisonContainer.innerHTML = html;
                 } else if (validValues.length > 0) {
                     // Crea un select con i valori validi
-                    let html = '<select id="conditional-comparison-value" name="conditional_value" required style="width: 100%; padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px;">';
+                    let html = '<select id="modal-conditional-comparison-value" name="conditional_value" required style="width: 100%; padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px;">';
                     html += '<option value="">-- Seleziona valore --</option>';
                     validValues.forEach(vv => {
                         const label = vv.description ? `${vv.value} (${vv.description})` : vv.value;
@@ -1495,11 +1513,11 @@ class MiaConfigCard extends HTMLElement {
                     comparisonContainer.innerHTML = html;
                 } else {
                     // Campo di input libero
-                    comparisonContainer.innerHTML = '<input type="text" id="conditional-comparison-value" name="conditional_value" required placeholder="es. 1" style="width: 100%; padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px;">';
+                    comparisonContainer.innerHTML = '<input type="text" id="modal-conditional-comparison-value" name="conditional_value" required placeholder="es. 1" style="width: 100%; padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px;">';
                 }
                 
                 // Aggiorna preview
-                const operatorElement = this.content.querySelector('#modal-conditional-operator');
+                const operatorElement = card.content.querySelector('#modal-conditional-operator');
                 if (previewSpan && operatorElement) {
                     previewSpan.textContent = `${configName} ${operatorElement.value} [valore]`;
                 }
