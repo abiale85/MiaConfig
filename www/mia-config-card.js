@@ -689,9 +689,9 @@ class MiaConfigCard extends HTMLElement {
                                 <div id="modal-conditional-comparison-container">
                                     <input type="text" id="modal-conditional-comparison-value" name="conditional_value" required placeholder="es. 1">
                                 </div>
-                                <small style="color: var(--secondary-text-color); display: block; margin-top: 4px;">L'override si attiva se: <strong id="modal-conditional-preview">configurazione operatore valore</strong></small>
                             </div>
                         </div>
+                        <div style="color: var(--secondary-text-color); font-size: 12px; margin: -5px 0 10px 0;">L'override si attiva se: <strong id="modal-conditional-preview">configurazione operatore valore</strong></div>
                         <div class="dc-form-group">
                             <label>Priorità (1-999):</label>
                             <input type="number" name="priority" min="1" max="999" value="50">
