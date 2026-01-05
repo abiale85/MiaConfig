@@ -4,6 +4,8 @@ console.log('MIA-CONFIG-CARD Loading Version 2.0.0 - 20260103');
 class MiaConfigCard extends HTMLElement {
     constructor() {
         super();
+        // Memorizza l'istanza della card a livello globale per accesso dalle funzioni window
+        window._miaConfigCardInstance = this;
         // Definisci subito le funzioni window che potrebbero essere chiamate dalla dashboard
         // prima che render() sia completato
         this.initializeWindowFunctions();
@@ -61,6 +63,10 @@ class MiaConfigCard extends HTMLElement {
         }
         
         return "Mia Config";
+    }
+
+    static getCardInstance() {
+        return window._miaConfigCardInstance;
     }
 
     setConfig(config) {
@@ -979,17 +985,29 @@ class MiaConfigCard extends HTMLElement {
             modalConditionalForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const form = e.target;
-                const setupName = this.content.querySelector('#modal-conditional-config-select').value;
-                const setupValue = this.content.querySelector('#modal-conditional-setup-value').value;
-                const conditionalConfig = this.content.querySelector('#modal-conditional-source-config').value;
-                const conditionalOperator = this.content.querySelector('#modal-conditional-operator').value;
-                const conditionalValue = this.content.querySelector('#modal-conditional-comparison-value').value;
-                const priority = this.content.querySelector('#modal-dc-form-conditional input[name="priority"]').value;
-                const enableHours = this.content.querySelector('#modal-conditional-enable-hours').checked;
+                
+                // Validazione elementi obbligatori
+                const setupNameElement = this.content.querySelector('#modal-conditional-config-select');
+                const conditionalConfigElement = this.content.querySelector('#modal-conditional-source-config');
+                const conditionalOperatorElement = this.content.querySelector('#modal-conditional-operator');
+                const conditionalValueElement = this.content.querySelector('#modal-conditional-comparison-value');
+                const priorityElement = this.content.querySelector('#modal-dc-form-conditional input[name="priority"]');
+                
+                // Se mancano elementi critici, annulla il submit
+                if (!setupNameElement?.value || !conditionalConfigElement?.value || !conditionalOperatorElement?.value || !conditionalValueElement?.value || !priorityElement?.value) {
+                    console.warn('Campi obbligatori mancanti nel form condizionale');
+                    return;
+                }
+                
+                const setupName = setupNameElement.value;
+                const conditionalConfig = conditionalConfigElement.value;
+                const conditionalOperator = conditionalOperatorElement.value;
+                const conditionalValue = conditionalValueElement.value;
+                const priority = priorityElement.value;
+                const enableHours = this.content.querySelector('#modal-conditional-enable-hours')?.checked || false;
                 try {
                     const serviceData = {
                         setup_name: setupName,
-                        setup_value: setupValue,
                         conditional_config: conditionalConfig,
                         conditional_operator: conditionalOperator,
                         conditional_value: conditionalValue,
@@ -1161,19 +1179,28 @@ class MiaConfigCard extends HTMLElement {
         
         // Mostra form restore
         window.dcShowRestoreForm = () => {
-            const form = this.content.querySelector('#dc-restore-form');
-            form.style.display = 'block';
+            const card = MiaConfigCard.getCardInstance();
+            if (!card || !card.content) return;
+            const form = card.content.querySelector('#dc-restore-form');
+            if (form) form.style.display = 'block';
         };
         
         // Nascondi form restore
         window.dcHideRestoreForm = () => {
-            const form = this.content.querySelector('#dc-restore-form');
-            form.style.display = 'none';
+            const card = MiaConfigCard.getCardInstance();
+            if (!card || !card.content) return;
+            const form = card.content.querySelector('#dc-restore-form');
+            if (form) form.style.display = 'none';
         };
         
         // Restore Database
         window.dcRestoreDatabase = async () => {
-            const pathInput = this.content.querySelector('#restore-backup-path');
+            const card = MiaConfigCard.getCardInstance();
+            if (!card || !card.content || !card._hass) {
+                console.error('Card instance not available for restore');
+                return;
+            }
+            const pathInput = card.content.querySelector('#restore-backup-path');
             const backupFile = pathInput.value.trim();
             
             if (!backupFile) {
@@ -1185,15 +1212,15 @@ class MiaConfigCard extends HTMLElement {
                 return;
             }
             
-            const statusDiv = this.content.querySelector('#dc-backup-status');
+            const statusDiv = card.content.querySelector('#dc-backup-status');
             statusDiv.innerHTML = '<p style="color: var(--info-color);">⏳ Ripristino database...</p>';
             
             try {
-                const entityId = this.getSelectedEntityId();
+                const entityId = card.getSelectedEntityId();
                 const serviceData = { backup_file: backupFile };
                 if (entityId) serviceData.entity_id = entityId;
                 
-                const result = await this._hass.callWS({
+                const result = await card._hass.callWS({
                     type: 'call_service',
                     domain: 'mia_config',
                     service: 'restore_database',
@@ -1206,7 +1233,7 @@ class MiaConfigCard extends HTMLElement {
                     window.dcHideRestoreForm();
                     pathInput.value = '';
                     setTimeout(() => {
-                        this.loadDashboard();
+                        card.loadDashboard();
                         statusDiv.innerHTML = '';
                     }, 2000);
                 } else {
@@ -1230,13 +1257,18 @@ class MiaConfigCard extends HTMLElement {
         };
 
         window.dcRefreshBackupList = async () => {
-            const listDiv = this.content.querySelector('#dc-backup-list');
+            const card = MiaConfigCard.getCardInstance();
+            if (!card || !card.content) {
+                console.warn('Card instance not available for backup list');
+                return;
+            }
+            const listDiv = card.content.querySelector('#dc-backup-list');
             if (!listDiv) return;
             listDiv.innerHTML = '<p style="margin: 0; color: var(--secondary-text-color);">Caricamento elenco backup...</p>';
             try {
-                const entityId = this.getSelectedEntityId();
+                const entityId = card.getSelectedEntityId();
                 const serviceData = entityId ? { entity_id: entityId } : {};
-                const result = await this._hass.callWS({
+                const result = await card._hass.callWS({
                     type: 'call_service',
                     domain: 'mia_config',
                     service: 'list_backups',
@@ -1273,11 +1305,16 @@ class MiaConfigCard extends HTMLElement {
         };
 
         window.dcDownloadBackup = async (fileName) => {
-            const statusDiv = this.content.querySelector('#dc-backup-status');
+            const card = MiaConfigCard.getCardInstance();
+            if (!card || !card.content || !card._hass) {
+                console.error('Card instance not available for download');
+                return;
+            }
+            const statusDiv = card.content.querySelector('#dc-backup-status');
             const token = getAuthToken();
             try {
                 statusDiv.innerHTML = '<p style="color: var(--info-color);">⬇️ Download backup...</p>';
-                const url = this._hass.hassUrl(`/api/mia_config/backups/${encodeURIComponent(fileName)}`);
+                const url = card._hass.hassUrl(`/api/mia_config/backups/${encodeURIComponent(fileName)}`);
                 const resp = await fetch(url, {
                     headers: token ? { Authorization: `Bearer ${token}` } : {}
                 });
@@ -1331,13 +1368,18 @@ class MiaConfigCard extends HTMLElement {
 
         window.dcDeleteBackup = async (fileName) => {
             if (!confirm(`Eliminare il backup "${fileName}"?`)) return;
-            const statusDiv = this.content.querySelector('#dc-backup-status');
+            const card = MiaConfigCard.getCardInstance();
+            if (!card || !card.content || !card._hass) {
+                console.error('Card instance not available for delete');
+                return;
+            }
+            const statusDiv = card.content.querySelector('#dc-backup-status');
             statusDiv.innerHTML = '<p style="color: var(--info-color);">🗑️ Eliminazione backup...</p>';
             try {
-                const entityId = this.getSelectedEntityId();
+                const entityId = card.getSelectedEntityId();
                 const serviceData = { file_name: fileName };
                 if (entityId) serviceData.entity_id = entityId;
-                const result = await this._hass.callWS({
+                const result = await card._hass.callWS({
                     type: 'call_service',
                     domain: 'mia_config',
                     service: 'delete_backup',
@@ -1358,12 +1400,17 @@ class MiaConfigCard extends HTMLElement {
 
         window.dcDeleteAllBackups = async () => {
             if (!confirm('Eliminare tutti i backup locali?')) return;
-            const statusDiv = this.content.querySelector('#dc-backup-status');
+            const card = MiaConfigCard.getCardInstance();
+            if (!card || !card.content || !card._hass) {
+                console.error('Card instance not available for delete all backups');
+                return;
+            }
+            const statusDiv = card.content.querySelector('#dc-backup-status');
             statusDiv.innerHTML = '<p style="color: var(--info-color);">🗑️ Eliminazione di tutti i backup...</p>';
             try {
-                const entityId = this.getSelectedEntityId();
+                const entityId = card.getSelectedEntityId();
                 const serviceData = entityId ? { entity_id: entityId } : {};
-                const result = await this._hass.callWS({
+                const result = await card._hass.callWS({
                     type: 'call_service',
                     domain: 'mia_config',
                     service: 'delete_all_backups',
@@ -1383,7 +1430,12 @@ class MiaConfigCard extends HTMLElement {
         };
 
         window.dcPrefillRestorePath = (path) => {
-            const input = this.content.querySelector('#restore-backup-path');
+            const card = MiaConfigCard.getCardInstance();
+            if (!card || !card.content) {
+                console.warn('Card instance not available for prefill');
+                return;
+            }
+            const input = card.content.querySelector('#restore-backup-path');
             if (input) {
                 input.value = path;
                 window.dcShowRestoreForm();
@@ -1447,9 +1499,9 @@ class MiaConfigCard extends HTMLElement {
                 }
                 
                 // Aggiorna preview
-                const operator = this.content.querySelector('#conditional-operator').value;
-                if (previewSpan) {
-                    previewSpan.textContent = `${configName} ${operator} [valore]`;
+                const operatorElement = this.content.querySelector('#modal-conditional-operator');
+                if (previewSpan && operatorElement) {
+                    previewSpan.textContent = `${configName} ${operatorElement.value} [valore]`;
                 }
             } catch (err) {
                 console.error('Errore caricamento valori validi:', err);
