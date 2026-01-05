@@ -674,16 +674,16 @@ class MiaConfigCard extends HTMLElement {
                             </select>
                             <small style="color: var(--secondary-text-color);">L'override si attiverà quando questa configurazione ha un valore specifico</small>
                         </div>
-                        <div class="dc-form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end;">
+                        <div class="dc-form-group" style="display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: end;">
                             <div>
                                 <label>Operatore:</label>
                                 <select id="modal-conditional-operator" name="conditional_operator" required>
-                                    <option value="==">=== (uguale)</option>
-                                    <option value="!=">!= (diverso)</option>
-                                    <option value=">">  > (maggiore)</option>
-                                    <option value="<">  < (minore)</option>
-                                    <option value=">=">>= (maggiore o uguale)</option>
-                                    <option value="<="><= (minore o uguale)</option>
+                                    <option value="==">==</option>
+                                    <option value="!=">!=</option>
+                                    <option value=">">&gt;</option>
+                                    <option value="<">&lt;</option>
+                                    <option value=">=">&gt;=</option>
+                                    <option value="<=">&lt;=</option>
                                 </select>
                             </div>
                             <div>
@@ -1004,18 +1004,20 @@ class MiaConfigCard extends HTMLElement {
                 
                 // Validazione elementi obbligatori
                 const setupNameElement = this.content.querySelector('#modal-conditional-config-select');
+                const setupValueElement = this.content.querySelector('#modal-conditional-setup-value');
                 const conditionalConfigElement = this.content.querySelector('#modal-conditional-source-config');
                 const conditionalOperatorElement = this.content.querySelector('#modal-conditional-operator');
                 const conditionalValueElement = this.content.querySelector('#modal-conditional-comparison-value');
                 const priorityElement = this.content.querySelector('#modal-dc-form-conditional input[name="priority"]');
                 
                 // Se mancano elementi critici, annulla il submit
-                if (!setupNameElement?.value || !conditionalConfigElement?.value || !conditionalOperatorElement?.value || !conditionalValueElement?.value || !priorityElement?.value) {
+                if (!setupNameElement?.value || !setupValueElement?.value || !conditionalConfigElement?.value || !conditionalOperatorElement?.value || !conditionalValueElement?.value || !priorityElement?.value) {
                     console.warn('Campi obbligatori mancanti nel form condizionale');
                     return;
                 }
                 
                 const setupName = setupNameElement.value;
+                const setupValue = setupValueElement.value;
                 const conditionalConfig = conditionalConfigElement.value;
                 const conditionalOperator = conditionalOperatorElement.value;
                 const conditionalValue = conditionalValueElement.value;
@@ -1024,6 +1026,7 @@ class MiaConfigCard extends HTMLElement {
                 try {
                     const serviceData = {
                         setup_name: setupName,
+                        setup_value: setupValue,
                         conditional_config: conditionalConfig,
                         conditional_operator: conditionalOperator,
                         conditional_value: conditionalValue,
