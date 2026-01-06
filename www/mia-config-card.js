@@ -2064,6 +2064,10 @@ class MiaConfigCard extends HTMLElement {
         
         window.dcEditConfig = async (name, type, id, cfgDataEncoded) => {
             try {
+                console.log('[dcEditConfig] Called with:', {name, type, id});
+                console.log('[dcEditConfig] this:', this);
+                console.log('[dcEditConfig] this.content:', this.content);
+                
                 // Chiudi il modal di add se è aperto
                 const addModal = this.content.querySelector('#dc-add-config-modal');
                 if (addModal && addModal.classList.contains('active')) {
@@ -2720,6 +2724,10 @@ class MiaConfigCard extends HTMLElement {
         
         window.dcShowWeeklyEventModal = (barElement) => {
             try {
+                console.log('[dcShowWeeklyEventModal] Called');
+                console.log('[dcShowWeeklyEventModal] this:', this);
+                console.log('[dcShowWeeklyEventModal] this.content:', this.content);
+                
                 // Helper per escape HTML e prevenire XSS
                 // Usa textContent per evitare l'interpretazione di HTML, poi legge innerHTML
                 // che contiene gli entity-encoded characters
@@ -3584,15 +3592,11 @@ class MiaConfigCard extends HTMLElement {
         };
 
         window.dcToggleOverrideGroup = (headerElement, safeKey) => {
-            // Trova il shadow root dall'elemento cliccato
-            const shadowRoot = headerElement.getRootNode();
-            if (!shadowRoot || shadowRoot === document) {
-                console.error('Impossibile trovare il shadow root');
-                return;
-            }
+            console.log('[dcToggleOverrideGroup] Called with:', {safeKey});
+            console.log('[dcToggleOverrideGroup] this.content:', this.content);
             
-            const content = shadowRoot.querySelector(`#${safeKey}-content`);
-            const toggle = shadowRoot.querySelector(`#${safeKey}-toggle`);
+            const content = this.content.querySelector(`#${safeKey}-content`);
+            const toggle = this.content.querySelector(`#${safeKey}-toggle`);
             if (!content || !toggle) {
                 console.error('Elementi collapse non trovati:', {safeKey, content, toggle});
                 return;
