@@ -2670,6 +2670,12 @@ class MiaConfigCard extends HTMLElement {
         
         // Funzioni per modal di inserimento configurazione
         window.dcOpenAddConfigModal = () => {
+            // Chiudi il modal di edit se è aperto
+            const editModal = this.content.querySelector('#dc-edit-modal');
+            if (editModal && editModal.classList.contains('active')) {
+                editModal.classList.remove('active');
+            }
+            
             const modal = this.content.querySelector('#dc-add-config-modal');
             modal.classList.add('active');
             // Carica le configurazioni standard per i select
@@ -2706,12 +2712,9 @@ class MiaConfigCard extends HTMLElement {
         };
         
         window.dcCloseEditModal = () => {
-            const cardElement = document.querySelector('mia-config-card');
-            if (cardElement && cardElement.shadowRoot) {
-                const modal = cardElement.shadowRoot.querySelector('#dc-edit-modal');
-                if (modal) {
-                    modal.classList.remove('active');
-                }
+            const modal = this.content.querySelector('#dc-edit-modal');
+            if (modal) {
+                modal.classList.remove('active');
             }
         };
         
@@ -2746,24 +2749,9 @@ class MiaConfigCard extends HTMLElement {
                 if (segment.from) segment.from = new Date(segment.from);
                 if (segment.to) segment.to = new Date(segment.to);
                 
-                // Genera il contenuto del modal partendo dal shadow root del segmento cliccato
-                let shadowRoot = null;
-                if (barElement && typeof barElement.getRootNode === 'function') {
-                    const root = barElement.getRootNode();
-                    if (root && root !== document && root.host && root.host.tagName === 'MIA-CONFIG-CARD') {
-                        shadowRoot = root;
-                    }
-                }
-                // Fallback: usa l'istanza globale della card
-                if (!shadowRoot && window._miaConfigCardInstance) {
-                    shadowRoot = window._miaConfigCardInstance.shadowRoot;
-                }
-                if (!shadowRoot) {
-                    console.error('Impossibile trovare il componente card');
-                    return;
-                }
-                const modalBody = shadowRoot.querySelector('#dc-weekly-event-modal-body');
-                const modal = shadowRoot.querySelector('#dc-weekly-event-modal');
+                // Genera il contenuto del modal
+                const modalBody = this.content.querySelector('#dc-weekly-event-modal-body');
+                const modal = this.content.querySelector('#dc-weekly-event-modal');
                 
                 if (!modalBody || !modal) {
                     console.error('Modal elements not found:', {modalBody, modal});
@@ -2864,13 +2852,9 @@ class MiaConfigCard extends HTMLElement {
         };
         
         window.dcCloseWeeklyEventModal = () => {
-            // Trova il modal attivo nel shadow DOM del componente card
-            const cardElement = document.querySelector('mia-config-card');
-            if (cardElement && cardElement.shadowRoot) {
-                const modal = cardElement.shadowRoot.querySelector('#dc-weekly-event-modal');
-                if (modal) {
-                    modal.classList.remove('active');
-                }
+            const modal = this.content.querySelector('#dc-weekly-event-modal');
+            if (modal) {
+                modal.classList.remove('active');
             }
         };
         
