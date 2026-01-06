@@ -1,5 +1,4 @@
 // Version 2.1.0-beta.6 - Restored v2.0.0 working implementation - 20260106
-console.log('MIA-CONFIG-CARD Loading Version 2.1.0-beta.6 - 20260106');
 
 class MiaConfigCard extends HTMLElement {
     constructor() {
@@ -833,7 +832,6 @@ class MiaConfigCard extends HTMLElement {
         window.dcShowWeeklyFor = (setupName) => {
             // Verifica che il contenuto sia renderizzato
             if (!this.window._miaConfigCardInstance.content) {
-                console.warn('Content not ready, waiting...');
                 setTimeout(() => window.dcShowWeeklyFor(setupName), 100);
                 return;
             }
@@ -867,7 +865,6 @@ class MiaConfigCard extends HTMLElement {
         
         window.dcLoadWeeklyView = async () => {
             if (!this._hass || !this.content) {
-                console.warn('Hass or content not ready');
                 return;
             }
             
@@ -1036,7 +1033,6 @@ class MiaConfigCard extends HTMLElement {
                 
                 // Se mancano elementi critici, annulla il submit
                 if (!setupNameElement?.value || !setupValueElement?.value || !conditionalConfigElement?.value || !conditionalOperatorElement?.value || !conditionalValueElement?.value || !priorityElement?.value) {
-                    console.warn('Campi obbligatori mancanti nel form condizionale');
                     return;
                 }
                 
@@ -1307,7 +1303,6 @@ class MiaConfigCard extends HTMLElement {
         window.dcRefreshBackupList = async () => {
             const card = MiaConfigCard.getCardInstance();
             if (!card || !card.content) {
-                console.warn('Card instance not available for backup list');
                 return;
             }
             const listDiv = card.content.querySelector('#dc-backup-list');
