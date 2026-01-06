@@ -1,6 +1,6 @@
 # 📋 Changelog - Mia Config
 
-## Unreleased
+## v2.1.0-beta.1 - 6 Gennaio 2026 🧪 Beta Release
 
 ### 🎨 Frontend (mia-config-card.js)
 - **Vista settimanale mobile**: Aggiunto modal con dettagli completi per tocco/click sulle barre
@@ -9,6 +9,11 @@
   - Mantiene i tooltip hover per desktop (progressive enhancement)
   - Chiusura modal con click sul backdrop o pulsante X
   - Aggiunta nota nella legenda sulla funzionalità tap/click
+
+### 📝 Note
+Prima versione beta di 2.1.0. Testing per nuove funzionalità in arrivo.
+
+---
 
 ## v2.0.0 - 3 Gennaio 2026 🚀 Major UX + Backup
 
