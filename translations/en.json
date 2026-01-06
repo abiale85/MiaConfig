@@ -5,7 +5,24 @@
         "title": "Configure Mia Config",
         "description": "Configure the Mia Config integration to manage dynamic configurations based on time and schedule.",
         "data": {
-          "scan_interval": "Scan interval (seconds)"
+          "db_name": "Database Name",
+          "scan_interval": "Scan interval (seconds)",
+          "lookahead_hours": "Future prediction hours",
+          "lookback_hours": "Past history hours",
+          "cleanup_days": "Expired config cleanup days",
+          "retention_days": "History retention days",
+          "max_history_per_name": "Max history entries",
+          "min_history_per_name": "Min history entries"
+        },
+        "data_description": {
+          "db_name": "Database file name (e.g., 'mia_config' or 'vacation_home')",
+          "scan_interval": "Sensor update frequency in seconds",
+          "lookahead_hours": "How many hours to look ahead for predicting next changes",
+          "lookback_hours": "How many hours to look back for history",
+          "cleanup_days": "After how many days to delete expired temporal configurations",
+          "retention_days": "Delete history entries older than these days",
+          "max_history_per_name": "Keep at most this number of entries per configuration",
+          "min_history_per_name": "Always keep at least this number of recent entries"
         }
       }
     },
@@ -14,16 +31,141 @@
       "unknown": "Unknown error"
     },
     "abort": {
-      "already_configured": "Integration is already configured"
+      "already_configured": "Instance already configured"
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Mia Config Options",
-        "description": "Configure options for Mia Config",
+        "description": "Configure advanced options",
         "data": {
-          "scan_interval": "Scan interval (seconds)"
+          "scan_interval": "Scan interval (seconds)",
+          "lookahead_hours": "Future prediction hours",
+          "lookback_hours": "Past history hours",
+          "cleanup_days": "Expired config cleanup days",
+          "retention_days": "History retention days",
+          "max_history_per_name": "Max history entries",
+          "min_history_per_name": "Min history entries"
+        },
+        "data_description": {
+          "scan_interval": "Update frequency in seconds",
+          "lookahead_hours": "Prediction window in hours",
+          "lookback_hours": "History window in hours",
+          "cleanup_days": "Auto-cleanup threshold",
+          "retention_days": "Maximum history age",
+          "max_history_per_name": "Maximum entries per config",
+          "min_history_per_name": "Minimum entries to retain"
+        }
+      }
+    }
+  },
+  "services": {
+    "set_standard_config": {
+      "name": "Set Standard Configuration",
+      "description": "Sets or updates a standard configuration with priority.",
+      "fields": {
+        "setup_name": {
+          "name": "Configuration Name",
+          "description": "Name of the configuration to set."
+        },
+        "setup_value": {
+          "name": "Value",
+          "description": "Value to assign to the configuration."
+        },
+        "priority": {
+          "name": "Priority",
+          "description": "Priority level (1 = highest, 99 = lowest)."
+        },
+        "description": {
+          "name": "Description",
+          "description": "Optional description for the configuration."
+        }
+      }
+    },
+    "set_schedule_config": {
+      "name": "Set Schedule Configuration",
+      "description": "Sets a time-based override with time slots and weekdays.",
+      "fields": {
+        "setup_name": {
+          "name": "Configuration Name",
+          "description": "Name of the configuration to override."
+        },
+        "setup_value": {
+          "name": "Value",
+          "description": "Value during the time slot."
+        },
+        "valid_from_ora": {
+          "name": "From Hour",
+          "description": "Start hour in decimal format (e.g., 8.5 = 8:30)."
+        },
+        "valid_to_ora": {
+          "name": "To Hour",
+          "description": "End hour in decimal format."
+        },
+        "days_of_week": {
+          "name": "Days of Week",
+          "description": "List of weekdays (0=Monday, 6=Sunday)."
+        },
+        "priority": {
+          "name": "Priority",
+          "description": "Priority level (1 = highest, 99 = lowest)."
+        }
+      }
+    },
+    "set_time_config": {
+      "name": "Set Time Configuration",
+      "description": "Sets a date-range-based override.",
+      "fields": {
+        "setup_name": {
+          "name": "Configuration Name",
+          "description": "Name of the configuration to override."
+        },
+        "setup_value": {
+          "name": "Value",
+          "description": "Value during the date range."
+        },
+        "valid_from_date": {
+          "name": "From Date",
+          "description": "Start date and time (YYYY-MM-DD HH:MM)."
+        },
+        "valid_to_date": {
+          "name": "To Date",
+          "description": "End date and time (YYYY-MM-DD HH:MM)."
+        },
+        "priority": {
+          "name": "Priority",
+          "description": "Priority level (1 = highest, 99 = lowest)."
+        }
+      }
+    },
+    "set_conditional_config": {
+      "name": "Set Conditional Configuration",
+      "description": "Sets a condition-based override.",
+      "fields": {
+        "setup_name": {
+          "name": "Configuration Name",
+          "description": "Name of the configuration to override."
+        },
+        "setup_value": {
+          "name": "Value",
+          "description": "Value when condition is met."
+        },
+        "conditional_config": {
+          "name": "Source Configuration",
+          "description": "Configuration to monitor."
+        },
+        "conditional_operator": {
+          "name": "Operator",
+          "description": "Comparison operator (==, !=, >, <, >=, <=)."
+        },
+        "conditional_value": {
+          "name": "Compare Value",
+          "description": "Value to compare against."
+        },
+        "priority": {
+          "name": "Priority",
+          "description": "Priority level (1 = highest, 99 = lowest)."
         }
       }
     }

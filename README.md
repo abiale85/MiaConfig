@@ -5,6 +5,8 @@
 [![GitHub issues](https://img.shields.io/github/issues/abiale85/MiaConfig.svg)](https://GitHub.com/abiale85/MiaConfig/issues/)
 [![License](https://img.shields.io/github/license/abiale85/MiaConfig.svg)](https://github.com/abiale85/MiaConfig/blob/main/LICENSE)
 
+🇮🇹 **Italiano** | [🇬🇧 English](README_EN.md)
+
 Un componente custom per Home Assistant che gestisce configurazioni dinamiche con valori che cambiano automaticamente in base a regole temporali e orarie con sistema avanzato di priorità.
 
 ## Caratteristiche

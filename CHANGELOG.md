@@ -1,5 +1,39 @@
 # 📋 Changelog - Mia Config
 
+## v2.1.0-beta.3 - 6 Gennaio 2026 🌍 Internationalization
+
+### 🌐 Internationalization & Multilingual Support
+- **English Documentation**: Complete English translation of all documentation
+  - README_EN.md: Full English version of main README
+  - QUICK_START_EN.md: English quick start guide
+  - Complete UI translations in translations/en.json
+  - **Impact**: Integration now fully accessible to international users
+
+- **Multilingual UI**: Enhanced translation system
+  - All config flow strings translated (English + Italian)
+  - All service descriptions translated
+  - Field descriptions and helpers in both languages
+  - **Impact**: Users can use the integration in their language
+
+- **HACS Compatibility**: Updated for worldwide distribution
+  - Added country codes: IT, GB, US in hacs.json
+  - Language switcher in README files
+  - **Impact**: Integration ready for HACS default repository
+
+### 📝 Documentation Updates
+- Language switcher in all README files (🇮🇹 / 🇬🇧)
+- Bilingual quick start guides
+- Internationalized service documentation
+
+### 🎯 Target Audience
+Integration now serves both Italian and international Home Assistant communities
+
+**Versions**
+- integrazione: 2.1.0-beta.3
+- card: 2.1.0-beta.2
+
+---
+
 ## v2.1.0-beta.2 - 6 Gennaio 2026 🐛 Bugfix Release
 
 ### 🐛 Fix Critici

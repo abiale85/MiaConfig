@@ -5,5 +5,5 @@
   "homeassistant": "2024.1.0",
   "filename": "mia_config.zip",
   "zip_release": false,
-  "country": ["IT"]
+  "country": ["IT", "GB", "US"]
 }
