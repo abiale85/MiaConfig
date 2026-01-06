@@ -2716,8 +2716,12 @@ class MiaConfigCard extends HTMLElement {
         };
         
         window.dcShowWeeklyEventModal = (cardElement, barElement) => {
+            const instance = cardElement._instance;
             const content = instance.content;
-            const instance = instance._instance;
+            
+            try {
+                const modal = content.querySelector('#dc-weekly-event-modal');
+                const modalBody = content.querySelector('#dc-weekly-event-modal-body');
                 
                 if (!modalBody || !modal) {
                     console.error('Modal elements not found:', {modalBody, modal});
