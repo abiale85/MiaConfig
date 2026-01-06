@@ -3376,7 +3376,7 @@ class MiaConfigCard extends HTMLElement {
             html += `<div class="dc-config-group">`;
             html += `<div class="dc-config-group-header" onclick="window.dcToggleOverrideGroup(this, '${safeKey}')">`;
             html += `<div class="dc-config-group-title">`;
-            html += `<span class="dc-config-group-toggle" id="${safeKey}-toggle">▼</span>`;
+            html += `<span class="dc-config-group-toggle" id="${safeKey}-toggle">▶</span>`;
             html += `<span>${group.title}</span>`;
             html += `</div>`;
             if (group.type !== 'standard') {
@@ -3586,13 +3586,17 @@ class MiaConfigCard extends HTMLElement {
         window.dcToggleOverrideGroup = (headerElement, safeKey) => {
             const content = window._miaConfigCardInstance.content.querySelector(`#${safeKey}-content`);
             const toggle = window._miaConfigCardInstance.content.querySelector(`#${safeKey}-toggle`);
-            if (!content || !toggle) {
-                console.error('Elementi collapse non trovati:', {safeKey, content, toggle});
-                return;
+            
+            if (content && toggle) {
+                const isExpanded = content.classList.contains('expanded');
+                if (isExpanded) {
+                    content.classList.remove('expanded');
+                    toggle.classList.remove('expanded');
+                } else {
+                    content.classList.add('expanded');
+                    toggle.classList.add('expanded');
+                }
             }
-            const isOpen = content.style.display !== 'none';
-            content.style.display = isOpen ? 'none' : 'block';
-            toggle.textContent = isOpen ? '▶' : '▼';
         };
     }
 
