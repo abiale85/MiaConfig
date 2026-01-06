@@ -4,7 +4,7 @@
 
 ### 🐛 Issues Resolved:
 1. **Edit Modal** - Now appears in foreground (was opening in background)
-2. **Collapse in Group By Override** - Toggle now works correctly
+2. **Collapse in Group By Override** - Toggle now works correctly (was using wrong CSS approach)
 3. **Weekly View Popup** - Detail popup now appears when clicking bars
 
 ### 🔧 Root Cause & Fix:
@@ -15,7 +15,8 @@
       display: flex !important;
   }
   ```
-- **JavaScript**: Restored v2.0.0 working pattern using this.content.querySelector() throughout
+- **JavaScript**: Restored v2.0.0 working pattern using window._miaConfigCardInstance.content.querySelector() throughout
+- **Collapse Fix**: dcToggleOverrideGroup now uses CSS classes instead of inline styles (like dcToggleConfigGroup)
 
 ### 🧪 How to test:
 1. **Hard-reload** (Ctrl+F5)
@@ -27,4 +28,4 @@
 - Integration: 2.1.0-beta.6
 - Card: 2.1.0-beta.6
 
-**All modals now work correctly!** 🎉
+**All modals and collapse functionality now work correctly!** 🎉
