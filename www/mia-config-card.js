@@ -34,7 +34,7 @@ class MiaConfigCard extends HTMLElement {
         } else if (firstLoad && this.content) {
             // Prima volta che _hass diventa disponibile e content già esiste
             // Carica dashboard se è il tab attivo
-            const dashboardTab = this.content.querySelector('#dc-tab-dashboard');
+            const dashboardTab = window._miaConfigCardInstance.content.querySelector('#dc-tab-dashboard');
             if (dashboardTab && dashboardTab.classList.contains('active')) {
                 this.loadDashboard();
             }
@@ -537,11 +537,11 @@ class MiaConfigCard extends HTMLElement {
                                     <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
                                     <div class="dc-time-input">
                                         <select id="modal-from-hour" required>
-                                            ${this.generateHourOptions(0, 23)}
+                                            ${window._miaConfigCardInstance.generateHourOptions(0, 23)}
                                         </select>
                                         <span class="dc-time-separator">:</span>
                                         <select id="modal-from-minute" required>
-                                            ${this.generateMinuteOptions()}
+                                            ${window._miaConfigCardInstance.generateMinuteOptions()}
                                         </select>
                                     </div>
                                 </div>
@@ -550,11 +550,11 @@ class MiaConfigCard extends HTMLElement {
                                     <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
                                     <div class="dc-time-input">
                                         <select id="modal-to-hour" required>
-                                            ${this.generateHourOptions(0, 23)}
+                                            ${window._miaConfigCardInstance.generateHourOptions(0, 23)}
                                         </select>
                                         <span class="dc-time-separator">:</span>
                                         <select id="modal-to-minute" required>
-                                            ${this.generateMinuteOptions()}
+                                            ${window._miaConfigCardInstance.generateMinuteOptions()}
                                         </select>
                                     </div>
                                 </div>
@@ -627,18 +627,18 @@ class MiaConfigCard extends HTMLElement {
                                     <div>
                                         <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
                                         <div class="dc-time-input">
-                                            <select id="modal-time-from-hour">${this.generateHourOptions(0, 23)}</select>
+                                            <select id="modal-time-from-hour">${window._miaConfigCardInstance.generateHourOptions(0, 23)}</select>
                                             <span class="dc-time-separator">:</span>
-                                            <select id="modal-time-from-minute">${this.generateMinuteOptions()}</select>
+                                            <select id="modal-time-from-minute">${window._miaConfigCardInstance.generateMinuteOptions()}</select>
                                         </div>
                                     </div>
                                     <span style="font-size: 18px; align-self: flex-end; padding-bottom: 8px;">→</span>
                                     <div>
                                         <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
                                         <div class="dc-time-input">
-                                            <select id="modal-time-to-hour">${this.generateHourOptions(0, 23)}</select>
+                                            <select id="modal-time-to-hour">${window._miaConfigCardInstance.generateHourOptions(0, 23)}</select>
                                             <span class="dc-time-separator">:</span>
-                                            <select id="modal-time-to-minute">${this.generateMinuteOptions()}</select>
+                                            <select id="modal-time-to-minute">${window._miaConfigCardInstance.generateMinuteOptions()}</select>
                                         </div>
                                     </div>
                                 </div>
@@ -720,18 +720,18 @@ class MiaConfigCard extends HTMLElement {
                                     <div>
                                         <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
                                         <div class="dc-time-input">
-                                            <select id="modal-conditional-from-hour">${this.generateHourOptions(0, 23)}</select>
+                                            <select id="modal-conditional-from-hour">${window._miaConfigCardInstance.generateHourOptions(0, 23)}</select>
                                             <span class="dc-time-separator">:</span>
-                                            <select id="modal-conditional-from-minute">${this.generateMinuteOptions()}</select>
+                                            <select id="modal-conditional-from-minute">${window._miaConfigCardInstance.generateMinuteOptions()}</select>
                                         </div>
                                     </div>
                                     <span style="font-size: 18px; align-self: flex-end; padding-bottom: 8px;">→</span>
                                     <div>
                                         <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
                                         <div class="dc-time-input">
-                                            <select id="modal-conditional-to-hour">${this.generateHourOptions(0, 23)}</select>
+                                            <select id="modal-conditional-to-hour">${window._miaConfigCardInstance.generateHourOptions(0, 23)}</select>
                                             <span class="dc-time-separator">:</span>
-                                            <select id="modal-conditional-to-minute">${this.generateMinuteOptions()}</select>
+                                            <select id="modal-conditional-to-minute">${window._miaConfigCardInstance.generateMinuteOptions()}</select>
                                         </div>
                                     </div>
                                 </div>
@@ -771,7 +771,7 @@ class MiaConfigCard extends HTMLElement {
         `;
 
         // setupEventListeners() ora è chiamato in set hass dopo render()
-        this.loadConfigurations();
+        window._miaConfigCardInstance.loadConfigurations();
         this.setDefaultTimeValues();
     }
     
@@ -808,8 +808,8 @@ class MiaConfigCard extends HTMLElement {
             return `${year}-${month}-${day}T${hours}:${minutes}`;
         };
         
-        const validFromInput = this.content.querySelector('#modal-dc-form-time input[name="valid_from"]');
-        const validToInput = this.content.querySelector('#modal-dc-form-time input[name="valid_to"]');
+        const validFromInput = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-time input[name="valid_from"]');
+        const validToInput = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-time input[name="valid_to"]');
         
         if (validFromInput) validFromInput.value = formatDateTime(now);
         if (validToInput) validToInput.value = formatDateTime(midnight);
@@ -828,14 +828,14 @@ class MiaConfigCard extends HTMLElement {
             }
             
             // Passa al tab vista settimanale
-            const weeklyTab = this.content.querySelector('.dc-tab:nth-child(3)');
+            const weeklyTab = window._miaConfigCardInstance.content.querySelector('.dc-tab:nth-child(3)');
             if (weeklyTab) {
                 weeklyTab.click();
             }
             
             // Attendi che il tab si carichi e il select sia popolato
             setTimeout(() => {
-                const weeklySelect = this.content.querySelector('#weekly-config-select');
+                const weeklySelect = window._miaConfigCardInstance.content.querySelector('#weekly-config-select');
                 if (weeklySelect) {
                     const checkAndLoad = () => {
                         if (weeklySelect.options.length > 1) {
@@ -860,9 +860,9 @@ class MiaConfigCard extends HTMLElement {
                 return;
             }
             
-            const setupName = this.content.querySelector('#weekly-config-select').value;
+            const setupName = window._miaConfigCardInstance.content.querySelector('#weekly-config-select').value;
             if (!setupName) {
-                this.showToast('Seleziona una configurazione', true);
+                window._miaConfigCardInstance.showToast('Seleziona una configurazione', true);
                 return;
             }
             
@@ -882,14 +882,14 @@ class MiaConfigCard extends HTMLElement {
                 const setupConfigs = configs[setupName] || [];
                 
                 if (setupConfigs.length === 0) {
-                    this.content.querySelector('#dc-weekly-view').innerHTML = '<p>Nessuna configurazione trovata per questo setup</p>';
+                    window._miaConfigCardInstance.content.querySelector('#dc-weekly-view').innerHTML = '<p>Nessuna configurazione trovata per questo setup</p>';
                     return;
                 }
                 
                 this.renderWeeklyView(setupName, setupConfigs);
             } catch (error) {
                 console.error('Error loading weekly view:', error);
-                this.content.querySelector('#dc-weekly-view').innerHTML = `<p style="color: red;">Errore: ${error.message}</p>`;
+                window._miaConfigCardInstance.content.querySelector('#dc-weekly-view').innerHTML = `<p style="color: red;">Errore: ${error.message}</p>`;
             }
         };
         
@@ -898,7 +898,7 @@ class MiaConfigCard extends HTMLElement {
 
     setupEventListeners() {
         // Form handlers per modal di inserimento
-        const modalStandardForm = this.content.querySelector('#modal-dc-form-standard');
+        const modalStandardForm = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-standard');
         if (modalStandardForm) {
             modalStandardForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -914,34 +914,34 @@ class MiaConfigCard extends HTMLElement {
                     if (description && description.trim()) {
                         serviceData.description = description.trim();
                     }
-                    await this.callMiaConfigService('set_config', serviceData);
+                    await window._miaConfigCardInstance.callMiaConfigService('set_config', serviceData);
                     form.reset();
                     window.dcCloseAddConfigModal();
-                    this.showToast('Configurazione salvata!');
+                    window._miaConfigCardInstance.showToast('Configurazione salvata!');
                     setTimeout(() => {
-                        this.loadConfigurations();
+                        window._miaConfigCardInstance.loadConfigurations();
                         this.loadConfigsForValidValues();
                     }, 500);
                 } catch (err) {
                     console.error('Errore salvataggio:', err);
-                    this.showToast('Errore: ' + err.message, true);
+                    window._miaConfigCardInstance.showToast('Errore: ' + err.message, true);
                 }
             });
         }
         
-        const modalScheduleForm = this.content.querySelector('#modal-dc-form-schedule');
+        const modalScheduleForm = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-schedule');
         if (modalScheduleForm) {
             modalScheduleForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const form = e.target;
-                const setupName = this.content.querySelector('#modal-schedule-config-select').value;
-                const setupValue = this.content.querySelector('#modal-schedule-setup-value').value;
-                const fromHour = this.content.querySelector('#modal-from-hour').value;
-                const fromMinute = this.content.querySelector('#modal-from-minute').value;
-                const toHour = this.content.querySelector('#modal-to-hour').value;
-                const toMinute = this.content.querySelector('#modal-to-minute').value;
-                const selectedDays = Array.from(this.content.querySelectorAll('#modal-dc-form-schedule input[name="days"]:checked')).map(el => el.value);
-                const priority = this.content.querySelector('#modal-dc-form-schedule input[name="priority"]').value;
+                const setupName = window._miaConfigCardInstance.content.querySelector('#modal-schedule-config-select').value;
+                const setupValue = window._miaConfigCardInstance.content.querySelector('#modal-schedule-setup-value').value;
+                const fromHour = window._miaConfigCardInstance.content.querySelector('#modal-from-hour').value;
+                const fromMinute = window._miaConfigCardInstance.content.querySelector('#modal-from-minute').value;
+                const toHour = window._miaConfigCardInstance.content.querySelector('#modal-to-hour').value;
+                const toMinute = window._miaConfigCardInstance.content.querySelector('#modal-to-minute').value;
+                const selectedDays = Array.from(window._miaConfigCardInstance.content.querySelectorAll('#modal-dc-form-schedule input[name="days"]:checked')).map(el => el.value);
+                const priority = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-schedule input[name="priority"]').value;
                 try {
                     const validFromOra = parseFloat(fromHour) + parseFloat(fromMinute) / 60;
                     const validToOra = parseFloat(toHour) + parseFloat(toMinute) / 60;
@@ -953,30 +953,30 @@ class MiaConfigCard extends HTMLElement {
                         days_of_week: selectedDays.join(','),
                         priority: parseInt(priority)
                     };
-                    await this.callMiaConfigService('set_schedule_config', serviceData);
+                    await window._miaConfigCardInstance.callMiaConfigService('set_schedule_config', serviceData);
                     form.reset();
                     window.dcCloseAddConfigModal();
-                    this.showToast('Override orario aggiunto!');
-                    setTimeout(() => this.loadConfigurations(), 500);
+                    window._miaConfigCardInstance.showToast('Override orario aggiunto!');
+                    setTimeout(() => window._miaConfigCardInstance.loadConfigurations(), 500);
                 } catch (err) {
                     console.error('Errore:', err);
-                    this.showToast('Errore: ' + err.message, true);
+                    window._miaConfigCardInstance.showToast('Errore: ' + err.message, true);
                 }
             });
         }
         
-        const modalTimeForm = this.content.querySelector('#modal-dc-form-time');
+        const modalTimeForm = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-time');
         if (modalTimeForm) {
             modalTimeForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const form = e.target;
-                const setupName = this.content.querySelector('#modal-time-config-select').value;
-                const setupValue = this.content.querySelector('#modal-time-setup-value').value;
-                const validFrom = this.content.querySelector('#modal-dc-form-time input[name="valid_from"]').value;
-                const validTo = this.content.querySelector('#modal-dc-form-time input[name="valid_to"]').value;
-                const priority = this.content.querySelector('#modal-dc-form-time input[name="priority"]').value;
-                const enableHours = this.content.querySelector('#modal-time-enable-hours').checked;
-                const enableDays = this.content.querySelector('#modal-time-enable-days').checked;
+                const setupName = window._miaConfigCardInstance.content.querySelector('#modal-time-config-select').value;
+                const setupValue = window._miaConfigCardInstance.content.querySelector('#modal-time-setup-value').value;
+                const validFrom = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-time input[name="valid_from"]').value;
+                const validTo = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-time input[name="valid_to"]').value;
+                const priority = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-time input[name="priority"]').value;
+                const enableHours = window._miaConfigCardInstance.content.querySelector('#modal-time-enable-hours').checked;
+                const enableDays = window._miaConfigCardInstance.content.querySelector('#modal-time-enable-days').checked;
                 try {
                     const serviceData = {
                         setup_name: setupName,
@@ -986,42 +986,42 @@ class MiaConfigCard extends HTMLElement {
                         priority: parseInt(priority)
                     };
                     if (enableHours) {
-                        const fromHour = this.content.querySelector('#modal-time-from-hour').value;
-                        const fromMinute = this.content.querySelector('#modal-time-from-minute').value;
-                        const toHour = this.content.querySelector('#modal-time-to-hour').value;
-                        const toMinute = this.content.querySelector('#modal-time-to-minute').value;
+                        const fromHour = window._miaConfigCardInstance.content.querySelector('#modal-time-from-hour').value;
+                        const fromMinute = window._miaConfigCardInstance.content.querySelector('#modal-time-from-minute').value;
+                        const toHour = window._miaConfigCardInstance.content.querySelector('#modal-time-to-hour').value;
+                        const toMinute = window._miaConfigCardInstance.content.querySelector('#modal-time-to-minute').value;
                         serviceData.valid_from_ora = parseFloat(fromHour) + parseFloat(fromMinute) / 60;
                         serviceData.valid_to_ora = parseFloat(toHour) + parseFloat(toMinute) / 60;
                     }
                     if (enableDays) {
-                        const selectedDays = Array.from(this.content.querySelectorAll('#modal-dc-form-time input[name="time-days"]:checked')).map(el => el.value);
+                        const selectedDays = Array.from(window._miaConfigCardInstance.content.querySelectorAll('#modal-dc-form-time input[name="time-days"]:checked')).map(el => el.value);
                         serviceData.days_of_week = selectedDays.join(',');
                     }
-                    await this.callMiaConfigService('set_time_config', serviceData);
+                    await window._miaConfigCardInstance.callMiaConfigService('set_time_config', serviceData);
                     form.reset();
                     window.dcCloseAddConfigModal();
-                    this.showToast('Override temporale aggiunto!');
-                    setTimeout(() => this.loadConfigurations(), 500);
+                    window._miaConfigCardInstance.showToast('Override temporale aggiunto!');
+                    setTimeout(() => window._miaConfigCardInstance.loadConfigurations(), 500);
                 } catch (err) {
                     console.error('Errore:', err);
-                    this.showToast('Errore: ' + err.message, true);
+                    window._miaConfigCardInstance.showToast('Errore: ' + err.message, true);
                 }
             });
         }
         
-        const modalConditionalForm = this.content.querySelector('#modal-dc-form-conditional');
+        const modalConditionalForm = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-conditional');
         if (modalConditionalForm) {
             modalConditionalForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const form = e.target;
                 
                 // Validazione elementi obbligatori
-                const setupNameElement = this.content.querySelector('#modal-conditional-config-select');
-                const setupValueElement = this.content.querySelector('#modal-conditional-setup-value');
-                const conditionalConfigElement = this.content.querySelector('#modal-conditional-source-config');
-                const conditionalOperatorElement = this.content.querySelector('#modal-conditional-operator');
-                const conditionalValueElement = this.content.querySelector('#modal-conditional-comparison-value');
-                const priorityElement = this.content.querySelector('#modal-dc-form-conditional input[name="priority"]');
+                const setupNameElement = window._miaConfigCardInstance.content.querySelector('#modal-conditional-config-select');
+                const setupValueElement = window._miaConfigCardInstance.content.querySelector('#modal-conditional-setup-value');
+                const conditionalConfigElement = window._miaConfigCardInstance.content.querySelector('#modal-conditional-source-config');
+                const conditionalOperatorElement = window._miaConfigCardInstance.content.querySelector('#modal-conditional-operator');
+                const conditionalValueElement = window._miaConfigCardInstance.content.querySelector('#modal-conditional-comparison-value');
+                const priorityElement = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-conditional input[name="priority"]');
                 
                 // Se mancano elementi critici, annulla il submit
                 if (!setupNameElement?.value || !setupValueElement?.value || !conditionalConfigElement?.value || !conditionalOperatorElement?.value || !conditionalValueElement?.value || !priorityElement?.value) {
@@ -1035,7 +1035,7 @@ class MiaConfigCard extends HTMLElement {
                 const conditionalOperator = conditionalOperatorElement.value;
                 const conditionalValue = conditionalValueElement.value;
                 const priority = priorityElement.value;
-                const enableHours = this.content.querySelector('#modal-conditional-enable-hours')?.checked || false;
+                const enableHours = window._miaConfigCardInstance.content.querySelector('#modal-conditional-enable-hours')?.checked || false;
                 try {
                     const serviceData = {
                         setup_name: setupName,
@@ -1046,35 +1046,35 @@ class MiaConfigCard extends HTMLElement {
                         priority: parseInt(priority)
                     };
                     if (enableHours) {
-                        const fromHour = this.content.querySelector('#modal-conditional-from-hour').value;
-                        const fromMinute = this.content.querySelector('#modal-conditional-from-minute').value;
-                        const toHour = this.content.querySelector('#modal-conditional-to-hour').value;
-                        const toMinute = this.content.querySelector('#modal-conditional-to-minute').value;
+                        const fromHour = window._miaConfigCardInstance.content.querySelector('#modal-conditional-from-hour').value;
+                        const fromMinute = window._miaConfigCardInstance.content.querySelector('#modal-conditional-from-minute').value;
+                        const toHour = window._miaConfigCardInstance.content.querySelector('#modal-conditional-to-hour').value;
+                        const toMinute = window._miaConfigCardInstance.content.querySelector('#modal-conditional-to-minute').value;
                         serviceData.valid_from_ora = parseFloat(fromHour) + parseFloat(fromMinute) / 60;
                         serviceData.valid_to_ora = parseFloat(toHour) + parseFloat(toMinute) / 60;
                     }
-                    await this.callMiaConfigService('set_conditional_config', serviceData);
+                    await window._miaConfigCardInstance.callMiaConfigService('set_conditional_config', serviceData);
                     form.reset();
                     window.dcCloseAddConfigModal();
-                    this.showToast('Override condizionale aggiunto!');
-                    setTimeout(() => this.loadConfigurations(), 500);
+                    window._miaConfigCardInstance.showToast('Override condizionale aggiunto!');
+                    setTimeout(() => window._miaConfigCardInstance.loadConfigurations(), 500);
                 } catch (err) {
                     console.error('Errore:', err);
-                    this.showToast('Errore: ' + err.message, true);
+                    window._miaConfigCardInstance.showToast('Errore: ' + err.message, true);
                 }
             });
         }
 
         // Toggle per filtri opzionali nel modal Time
-        const modalTimeHoursToggle = this.content.querySelector('#modal-time-enable-hours');
-        const modalTimeHoursContainer = this.content.querySelector('#modal-time-hours-container');
+        const modalTimeHoursToggle = window._miaConfigCardInstance.content.querySelector('#modal-time-enable-hours');
+        const modalTimeHoursContainer = window._miaConfigCardInstance.content.querySelector('#modal-time-hours-container');
         if (modalTimeHoursToggle && modalTimeHoursContainer) {
             modalTimeHoursToggle.addEventListener('change', (e) => {
                 modalTimeHoursContainer.style.display = e.target.checked ? 'block' : 'none';
             });
         }
-        const modalTimeDaysToggle = this.content.querySelector('#modal-time-enable-days');
-        const modalTimeDaysContainer = this.content.querySelector('#modal-time-days-container');
+        const modalTimeDaysToggle = window._miaConfigCardInstance.content.querySelector('#modal-time-enable-days');
+        const modalTimeDaysContainer = window._miaConfigCardInstance.content.querySelector('#modal-time-days-container');
         if (modalTimeDaysToggle && modalTimeDaysContainer) {
             modalTimeDaysToggle.addEventListener('change', (e) => {
                 modalTimeDaysContainer.style.display = e.target.checked ? 'block' : 'none';
@@ -1082,8 +1082,8 @@ class MiaConfigCard extends HTMLElement {
         }
 
         // Toggle per filtri opzionali nel modal Conditional
-        const modalConditionalHoursToggle = this.content.querySelector('#modal-conditional-enable-hours');
-        const modalConditionalHoursContainer = this.content.querySelector('#modal-conditional-hours-container');
+        const modalConditionalHoursToggle = window._miaConfigCardInstance.content.querySelector('#modal-conditional-enable-hours');
+        const modalConditionalHoursContainer = window._miaConfigCardInstance.content.querySelector('#modal-conditional-hours-container');
         if (modalConditionalHoursToggle && modalConditionalHoursContainer) {
             modalConditionalHoursToggle.addEventListener('change', (e) => {
                 modalConditionalHoursContainer.style.display = e.target.checked ? 'block' : 'none';
@@ -1091,12 +1091,12 @@ class MiaConfigCard extends HTMLElement {
         }
         
         // Update conditional preview on operator change (modal)
-        const modalConditionalOperator = this.content.querySelector('#modal-conditional-operator');
+        const modalConditionalOperator = window._miaConfigCardInstance.content.querySelector('#modal-conditional-operator');
         if (modalConditionalOperator) {
             modalConditionalOperator.addEventListener('change', () => {
-                const sourceSelect = this.content.querySelector('#modal-conditional-source-config');
+                const sourceSelect = window._miaConfigCardInstance.content.querySelector('#modal-conditional-source-config');
                 const operator = modalConditionalOperator.value;
-                const previewSpan = this.content.querySelector('#modal-conditional-preview');
+                const previewSpan = window._miaConfigCardInstance.content.querySelector('#modal-conditional-preview');
                 if (sourceSelect && sourceSelect.value && previewSpan) {
                     previewSpan.textContent = `${sourceSelect.value} ${operator} [valore]`;
                 }
@@ -1105,16 +1105,16 @@ class MiaConfigCard extends HTMLElement {
 
         // Switch Tab Function
         window.dcSwitchTab = (tabName, event) => {
-            this.content.querySelectorAll('.dc-tab').forEach(t => t.classList.remove('active'));
-            this.content.querySelectorAll('.dc-tab-content').forEach(c => c.classList.remove('active'));
+            window._miaConfigCardInstance.content.querySelectorAll('.dc-tab').forEach(t => t.classList.remove('active'));
+            window._miaConfigCardInstance.content.querySelectorAll('.dc-tab-content').forEach(c => c.classList.remove('active'));
             
             event.target.classList.add('active');
-            this.content.querySelector(`#dc-tab-${tabName}`).classList.add('active');
+            window._miaConfigCardInstance.content.querySelector(`#dc-tab-${tabName}`).classList.add('active');
             
             if (tabName === 'dashboard') {
                 this.loadDashboard();
             } else if (tabName === 'config') {
-                this.loadConfigurations();
+                window._miaConfigCardInstance.loadConfigurations();
                 this.loadStandardConfigsForSelect();
                 this.loadConfigsForValidValues();
             } else if (tabName === 'weekly') {
@@ -1129,12 +1129,12 @@ class MiaConfigCard extends HTMLElement {
         
         window.dcShowConfigForm = (formType) => {
             // Nascondi tutti i form
-            this.content.querySelectorAll('.dc-form-container').forEach(container => {
+            window._miaConfigCardInstance.content.querySelectorAll('.dc-form-container').forEach(container => {
                 container.style.display = 'none';
             });
             
             // Mostra il form selezionato
-            const container = this.content.querySelector(`#dc-form-container-${formType}`);
+            const container = window._miaConfigCardInstance.content.querySelector(`#dc-form-container-${formType}`);
             if (container) {
                 container.style.display = 'block';
                 
@@ -1155,18 +1155,18 @@ class MiaConfigCard extends HTMLElement {
             this.configViewMode = mode;
             
             // Aggiorna i pulsanti
-            this.content.querySelectorAll('.dc-view-btn').forEach(btn => {
+            window._miaConfigCardInstance.content.querySelectorAll('.dc-view-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
-            this.content.querySelector(`.dc-view-btn[data-mode="${mode}"]`).classList.add('active');
+            window._miaConfigCardInstance.content.querySelector(`.dc-view-btn[data-mode="${mode}"]`).classList.add('active');
             
             // Ricarica le configurazioni con la nuova vista
-            this.loadConfigurations();
+            window._miaConfigCardInstance.loadConfigurations();
         };
         
         // Toggle sezioni collassabili
         window.dcToggleSection = (header, sectionId) => {
-            const section = this.content.querySelector(`#dc-section-${sectionId}`);
+            const section = window._miaConfigCardInstance.content.querySelector(`#dc-section-${sectionId}`);
             const arrow = header.querySelector('.dc-toggle-arrow');
             
             if (section.style.display === 'none') {
@@ -1561,7 +1561,7 @@ class MiaConfigCard extends HTMLElement {
         // Quick Override - Apre tab Configura e precompila form temporale
         window.dcQuickOverride = (setupName) => {
             // Passa al tab configura
-            const configTab = this.content.querySelector('.dc-tab:nth-child(2)'); // Tab Configura
+            const configTab = window._miaConfigCardInstance.content.querySelector('.dc-tab:nth-child(2)'); // Tab Configura
             if (configTab) {
                 configTab.click();
             }
@@ -1570,7 +1570,7 @@ class MiaConfigCard extends HTMLElement {
             setTimeout(() => {
                 // Apri modal e seleziona tipo "Override Temporale"
                 window.dcOpenAddConfigModal();
-                const typeSelector = this.content.querySelector('#modal-config-type-selector');
+                const typeSelector = window._miaConfigCardInstance.content.querySelector('#modal-config-type-selector');
                 if (typeSelector) {
                     typeSelector.value = 'time';
                     window.dcShowModalConfigForm('time');
@@ -1578,7 +1578,7 @@ class MiaConfigCard extends HTMLElement {
                 
                 // Precompila il nome configurazione nel select dopo un momento
                 setTimeout(() => {
-                    const timeSelect = this.content.querySelector('#modal-time-config-select');
+                    const timeSelect = window._miaConfigCardInstance.content.querySelector('#modal-time-config-select');
                     if (timeSelect) {
                         timeSelect.value = setupName;
                         // Carica i valori validi per il campo valore
@@ -1586,7 +1586,7 @@ class MiaConfigCard extends HTMLElement {
                     }
                     
                     // Scroll al form
-                    const formContainer = this.content.querySelector('#modal-form-container-time');
+                    const formContainer = window._miaConfigCardInstance.content.querySelector('#modal-form-container-time');
                     if (formContainer) {
                         formContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }
@@ -1597,14 +1597,14 @@ class MiaConfigCard extends HTMLElement {
         // Show Weekly - Apre tab Vista Settimanale e mostra quella configurazione
         window.dcShowWeeklyFor = (setupName) => {
             // Passa al tab vista settimanale
-            const weeklyTab = this.content.querySelector('.dc-tab:nth-child(3)'); // Tab Vista Settimanale
+            const weeklyTab = window._miaConfigCardInstance.content.querySelector('.dc-tab:nth-child(3)'); // Tab Vista Settimanale
             if (weeklyTab) {
                 weeklyTab.click();
             }
             
             // Attendi che il tab si carichi
             setTimeout(() => {
-                const weeklySelect = this.content.querySelector('#weekly-config-select');
+                const weeklySelect = window._miaConfigCardInstance.content.querySelector('#weekly-config-select');
                 if (weeklySelect) {
                     weeklySelect.value = setupName;
                     // Carica automaticamente la vista
@@ -1657,10 +1657,10 @@ class MiaConfigCard extends HTMLElement {
             }
             console.log('Configurazioni standard trovate:', standardConfigs);
             
-            const scheduleSelect = this.content.querySelector('#modal-schedule-config-select');
-            const timeSelect = this.content.querySelector('#modal-time-config-select');
-            const conditionalSelect = this.content.querySelector('#modal-conditional-config-select');
-            const conditionalSourceSelect = this.content.querySelector('#modal-conditional-source-config');
+            const scheduleSelect = window._miaConfigCardInstance.content.querySelector('#modal-schedule-config-select');
+            const timeSelect = window._miaConfigCardInstance.content.querySelector('#modal-time-config-select');
+            const conditionalSelect = window._miaConfigCardInstance.content.querySelector('#modal-conditional-config-select');
+            const conditionalSourceSelect = window._miaConfigCardInstance.content.querySelector('#modal-conditional-source-config');
             
             if (standardConfigs.length === 0) {
                 const noConfigOption = '<option value="">-- Nessuna configurazione standard disponibile --</option>';
@@ -1687,7 +1687,7 @@ class MiaConfigCard extends HTMLElement {
     }
 
     async loadDashboard() {
-        const container = this.content.querySelector('#dc-dashboard-content');
+        const container = window._miaConfigCardInstance.content.querySelector('#dc-dashboard-content');
         container.innerHTML = 'Caricamento...';
         
         try {
@@ -1790,7 +1790,7 @@ class MiaConfigCard extends HTMLElement {
     }
 
     async loadConfigurations() {
-        const container = this.content.querySelector('#dc-config-list');
+        const container = window._miaConfigCardInstance.content.querySelector('#dc-config-list');
         container.innerHTML = 'Caricamento...';
         
         // Determina la modalità di visualizzazione
@@ -1993,8 +1993,8 @@ class MiaConfigCard extends HTMLElement {
         
         // Definisci la funzione per toggleare i gruppi
         window.dcToggleConfigGroup = (groupId) => {
-            const content = this.content.querySelector(`#${groupId}-content`);
-            const toggle = this.content.querySelector(`#${groupId}-toggle`);
+            const content = window._miaConfigCardInstance.content.querySelector(`#${groupId}-content`);
+            const toggle = window._miaConfigCardInstance.content.querySelector(`#${groupId}-toggle`);
             
             if (content && toggle) {
                 const isExpanded = content.classList.contains('expanded');
@@ -2012,28 +2012,28 @@ class MiaConfigCard extends HTMLElement {
         window.dcToggleConfigEnabled = async (type, configId, enabled) => {
             try {
                 const serviceName = enabled ? 'enable_config' : 'disable_config';
-                await this.callMiaConfigService(serviceName, {
+                await window._miaConfigCardInstance.callMiaConfigService(serviceName, {
                     config_type: type,
                     config_id: parseInt(configId)
                 });
-                this.showToast(enabled ? 'Configurazione abilitata!' : 'Configurazione disabilitata!');
-                setTimeout(() => this.loadConfigurations(), 500);
+                window._miaConfigCardInstance.showToast(enabled ? 'Configurazione abilitata!' : 'Configurazione disabilitata!');
+                setTimeout(() => window._miaConfigCardInstance.loadConfigurations(), 500);
             } catch (err) {
                 console.error('Errore toggle enabled:', err);
-                this.showToast('Errore: ' + err.message, true);
+                window._miaConfigCardInstance.showToast('Errore: ' + err.message, true);
                 // Ricarica per ripristinare lo stato corretto
-                setTimeout(() => this.loadConfigurations(), 500);
+                setTimeout(() => window._miaConfigCardInstance.loadConfigurations(), 500);
             }
         };
         
         window.dcDeleteConfig = async (name) => {
             if (confirm(`Eliminare tutte le configurazioni di "${name}"?`)) {
-                await this.callMiaConfigService('delete_config', {
+                await window._miaConfigCardInstance.callMiaConfigService('delete_config', {
                     setup_name: name,
                     config_type: 'all'
                 });
-                this.showToast('Configurazione eliminata!');
-                setTimeout(() => this.loadConfigurations(), 500);
+                window._miaConfigCardInstance.showToast('Configurazione eliminata!');
+                setTimeout(() => window._miaConfigCardInstance.loadConfigurations(), 500);
             }
         };
         
@@ -2049,15 +2049,15 @@ class MiaConfigCard extends HTMLElement {
         window.dcDeleteSingleConfig = async (type, id) => {
             if (confirm(`Eliminare questa configurazione ${type}?`)) {
                 try {
-                    await this.callMiaConfigService('delete_single_config', {
+                    await window._miaConfigCardInstance.callMiaConfigService('delete_single_config', {
                         config_type: type,
                         config_id: parseInt(id)
                     });
-                    this.showToast('Configurazione eliminata!');
-                    setTimeout(() => this.loadConfigurations(), 500);
+                    window._miaConfigCardInstance.showToast('Configurazione eliminata!');
+                    setTimeout(() => window._miaConfigCardInstance.loadConfigurations(), 500);
                 } catch (err) {
                     console.error('Errore eliminazione:', err);
-                    this.showToast('Errore: ' + err.message, true);
+                    window._miaConfigCardInstance.showToast('Errore: ' + err.message, true);
                 }
             }
         };
@@ -2065,14 +2065,14 @@ class MiaConfigCard extends HTMLElement {
         window.dcEditConfig = async (name, type, id, cfgDataEncoded) => {
             try {
                 // Chiudi il modal di add se è aperto
-                const addModal = this.content.querySelector('#dc-add-config-modal');
+                const addModal = window._miaConfigCardInstance.content.querySelector('#dc-add-config-modal');
                 if (addModal && addModal.classList.contains('active')) {
                     addModal.classList.remove('active');
                 }
                 
                 const cfg = JSON.parse(decodeURIComponent(cfgDataEncoded));
-                const modal = this.content.querySelector('#dc-edit-modal');
-                const modalBody = this.content.querySelector('#dc-edit-modal-body');
+                const modal = window._miaConfigCardInstance.content.querySelector('#dc-edit-modal');
+                const modalBody = window._miaConfigCardInstance.content.querySelector('#dc-edit-modal-body');
                 
                 if (!modal || !modalBody) {
                     console.error('Modal elements not found in DOM');
@@ -2133,11 +2133,11 @@ class MiaConfigCard extends HTMLElement {
                                         <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
                                         <div class="dc-time-input">
                                             <select id="edit-time-from-hour">
-                                                ${this.generateHourOptions(0, 23)}
+                                                ${window._miaConfigCardInstance.generateHourOptions(0, 23)}
                                             </select>
                                             <span class="dc-time-separator">:</span>
                                             <select id="edit-time-from-minute">
-                                                ${this.generateMinuteOptions()}
+                                                ${window._miaConfigCardInstance.generateMinuteOptions()}
                                             </select>
                                         </div>
                                     </div>
@@ -2146,11 +2146,11 @@ class MiaConfigCard extends HTMLElement {
                                         <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
                                         <div class="dc-time-input">
                                             <select id="edit-time-to-hour">
-                                                ${this.generateHourOptions(0, 23)}
+                                                ${window._miaConfigCardInstance.generateHourOptions(0, 23)}
                                             </select>
                                             <span class="dc-time-separator">:</span>
                                             <select id="edit-time-to-minute">
-                                                ${this.generateMinuteOptions()}
+                                                ${window._miaConfigCardInstance.generateMinuteOptions()}
                                             </select>
                                         </div>
                                     </div>
@@ -2170,11 +2170,11 @@ class MiaConfigCard extends HTMLElement {
                                         <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
                                         <div class="dc-time-input">
                                             <select id="edit-time-from-hour">
-                                                ${this.generateHourOptions(0, 23)}
+                                                ${window._miaConfigCardInstance.generateHourOptions(0, 23)}
                                             </select>
                                             <span class="dc-time-separator">:</span>
                                             <select id="edit-time-from-minute">
-                                                ${this.generateMinuteOptions()}
+                                                ${window._miaConfigCardInstance.generateMinuteOptions()}
                                             </select>
                                         </div>
                                     </div>
@@ -2183,11 +2183,11 @@ class MiaConfigCard extends HTMLElement {
                                         <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
                                         <div class="dc-time-input">
                                             <select id="edit-time-to-hour">
-                                                ${this.generateHourOptions(0, 23)}
+                                                ${window._miaConfigCardInstance.generateHourOptions(0, 23)}
                                             </select>
                                             <span class="dc-time-separator">:</span>
                                             <select id="edit-time-to-minute">
-                                                ${this.generateMinuteOptions()}
+                                                ${window._miaConfigCardInstance.generateMinuteOptions()}
                                             </select>
                                         </div>
                                     </div>
@@ -2273,10 +2273,10 @@ class MiaConfigCard extends HTMLElement {
                         const toHour = Math.floor(cfg.valid_to_ora);
                         const toMinute = Math.round((cfg.valid_to_ora - toHour) * 60);
                         
-                        this.content.querySelector('#edit-time-from-hour').value = fromHour;
-                        this.content.querySelector('#edit-time-from-minute').value = fromMinute;
-                        this.content.querySelector('#edit-time-to-hour').value = toHour;
-                        this.content.querySelector('#edit-time-to-minute').value = toMinute;
+                        window._miaConfigCardInstance.content.querySelector('#edit-time-from-hour').value = fromHour;
+                        window._miaConfigCardInstance.content.querySelector('#edit-time-from-minute').value = fromMinute;
+                        window._miaConfigCardInstance.content.querySelector('#edit-time-to-hour').value = toHour;
+                        window._miaConfigCardInstance.content.querySelector('#edit-time-to-minute').value = toMinute;
                     }, 10);
                 }
             } else if (type === 'schedule') {
@@ -2310,11 +2310,11 @@ class MiaConfigCard extends HTMLElement {
                                     <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
                                     <div class="dc-time-input">
                                         <select id="edit-from-hour" required>
-                                            ${this.generateHourOptions(0, 23)}
+                                            ${window._miaConfigCardInstance.generateHourOptions(0, 23)}
                                         </select>
                                         <span class="dc-time-separator">:</span>
                                         <select id="edit-from-minute" required>
-                                            ${this.generateMinuteOptions()}
+                                            ${window._miaConfigCardInstance.generateMinuteOptions()}
                                         </select>
                                     </div>
                                 </div>
@@ -2323,11 +2323,11 @@ class MiaConfigCard extends HTMLElement {
                                     <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
                                     <div class="dc-time-input">
                                         <select id="edit-to-hour" required>
-                                            ${this.generateHourOptions(0, 23)}
+                                            ${window._miaConfigCardInstance.generateHourOptions(0, 23)}
                                         </select>
                                         <span class="dc-time-separator">:</span>
                                         <select id="edit-to-minute" required>
-                                            ${this.generateMinuteOptions()}
+                                            ${window._miaConfigCardInstance.generateMinuteOptions()}
                                         </select>
                                     </div>
                                 </div>
@@ -2353,10 +2353,10 @@ class MiaConfigCard extends HTMLElement {
                 
                 // Dopo aver mostrato il modal, imposta i valori dei selettori
                 setTimeout(() => {
-                    this.content.querySelector('#edit-from-hour').value = fromHour;
-                    this.content.querySelector('#edit-from-minute').value = fromMinute;
-                    this.content.querySelector('#edit-to-hour').value = toHour;
-                    this.content.querySelector('#edit-to-minute').value = toMinute;
+                    window._miaConfigCardInstance.content.querySelector('#edit-from-hour').value = fromHour;
+                    window._miaConfigCardInstance.content.querySelector('#edit-from-minute').value = fromMinute;
+                    window._miaConfigCardInstance.content.querySelector('#edit-to-hour').value = toHour;
+                    window._miaConfigCardInstance.content.querySelector('#edit-to-minute').value = toMinute;
                 }, 10);
             } else if (type === 'conditional') {
                 // Form per modifica configurazione condizionale
@@ -2380,11 +2380,11 @@ class MiaConfigCard extends HTMLElement {
                                         <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
                                         <div class="dc-time-input">
                                             <select id="edit-conditional-from-hour">
-                                                ${this.generateHourOptions(0, 23)}
+                                                ${window._miaConfigCardInstance.generateHourOptions(0, 23)}
                                             </select>
                                             <span class="dc-time-separator">:</span>
                                             <select id="edit-conditional-from-minute">
-                                                ${this.generateMinuteOptions()}
+                                                ${window._miaConfigCardInstance.generateMinuteOptions()}
                                             </select>
                                         </div>
                                     </div>
@@ -2393,11 +2393,11 @@ class MiaConfigCard extends HTMLElement {
                                         <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
                                         <div class="dc-time-input">
                                             <select id="edit-conditional-to-hour">
-                                                ${this.generateHourOptions(0, 23)}
+                                                ${window._miaConfigCardInstance.generateHourOptions(0, 23)}
                                             </select>
                                             <span class="dc-time-separator">:</span>
                                             <select id="edit-conditional-to-minute">
-                                                ${this.generateMinuteOptions()}
+                                                ${window._miaConfigCardInstance.generateMinuteOptions()}
                                             </select>
                                         </div>
                                     </div>
@@ -2417,11 +2417,11 @@ class MiaConfigCard extends HTMLElement {
                                         <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
                                         <div class="dc-time-input">
                                             <select id="edit-conditional-from-hour">
-                                                ${this.generateHourOptions(0, 23)}
+                                                ${window._miaConfigCardInstance.generateHourOptions(0, 23)}
                                             </select>
                                             <span class="dc-time-separator">:</span>
                                             <select id="edit-conditional-from-minute">
-                                                ${this.generateMinuteOptions()}
+                                                ${window._miaConfigCardInstance.generateMinuteOptions()}
                                             </select>
                                         </div>
                                     </div>
@@ -2430,11 +2430,11 @@ class MiaConfigCard extends HTMLElement {
                                         <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
                                         <div class="dc-time-input">
                                             <select id="edit-conditional-to-hour">
-                                                ${this.generateHourOptions(0, 23)}
+                                                ${window._miaConfigCardInstance.generateHourOptions(0, 23)}
                                             </select>
                                             <span class="dc-time-separator">:</span>
                                             <select id="edit-conditional-to-minute">
-                                                ${this.generateMinuteOptions()}
+                                                ${window._miaConfigCardInstance.generateMinuteOptions()}
                                             </select>
                                         </div>
                                     </div>
@@ -2487,10 +2487,10 @@ class MiaConfigCard extends HTMLElement {
                         const toHour = Math.floor(cfg.valid_to_ora);
                         const toMinute = Math.round((cfg.valid_to_ora - toHour) * 60);
                         
-                        this.content.querySelector('#edit-conditional-from-hour').value = fromHour;
-                        this.content.querySelector('#edit-conditional-from-minute').value = fromMinute;
-                        this.content.querySelector('#edit-conditional-to-hour').value = toHour;
-                        this.content.querySelector('#edit-conditional-to-minute').value = toMinute;
+                        window._miaConfigCardInstance.content.querySelector('#edit-conditional-from-hour').value = fromHour;
+                        window._miaConfigCardInstance.content.querySelector('#edit-conditional-from-minute').value = fromMinute;
+                        window._miaConfigCardInstance.content.querySelector('#edit-conditional-to-hour').value = toHour;
+                        window._miaConfigCardInstance.content.querySelector('#edit-conditional-to-minute').value = toMinute;
                     }, 10);
                 }
             }
@@ -2500,12 +2500,12 @@ class MiaConfigCard extends HTMLElement {
             
             // Aggiungi event listener per i checkbox toggle
             if (type === 'time') {
-                const enableHoursCheckbox = this.content.querySelector('#edit-time-enable-hours');
-                const enableDaysCheckbox = this.content.querySelector('#edit-time-enable-days');
+                const enableHoursCheckbox = window._miaConfigCardInstance.content.querySelector('#edit-time-enable-hours');
+                const enableDaysCheckbox = window._miaConfigCardInstance.content.querySelector('#edit-time-enable-days');
                 
                 if (enableHoursCheckbox) {
                     enableHoursCheckbox.addEventListener('change', (e) => {
-                        const container = this.content.querySelector('#edit-time-hours-container');
+                        const container = window._miaConfigCardInstance.content.querySelector('#edit-time-hours-container');
                         if (container) {
                             container.style.display = e.target.checked ? 'block' : 'none';
                         }
@@ -2514,18 +2514,18 @@ class MiaConfigCard extends HTMLElement {
                 
                 if (enableDaysCheckbox) {
                     enableDaysCheckbox.addEventListener('change', (e) => {
-                        const container = this.content.querySelector('#edit-time-days-container');
+                        const container = window._miaConfigCardInstance.content.querySelector('#edit-time-days-container');
                         if (container) {
                             container.style.display = e.target.checked ? 'block' : 'none';
                         }
                     });
                 }
             } else if (type === 'conditional') {
-                const enableHoursCheckbox = this.content.querySelector('#edit-conditional-enable-hours');
+                const enableHoursCheckbox = window._miaConfigCardInstance.content.querySelector('#edit-conditional-enable-hours');
                 
                 if (enableHoursCheckbox) {
                     enableHoursCheckbox.addEventListener('change', (e) => {
-                        const container = this.content.querySelector('#edit-conditional-hours-container');
+                        const container = window._miaConfigCardInstance.content.querySelector('#edit-conditional-hours-container');
                         if (container) {
                             container.style.display = e.target.checked ? 'block' : 'none';
                         }
@@ -2534,7 +2534,7 @@ class MiaConfigCard extends HTMLElement {
             }
             
             // Gestione submit del form
-            const editForm = this.content.querySelector('#dc-edit-form');
+            const editForm = window._miaConfigCardInstance.content.querySelector('#dc-edit-form');
             if (!editForm) {
                 console.error('Form di edit non trovato nel DOM');
                 return;
@@ -2559,10 +2559,10 @@ class MiaConfigCard extends HTMLElement {
                             serviceData.description = description.trim();
                         }
                         
-                        await this.callMiaConfigService('update_standard_config', serviceData);
+                        await window._miaConfigCardInstance.callMiaConfigService('update_standard_config', serviceData);
                     } else if (type === 'time') {
                         // Prima elimina la vecchia configurazione
-                        await this.callMiaConfigService('delete_single_config', {
+                        await window._miaConfigCardInstance.callMiaConfigService('delete_single_config', {
                             config_type: 'time',
                             config_id: parseInt(id)
                         });
@@ -2578,53 +2578,53 @@ class MiaConfigCard extends HTMLElement {
                         };
                         
                         // Aggiungi filtro orario se abilitato
-                        const enableHours = this.content.querySelector('#edit-time-enable-hours');
+                        const enableHours = window._miaConfigCardInstance.content.querySelector('#edit-time-enable-hours');
                         if (enableHours && enableHours.checked) {
-                            const fromHour = parseInt(this.content.querySelector('#edit-time-from-hour').value);
-                            const fromMinute = parseInt(this.content.querySelector('#edit-time-from-minute').value);
-                            const toHour = parseInt(this.content.querySelector('#edit-time-to-hour').value);
-                            const toMinute = parseInt(this.content.querySelector('#edit-time-to-minute').value);
+                            const fromHour = parseInt(window._miaConfigCardInstance.content.querySelector('#edit-time-from-hour').value);
+                            const fromMinute = parseInt(window._miaConfigCardInstance.content.querySelector('#edit-time-from-minute').value);
+                            const toHour = parseInt(window._miaConfigCardInstance.content.querySelector('#edit-time-to-hour').value);
+                            const toMinute = parseInt(window._miaConfigCardInstance.content.querySelector('#edit-time-to-minute').value);
                             
-                            serviceData.valid_from_ora = this.timeSelectorsToDecimal(fromHour, fromMinute);
-                            serviceData.valid_to_ora = this.timeSelectorsToDecimal(toHour, toMinute);
+                            serviceData.valid_from_ora = window._miaConfigCardInstance.timeSelectorsToDecimal(fromHour, fromMinute);
+                            serviceData.valid_to_ora = window._miaConfigCardInstance.timeSelectorsToDecimal(toHour, toMinute);
                         }
                         
                         // Aggiungi filtro giorni se abilitato
-                        const enableDays = this.content.querySelector('#edit-time-enable-days');
+                        const enableDays = window._miaConfigCardInstance.content.querySelector('#edit-time-enable-days');
                         if (enableDays && enableDays.checked) {
-                            const days = Array.from(this.content.querySelectorAll('#dc-edit-form input[name="edit-time-days"]:checked'))
+                            const days = Array.from(window._miaConfigCardInstance.content.querySelectorAll('#dc-edit-form input[name="edit-time-days"]:checked'))
                                 .map(cb => parseInt(cb.value));
                             serviceData.days_of_week = days.join(',');
                         }
                         
-                        await this.callMiaConfigService('set_time_config', serviceData);
+                        await window._miaConfigCardInstance.callMiaConfigService('set_time_config', serviceData);
                     } else if (type === 'schedule') {
                         // Prima elimina la vecchia configurazione
-                        await this.callMiaConfigService('delete_single_config', {
+                        await window._miaConfigCardInstance.callMiaConfigService('delete_single_config', {
                             config_type: 'schedule',
                             config_id: parseInt(id)
                         });
                         
                         // Poi crea la nuova
-                        const days = Array.from(this.content.querySelectorAll('#dc-edit-form input[name="days"]:checked'))
+                        const days = Array.from(window._miaConfigCardInstance.content.querySelectorAll('#dc-edit-form input[name="days"]:checked'))
                             .map(cb => parseInt(cb.value));
                         
-                        const fromHour = parseInt(this.content.querySelector('#edit-from-hour').value);
-                        const fromMinute = parseInt(this.content.querySelector('#edit-from-minute').value);
-                        const toHour = parseInt(this.content.querySelector('#edit-to-hour').value);
-                        const toMinute = parseInt(this.content.querySelector('#edit-to-minute').value);
+                        const fromHour = parseInt(window._miaConfigCardInstance.content.querySelector('#edit-from-hour').value);
+                        const fromMinute = parseInt(window._miaConfigCardInstance.content.querySelector('#edit-from-minute').value);
+                        const toHour = parseInt(window._miaConfigCardInstance.content.querySelector('#edit-to-hour').value);
+                        const toMinute = parseInt(window._miaConfigCardInstance.content.querySelector('#edit-to-minute').value);
                         
-                        await this.callMiaConfigService('set_schedule_config', {
+                        await window._miaConfigCardInstance.callMiaConfigService('set_schedule_config', {
                             setup_name: name,
                             setup_value: formData.get('setup_value'),
-                            valid_from_ora: this.timeSelectorsToDecimal(fromHour, fromMinute),
-                            valid_to_ora: this.timeSelectorsToDecimal(toHour, toMinute),
+                            valid_from_ora: window._miaConfigCardInstance.timeSelectorsToDecimal(fromHour, fromMinute),
+                            valid_to_ora: window._miaConfigCardInstance.timeSelectorsToDecimal(toHour, toMinute),
                             days_of_week: days,
                             priority: parseInt(formData.get('priority'))
                         });
                     } else if (type === 'conditional') {
                         // Prima elimina la vecchia configurazione
-                        await this.callMiaConfigService('delete_single_config', {
+                        await window._miaConfigCardInstance.callMiaConfigService('delete_single_config', {
                             config_type: 'conditional',
                             config_id: parseInt(id)
                         });
@@ -2640,48 +2640,48 @@ class MiaConfigCard extends HTMLElement {
                         };
                         
                         // Aggiungi fascia oraria se abilitata
-                        const enableHours = this.content.querySelector('#edit-conditional-enable-hours');
+                        const enableHours = window._miaConfigCardInstance.content.querySelector('#edit-conditional-enable-hours');
                         if (enableHours && enableHours.checked) {
-                            const fromHour = parseInt(this.content.querySelector('#edit-conditional-from-hour').value);
-                            const fromMinute = parseInt(this.content.querySelector('#edit-conditional-from-minute').value);
-                            const toHour = parseInt(this.content.querySelector('#edit-conditional-to-hour').value);
-                            const toMinute = parseInt(this.content.querySelector('#edit-conditional-to-minute').value);
+                            const fromHour = parseInt(window._miaConfigCardInstance.content.querySelector('#edit-conditional-from-hour').value);
+                            const fromMinute = parseInt(window._miaConfigCardInstance.content.querySelector('#edit-conditional-from-minute').value);
+                            const toHour = parseInt(window._miaConfigCardInstance.content.querySelector('#edit-conditional-to-hour').value);
+                            const toMinute = parseInt(window._miaConfigCardInstance.content.querySelector('#edit-conditional-to-minute').value);
                             
-                            serviceData.valid_from_ora = this.timeSelectorsToDecimal(fromHour, fromMinute);
-                            serviceData.valid_to_ora = this.timeSelectorsToDecimal(toHour, toMinute);
+                            serviceData.valid_from_ora = window._miaConfigCardInstance.timeSelectorsToDecimal(fromHour, fromMinute);
+                            serviceData.valid_to_ora = window._miaConfigCardInstance.timeSelectorsToDecimal(toHour, toMinute);
                         }
                         
-                        await this.callMiaConfigService('set_conditional_config', serviceData);
+                        await window._miaConfigCardInstance.callMiaConfigService('set_conditional_config', serviceData);
                     }
                     
                     window.dcCloseEditModal();
-                    this.showToast('Configurazione modificata!');
-                    setTimeout(() => this.loadConfigurations(), 500);
+                    window._miaConfigCardInstance.showToast('Configurazione modificata!');
+                    setTimeout(() => window._miaConfigCardInstance.loadConfigurations(), 500);
                 } catch (err) {
                     console.error('Errore modifica:', err);
-                    this.showToast('Errore: ' + err.message, true);
+                    window._miaConfigCardInstance.showToast('Errore: ' + err.message, true);
                 }
             });
             } catch (err) {
                 console.error('Error in dcEditConfig:', err);
-                this.showToast('Errore apertura modal: ' + err.message, true);
+                window._miaConfigCardInstance.showToast('Errore apertura modal: ' + err.message, true);
             }
         };
         
         // Funzioni per modal di inserimento configurazione
         window.dcOpenAddConfigModal = () => {
             // Chiudi il modal di edit se è aperto
-            const editModal = this.content.querySelector('#dc-edit-modal');
+            const editModal = window._miaConfigCardInstance.content.querySelector('#dc-edit-modal');
             if (editModal && editModal.classList.contains('active')) {
                 editModal.classList.remove('active');
             }
             
-            const modal = this.content.querySelector('#dc-add-config-modal');
+            const modal = window._miaConfigCardInstance.content.querySelector('#dc-add-config-modal');
             modal.classList.add('active');
             // Carica le configurazioni standard per i select
             this.loadStandardConfigsForSelect();
             // Reimposta il form
-            const typeSelector = this.content.querySelector('#modal-config-type-selector');
+            const typeSelector = window._miaConfigCardInstance.content.querySelector('#modal-config-type-selector');
             if (typeSelector) {
                 typeSelector.value = 'time';
                 window.dcShowModalConfigForm('time');
@@ -2689,18 +2689,18 @@ class MiaConfigCard extends HTMLElement {
         };
         
         window.dcCloseAddConfigModal = () => {
-            const modal = this.content.querySelector('#dc-add-config-modal');
+            const modal = window._miaConfigCardInstance.content.querySelector('#dc-add-config-modal');
             modal.classList.remove('active');
         };
         
         window.dcShowModalConfigForm = (formType) => {
             // Nascondi tutti i form
-            this.content.querySelectorAll('[id^="modal-form-container-"]').forEach(container => {
+            window._miaConfigCardInstance.content.querySelectorAll('[id^="modal-form-container-"]').forEach(container => {
                 container.style.display = 'none';
             });
             
             // Mostra il form selezionato
-            const container = this.content.querySelector(`#modal-form-container-${formType}`);
+            const container = window._miaConfigCardInstance.content.querySelector(`#modal-form-container-${formType}`);
             if (container) {
                 container.style.display = 'block';
                 
@@ -2712,7 +2712,7 @@ class MiaConfigCard extends HTMLElement {
         };
         
         window.dcCloseEditModal = () => {
-            const modal = this.content.querySelector('#dc-edit-modal');
+            const modal = window._miaConfigCardInstance.content.querySelector('#dc-edit-modal');
             if (modal) {
                 modal.classList.remove('active');
             }
@@ -2750,8 +2750,8 @@ class MiaConfigCard extends HTMLElement {
                 if (segment.to) segment.to = new Date(segment.to);
                 
                 // Genera il contenuto del modal
-                const modalBody = this.content.querySelector('#dc-weekly-event-modal-body');
-                const modal = this.content.querySelector('#dc-weekly-event-modal');
+                const modalBody = window._miaConfigCardInstance.content.querySelector('#dc-weekly-event-modal-body');
+                const modal = window._miaConfigCardInstance.content.querySelector('#dc-weekly-event-modal');
                 
                 if (!modalBody || !modal) {
                     console.error('Modal elements not found:', {modalBody, modal});
@@ -2852,15 +2852,15 @@ class MiaConfigCard extends HTMLElement {
         };
         
         window.dcCloseWeeklyEventModal = () => {
-            const modal = this.content.querySelector('#dc-weekly-event-modal');
+            const modal = window._miaConfigCardInstance.content.querySelector('#dc-weekly-event-modal');
             if (modal) {
                 modal.classList.remove('active');
             }
         };
         
         window.dcLoadHistory = async (page = 1) => {
-            const container = this.content.querySelector('#dc-history-list');
-            const filterInput = this.content.querySelector('#history-filter');
+            const container = window._miaConfigCardInstance.content.querySelector('#dc-history-list');
+            const filterInput = window._miaConfigCardInstance.content.querySelector('#history-filter');
             const setupName = filterInput ? filterInput.value.trim() : '';
             
             const itemsPerPage = 20;
@@ -2981,9 +2981,9 @@ class MiaConfigCard extends HTMLElement {
         };
         
         window.dcLoadValidValues = async () => {
-            const select = this.content.querySelector('#vv-config-select');
+            const select = window._miaConfigCardInstance.content.querySelector('#vv-config-select');
             const setupName = select.value;
-            const container = this.content.querySelector('#dc-valid-values-list');
+            const container = window._miaConfigCardInstance.content.querySelector('#dc-valid-values-list');
             
             if (!setupName) {
                 container.innerHTML = 'Seleziona una configurazione per gestire i valori validi';
@@ -3042,40 +3042,40 @@ class MiaConfigCard extends HTMLElement {
         };
         
         window.dcShowAddValidValueForm = () => {
-            const form = this.content.querySelector('#dc-add-valid-value-form');
-            const select = this.content.querySelector('#vv-config-select');
+            const form = window._miaConfigCardInstance.content.querySelector('#dc-add-valid-value-form');
+            const select = window._miaConfigCardInstance.content.querySelector('#vv-config-select');
             
             if (!select.value) {
-                this.showToast('Seleziona prima una configurazione', true);
+                window._miaConfigCardInstance.showToast('Seleziona prima una configurazione', true);
                 return;
             }
             
             // Reset form per nuovo inserimento
             form.style.display = 'block';
             form.dataset.editId = ''; // Rimuove ID se era in modalità modifica
-            this.content.querySelector('#vv-value').value = '';
-            this.content.querySelector('#vv-value').disabled = false; // Riabilita campo valore
-            this.content.querySelector('#vv-description').value = '';
-            this.content.querySelector('#vv-sort-order').value = '0';
+            window._miaConfigCardInstance.content.querySelector('#vv-value').value = '';
+            window._miaConfigCardInstance.content.querySelector('#vv-value').disabled = false; // Riabilita campo valore
+            window._miaConfigCardInstance.content.querySelector('#vv-description').value = '';
+            window._miaConfigCardInstance.content.querySelector('#vv-sort-order').value = '0';
             form.querySelector('h4').textContent = 'Aggiungi Valore Valido';
         };
         
         window.dcEditValidValue = (id, value, description, sortOrder) => {
-            const form = this.content.querySelector('#dc-add-valid-value-form');
-            const select = this.content.querySelector('#vv-config-select');
+            const form = window._miaConfigCardInstance.content.querySelector('#dc-add-valid-value-form');
+            const select = window._miaConfigCardInstance.content.querySelector('#vv-config-select');
             
             if (!select.value) {
-                this.showToast('Errore: nessuna configurazione selezionata', true);
+                window._miaConfigCardInstance.showToast('Errore: nessuna configurazione selezionata', true);
                 return;
             }
             
             // Mostra form in modalità modifica
             form.style.display = 'block';
             form.dataset.editId = id; // Salva ID per la modifica
-            this.content.querySelector('#vv-value').value = value;
-            this.content.querySelector('#vv-value').disabled = true; // Blocca modifica valore
-            this.content.querySelector('#vv-description').value = description;
-            this.content.querySelector('#vv-sort-order').value = sortOrder;
+            window._miaConfigCardInstance.content.querySelector('#vv-value').value = value;
+            window._miaConfigCardInstance.content.querySelector('#vv-value').disabled = true; // Blocca modifica valore
+            window._miaConfigCardInstance.content.querySelector('#vv-description').value = description;
+            window._miaConfigCardInstance.content.querySelector('#vv-sort-order').value = sortOrder;
             form.querySelector('h4').textContent = 'Modifica Valore Valido';
             
             // Scroll al form
@@ -3083,7 +3083,7 @@ class MiaConfigCard extends HTMLElement {
         };
         
         window.dcHideAddValidValueForm = () => {
-            const form = this.content.querySelector('#dc-add-valid-value-form');
+            const form = window._miaConfigCardInstance.content.querySelector('#dc-add-valid-value-form');
             form.style.display = 'none';
             form.dataset.editId = ''; // Reset ID
         };
@@ -3094,8 +3094,8 @@ class MiaConfigCard extends HTMLElement {
             const containerId = formType === 'schedule' ? '#modal-schedule-value-container' : (formType === 'time' ? '#modal-time-value-container' : '#modal-conditional-value-container');
             const inputId = formType === 'schedule' ? '#modal-schedule-setup-value' : (formType === 'time' ? '#modal-time-setup-value' : '#modal-conditional-setup-value');
             
-            const configSelect = this.content.querySelector(selectId);
-            const container = this.content.querySelector(containerId);
+            const configSelect = window._miaConfigCardInstance.content.querySelector(selectId);
+            const container = window._miaConfigCardInstance.content.querySelector(containerId);
             const setupName = configSelect.value;
             
             if (!setupName) {
@@ -3156,19 +3156,19 @@ class MiaConfigCard extends HTMLElement {
         };
         
         window.dcSaveValidValue = async () => {
-            const select = this.content.querySelector('#vv-config-select');
+            const select = window._miaConfigCardInstance.content.querySelector('#vv-config-select');
             const setupName = select.value;
-            const value = this.content.querySelector('#vv-value').value.trim();
-            const description = this.content.querySelector('#vv-description').value.trim();
-            const sortOrder = parseInt(this.content.querySelector('#vv-sort-order').value) || 0;
+            const value = window._miaConfigCardInstance.content.querySelector('#vv-value').value.trim();
+            const description = window._miaConfigCardInstance.content.querySelector('#vv-description').value.trim();
+            const sortOrder = parseInt(window._miaConfigCardInstance.content.querySelector('#vv-sort-order').value) || 0;
             
             if (!setupName) {
-                this.showToast('Seleziona una configurazione', true);
+                window._miaConfigCardInstance.showToast('Seleziona una configurazione', true);
                 return;
             }
             
             if (!value) {
-                this.showToast('Il valore è obbligatorio', true);
+                window._miaConfigCardInstance.showToast('Il valore è obbligatorio', true);
                 return;
             }
             
@@ -3191,13 +3191,13 @@ class MiaConfigCard extends HTMLElement {
                 
                 await this._hass.callService('mia_config', 'add_valid_value', serviceData);
                 
-                this.showToast('Valore valido salvato');
+                window._miaConfigCardInstance.showToast('Valore valido salvato');
                 window.dcHideAddValidValueForm();
                 window.dcLoadValidValues();
                 
             } catch (err) {
                 console.error('Errore salvataggio valore valido:', err);
-                this.showToast('Errore nel salvataggio', true);
+                window._miaConfigCardInstance.showToast('Errore nel salvataggio', true);
             }
         };
         
@@ -3213,12 +3213,12 @@ class MiaConfigCard extends HTMLElement {
                 
                 await this._hass.callService('mia_config', 'delete_valid_value', serviceData);
                 
-                this.showToast('Valore valido eliminato');
+                window._miaConfigCardInstance.showToast('Valore valido eliminato');
                 window.dcLoadValidValues();
                 
             } catch (err) {
                 console.error('Errore eliminazione valore valido:', err);
-                this.showToast('Errore nell\'eliminazione', true);
+                window._miaConfigCardInstance.showToast('Errore nell\'eliminazione', true);
             }
         };
         
@@ -3245,19 +3245,19 @@ class MiaConfigCard extends HTMLElement {
                 const entry = Array.isArray(history) ? history.find(h => h.id === historyId) : null;
                 
                 if (!entry) {
-                    this.showToast('Voce storico non trovata', true);
+                    window._miaConfigCardInstance.showToast('Voce storico non trovata', true);
                     return;
                 }
                 
                 // Ricrea la configurazione in base al tipo
                 if (entry.config_type === 'standard') {
-                    await this.callMiaConfigService('set_config', {
+                    await window._miaConfigCardInstance.callMiaConfigService('set_config', {
                         setup_name: entry.setup_name,
                         setup_value: entry.setup_value,
                         priority: entry.priority || 99
                     });
                 } else if (entry.config_type === 'schedule') {
-                    await this.callMiaConfigService('set_schedule_config', {
+                    await window._miaConfigCardInstance.callMiaConfigService('set_schedule_config', {
                         setup_name: entry.setup_name,
                         setup_value: entry.setup_value,
                         valid_from_ora: parseFloat(entry.valid_from_ora),
@@ -3265,7 +3265,7 @@ class MiaConfigCard extends HTMLElement {
                         days_of_week: entry.days_of_week ? entry.days_of_week.split(',').map(d => parseInt(d)) : [0,1,2,3,4,5,6]
                     });
                 } else if (entry.config_type === 'time') {
-                    await this.callMiaConfigService('set_time_config', {
+                    await window._miaConfigCardInstance.callMiaConfigService('set_time_config', {
                         setup_name: entry.setup_name,
                         setup_value: entry.setup_value,
                         valid_from: entry.valid_from_date,
@@ -3273,15 +3273,15 @@ class MiaConfigCard extends HTMLElement {
                     });
                 }
                 
-                this.showToast('Configurazione ripristinata!');
+                window._miaConfigCardInstance.showToast('Configurazione ripristinata!');
                 setTimeout(() => {
-                    this.loadConfigurations();
+                    window._miaConfigCardInstance.loadConfigurations();
                     window.dcLoadHistory();
                 }, 500);
                 
             } catch (err) {
                 console.error('Errore ripristino:', err);
-                this.showToast('Errore: ' + err.message, true);
+                window._miaConfigCardInstance.showToast('Errore: ' + err.message, true);
             }
         };
     }
@@ -3432,21 +3432,21 @@ class MiaConfigCard extends HTMLElement {
             const payload = JSON.parse(decodeURIComponent(templateEncoded));
             const cfg = payload.cfg || {};
             const name = payload.name || '';
-            const configTab = this.content.querySelector('.dc-tab:nth-child(2)');
+            const configTab = window._miaConfigCardInstance.content.querySelector('.dc-tab:nth-child(2)');
             if (configTab) {
                 configTab.click();
             }
 
             // Apri il modal e seleziona il form corretto
             window.dcOpenAddConfigModal();
-            const selector = this.content.querySelector('#modal-config-type-selector');
+            const selector = window._miaConfigCardInstance.content.querySelector('#modal-config-type-selector');
             if (selector) {
                 selector.value = groupType;
                 window.dcShowModalConfigForm(groupType);
             }
             
             setTimeout(async () => {
-                const configSelect = this.content.querySelector(groupType === 'schedule' ? '#modal-schedule-config-select' : groupType === 'time' ? '#modal-time-config-select' : '#modal-conditional-config-select');
+                const configSelect = window._miaConfigCardInstance.content.querySelector(groupType === 'schedule' ? '#modal-schedule-config-select' : groupType === 'time' ? '#modal-time-config-select' : '#modal-conditional-config-select');
                 if (configSelect) {
                     configSelect.value = name;
                 }
@@ -3460,7 +3460,7 @@ class MiaConfigCard extends HTMLElement {
                 await new Promise(resolve => setTimeout(resolve, 100));
                 
                 if (groupType === 'schedule') {
-                    const valueInput = this.content.querySelector('#modal-schedule-setup-value');
+                    const valueInput = window._miaConfigCardInstance.content.querySelector('#modal-schedule-setup-value');
                     if (valueInput && cfg.value !== undefined) {
                         valueInput.value = cfg.value;
                     }
@@ -3470,33 +3470,33 @@ class MiaConfigCard extends HTMLElement {
                     const toHour = Math.floor(cfg.valid_to_ora || 0);
                     const toMinute = Math.round(((cfg.valid_to_ora || 0) - toHour) * 60);
                     const days = Array.isArray(cfg.days_of_week) ? cfg.days_of_week : (typeof cfg.days_of_week === 'string' ? cfg.days_of_week.split(',').map(d => parseInt(d)).filter(n => !Number.isNaN(n)) : [0,1,2,3,4,5,6]);
-                    const daysCheckboxes = this.content.querySelectorAll('#modal-dc-form-schedule input[name="days"]');
+                    const daysCheckboxes = window._miaConfigCardInstance.content.querySelectorAll('#modal-dc-form-schedule input[name="days"]');
                     if (daysCheckboxes.length) {
                         daysCheckboxes.forEach(cb => cb.checked = days.includes(parseInt(cb.value)));
                     }
-                    const fromHourSel = this.content.querySelector('#modal-from-hour');
-                    const fromMinuteSel = this.content.querySelector('#modal-from-minute');
-                    const toHourSel = this.content.querySelector('#modal-to-hour');
-                    const toMinuteSel = this.content.querySelector('#modal-to-minute');
+                    const fromHourSel = window._miaConfigCardInstance.content.querySelector('#modal-from-hour');
+                    const fromMinuteSel = window._miaConfigCardInstance.content.querySelector('#modal-from-minute');
+                    const toHourSel = window._miaConfigCardInstance.content.querySelector('#modal-to-hour');
+                    const toMinuteSel = window._miaConfigCardInstance.content.querySelector('#modal-to-minute');
                     if (fromHourSel) fromHourSel.value = fromHour;
                     if (fromMinuteSel) fromMinuteSel.value = fromMinute;
                     if (toHourSel) toHourSel.value = toHour;
                     if (toMinuteSel) toMinuteSel.value = toMinute;
                 } else if (groupType === 'time') {
-                    const valueInput = this.content.querySelector('#modal-time-setup-value');
+                    const valueInput = window._miaConfigCardInstance.content.querySelector('#modal-time-setup-value');
                     if (valueInput && cfg.value !== undefined) {
                         valueInput.value = cfg.value;
                     }
                     
                     const formatForInput = (dt) => typeof dt === 'string' ? dt.replace(' ', 'T').substring(0, 16) : '';
-                    const validFromInput = this.content.querySelector('#modal-dc-form-time input[name="valid_from"]');
-                    const validToInput = this.content.querySelector('#modal-dc-form-time input[name="valid_to"]');
+                    const validFromInput = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-time input[name="valid_from"]');
+                    const validToInput = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-time input[name="valid_to"]');
                     if (validFromInput && cfg.valid_from_date) validFromInput.value = formatForInput(cfg.valid_from_date);
                     if (validToInput && cfg.valid_to_date) validToInput.value = formatForInput(cfg.valid_to_date);
                     
                     const hasTimeFilter = cfg.valid_from_ora !== undefined && cfg.valid_to_ora !== undefined;
-                    const timeToggle = this.content.querySelector('#modal-time-enable-hours');
-                    const timeContainer = this.content.querySelector('#modal-time-hours-container');
+                    const timeToggle = window._miaConfigCardInstance.content.querySelector('#modal-time-enable-hours');
+                    const timeContainer = window._miaConfigCardInstance.content.querySelector('#modal-time-hours-container');
                     if (timeToggle && timeContainer) {
                         timeToggle.checked = hasTimeFilter;
                         timeContainer.style.display = hasTimeFilter ? 'block' : 'none';
@@ -3506,47 +3506,47 @@ class MiaConfigCard extends HTMLElement {
                         const fromMinute = Math.round((cfg.valid_from_ora - fromHour) * 60);
                         const toHour = Math.floor(cfg.valid_to_ora);
                         const toMinute = Math.round((cfg.valid_to_ora - toHour) * 60);
-                        const fromHourSel = this.content.querySelector('#modal-time-from-hour');
-                        const fromMinuteSel = this.content.querySelector('#modal-time-from-minute');
-                        const toHourSel = this.content.querySelector('#modal-time-to-hour');
-                        const toMinuteSel = this.content.querySelector('#modal-time-to-minute');
+                        const fromHourSel = window._miaConfigCardInstance.content.querySelector('#modal-time-from-hour');
+                        const fromMinuteSel = window._miaConfigCardInstance.content.querySelector('#modal-time-from-minute');
+                        const toHourSel = window._miaConfigCardInstance.content.querySelector('#modal-time-to-hour');
+                        const toMinuteSel = window._miaConfigCardInstance.content.querySelector('#modal-time-to-minute');
                         if (fromHourSel) fromHourSel.value = fromHour;
                         if (fromMinuteSel) fromMinuteSel.value = fromMinute;
                         if (toHourSel) toHourSel.value = toHour;
                         if (toMinuteSel) toMinuteSel.value = toMinute;
                     }
                     const hasDays = cfg.days_of_week !== undefined && cfg.days_of_week !== null;
-                    const dayToggle = this.content.querySelector('#modal-time-enable-days');
-                    const dayContainer = this.content.querySelector('#modal-time-days-container');
+                    const dayToggle = window._miaConfigCardInstance.content.querySelector('#modal-time-enable-days');
+                    const dayContainer = window._miaConfigCardInstance.content.querySelector('#modal-time-days-container');
                     if (dayToggle && dayContainer) {
                         dayToggle.checked = hasDays;
                         dayContainer.style.display = hasDays ? 'block' : 'none';
                     }
                     if (hasDays) {
                         const days = Array.isArray(cfg.days_of_week) ? cfg.days_of_week : (typeof cfg.days_of_week === 'string' ? cfg.days_of_week.split(',').map(d => parseInt(d)).filter(n => !Number.isNaN(n)) : []);
-                        this.content.querySelectorAll('#modal-dc-form-time input[name="time-days"]').forEach(cb => {
+                        window._miaConfigCardInstance.content.querySelectorAll('#modal-dc-form-time input[name="time-days"]').forEach(cb => {
                             cb.checked = days.includes(parseInt(cb.value));
                         });
                     }
                 } else if (groupType === 'conditional') {
-                    const valueInput = this.content.querySelector('#modal-conditional-setup-value');
+                    const valueInput = window._miaConfigCardInstance.content.querySelector('#modal-conditional-setup-value');
                     if (valueInput && cfg.value !== undefined) {
                         valueInput.value = cfg.value;
                     }
                     
-                    const sourceSelect = this.content.querySelector('#modal-conditional-source-config');
+                    const sourceSelect = window._miaConfigCardInstance.content.querySelector('#modal-conditional-source-config');
                     if (sourceSelect && cfg.conditional_config) {
                         sourceSelect.value = cfg.conditional_config;
                     }
                     
-                    const operatorSelect = this.content.querySelector('#modal-conditional-operator');
+                    const operatorSelect = window._miaConfigCardInstance.content.querySelector('#modal-conditional-operator');
                     if (operatorSelect && cfg.conditional_operator) {
                         operatorSelect.value = cfg.conditional_operator;
                     }
                     
                     const enableHours = cfg.valid_from_ora !== undefined && cfg.valid_to_ora !== undefined;
-                    const hoursToggle = this.content.querySelector('#modal-conditional-enable-hours');
-                    const hoursContainer = this.content.querySelector('#modal-conditional-hours-container');
+                    const hoursToggle = window._miaConfigCardInstance.content.querySelector('#modal-conditional-enable-hours');
+                    const hoursContainer = window._miaConfigCardInstance.content.querySelector('#modal-conditional-hours-container');
                     if (hoursToggle && hoursContainer) {
                         hoursToggle.checked = enableHours;
                         hoursContainer.style.display = enableHours ? 'block' : 'none';
@@ -3556,10 +3556,10 @@ class MiaConfigCard extends HTMLElement {
                         const fromMinute = Math.round((cfg.valid_from_ora - fromHour) * 60);
                         const toHour = Math.floor(cfg.valid_to_ora);
                         const toMinute = Math.round((cfg.valid_to_ora - toHour) * 60);
-                        const fromHourSel = this.content.querySelector('#modal-conditional-from-hour');
-                        const fromMinuteSel = this.content.querySelector('#modal-conditional-from-minute');
-                        const toHourSel = this.content.querySelector('#modal-conditional-to-hour');
-                        const toMinuteSel = this.content.querySelector('#modal-conditional-to-minute');
+                        const fromHourSel = window._miaConfigCardInstance.content.querySelector('#modal-conditional-from-hour');
+                        const fromMinuteSel = window._miaConfigCardInstance.content.querySelector('#modal-conditional-from-minute');
+                        const toHourSel = window._miaConfigCardInstance.content.querySelector('#modal-conditional-to-hour');
+                        const toMinuteSel = window._miaConfigCardInstance.content.querySelector('#modal-conditional-to-minute');
                         if (fromHourSel) fromHourSel.value = fromHour;
                         if (fromMinuteSel) fromMinuteSel.value = fromMinute;
                         if (toHourSel) toHourSel.value = toHour;
@@ -3569,14 +3569,14 @@ class MiaConfigCard extends HTMLElement {
                     if (typeof window.dcUpdateConditionalOptions === 'function') {
                         await window.dcUpdateConditionalOptions();
                         await new Promise(resolve => setTimeout(resolve, 100));
-                        const comparisonInput = this.content.querySelector('#modal-conditional-comparison-value');
+                        const comparisonInput = window._miaConfigCardInstance.content.querySelector('#modal-conditional-comparison-value');
                         if (comparisonInput && cfg.conditional_value !== undefined) {
                             comparisonInput.value = cfg.conditional_value;
                         }
                     }
                 }
                 
-                const targetForm = this.content.querySelector(`#modal-form-container-${groupType}`);
+                const targetForm = window._miaConfigCardInstance.content.querySelector(`#modal-form-container-${groupType}`);
                 if (targetForm) {
                     targetForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
@@ -3584,8 +3584,8 @@ class MiaConfigCard extends HTMLElement {
         };
 
         window.dcToggleOverrideGroup = (headerElement, safeKey) => {
-            const content = this.content.querySelector(`#${safeKey}-content`);
-            const toggle = this.content.querySelector(`#${safeKey}-toggle`);
+            const content = window._miaConfigCardInstance.content.querySelector(`#${safeKey}-content`);
+            const toggle = window._miaConfigCardInstance.content.querySelector(`#${safeKey}-toggle`);
             if (!content || !toggle) {
                 console.error('Elementi collapse non trovati:', {safeKey, content, toggle});
                 return;
@@ -3610,7 +3610,7 @@ class MiaConfigCard extends HTMLElement {
             });
             
             const configs = result.response || {};
-            const select = this.content.querySelector('#weekly-config-select');
+            const select = window._miaConfigCardInstance.content.querySelector('#weekly-config-select');
             
             if (!select) return;
             
@@ -3640,7 +3640,7 @@ class MiaConfigCard extends HTMLElement {
             });
             
             const configs = result.response || {};
-            const select = this.content.querySelector('#history-filter');
+            const select = window._miaConfigCardInstance.content.querySelector('#history-filter');
             
             if (!select) return;
             
@@ -3656,9 +3656,9 @@ class MiaConfigCard extends HTMLElement {
         }
         
         window.dcLoadWeeklyView = async () => {
-            const setupName = this.content.querySelector('#weekly-config-select').value;
+            const setupName = window._miaConfigCardInstance.content.querySelector('#weekly-config-select').value;
             if (!setupName) {
-                this.showToast('Seleziona una configurazione', true);
+                window._miaConfigCardInstance.showToast('Seleziona una configurazione', true);
                 return;
             }
             
@@ -3681,13 +3681,13 @@ class MiaConfigCard extends HTMLElement {
                 
             } catch (error) {
                 console.error('Error loading weekly view:', error);
-                this.showToast('Errore nel caricamento', true);
+                window._miaConfigCardInstance.showToast('Errore nel caricamento', true);
             }
         };
     }
 
     async renderWeeklyView(setupName, configs) {
-        const container = this.content.querySelector('#dc-weekly-view');
+        const container = window._miaConfigCardInstance.content.querySelector('#dc-weekly-view');
         
         // Mostra loading
         container.innerHTML = '<div style="padding: 20px; text-align: center;">Caricamento vista settimanale...</div>';
@@ -3932,7 +3932,7 @@ class MiaConfigCard extends HTMLElement {
             // Aggiungi event listener per chiudere il modal cliccando sul backdrop
             setTimeout(() => {
                 if (!container.isConnected) return;
-                const modal = this.content.querySelector('#dc-weekly-event-modal');
+                const modal = window._miaConfigCardInstance.content.querySelector('#dc-weekly-event-modal');
                 if (modal) {
                     modal.addEventListener('click', function(e) {
                         // Chiudi solo se si clicca sul backdrop (non sul contenuto)
@@ -4687,7 +4687,7 @@ class MiaConfigCard extends HTMLElement {
     }
     
     async loadConfigsForValidValues() {
-        const select = this.content.querySelector('#vv-config-select');
+        const select = window._miaConfigCardInstance.content.querySelector('#vv-config-select');
         if (!select) return;
         
         try {
