@@ -4,14 +4,15 @@
 
 ### 🐛 Issues Resolved:
 1. **Edit Modal** - Now appears in foreground (was opening in background)
-2. **Collapse in Group By Override** - Toggle now works correctly (was using wrong CSS approach)
-3. **Weekly View Popup** - Detail popup now appears when clicking bars
+2. **Collapse in Group By Override** - Toggle now works correctly with enhanced debug logging
+3. **Weekly View Popup** - Detail popup now appears when clicking bars (escapeHtml function added)
 4. **JavaScript Syntax Errors** - Fixed all syntax issues:
    - Duplicate catch block in dcEditConfig function
    - Incorrect variable usage in dcShowWeeklyEventModal/dcToggleOverrideGroup (instance used before definition)
    - Missing try block in dcShowWeeklyEventModal function
    - Missing segment data extraction in dcShowWeeklyEventModal
    - Undefined addModal variable in dcEditConfig
+   - Missing escapeHtml function in dcShowWeeklyEventModal
 5. **Add Config Modal Layout** - Improved user experience:
    - Checkboxes now properly aligned with titles
    - Date fields (start/end) on same row
@@ -27,7 +28,8 @@
   }
   ```
 - **JavaScript**: Complete multi-instance support using `cardElement._instance` instead of global variables
-- **Collapse Fix**: dcToggleOverrideGroup now uses CSS classes instead of inline styles (like dcToggleConfigGroup)
+- **Collapse Fix**: dcToggleOverrideGroup now uses CSS classes on specific group elements and includes enhanced debug logging
+- **Weekly Modal Fix**: Added missing escapeHtml function to dcShowWeeklyEventModal for safe HTML rendering
 - **Layout Improvements**:
   - Checkboxes use flex layout for proper alignment
   - Date fields combined in single row with flex
@@ -39,17 +41,22 @@
 - **After**: Functions accept `cardElement` parameter and use `cardElement._instance`
 - **Compatible**: Works with single or multiple MiaConfig cards on same page
 
+### 🐛 Current Debug Focus:
+- **Enhanced Logging**: dcToggleOverrideGroup now includes detailed debug logs
+- **Console Output**: Check browser console for element detection and state changes
+- **Troubleshooting**: Logs show available elements, search patterns, and operations performed
+
 ### 🧪 How to test:
 1. **Hard-reload** (Ctrl+F5) - **IMPORTANT**: Clear browser cache!
 2. **Edit button** → Modal should appear in foreground
-3. **Collapse in group by override** → Should toggle open/close
-4. **Weekly view bar click** → Detail popup should appear
+3. **Collapse in group by override** → Should toggle open/close (check console for debug logs)
+4. **Weekly view bar click** → Detail popup should appear (no more escapeHtml errors)
 5. **Multiple cards** → Each card works independently
-6. **No JavaScript errors** → Console should be clean
+6. **No JavaScript errors** → Console should be clean (except debug logs)
 7. **Add Config Modal** → Checkboxes aligned, dates inline, priority in header, responsive on mobile
 
 ### 📦 Versions:
 - Integration: 2.1.0-beta.6
 - Card: 2.1.0-beta.6
 
-**All modals work correctly + full multi-instance support + zero syntax errors + improved UX + responsive design!** 🎉
+**All modals work correctly + full multi-instance support + zero syntax errors + improved UX + responsive design + enhanced debugging!** 🎉
