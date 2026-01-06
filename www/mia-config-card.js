@@ -141,6 +141,7 @@ class MiaConfigCard extends HTMLElement {
                 .mia-config-card .dc-weekly-hour-line { position: absolute; left: 0; right: 0; height: 1px; background: var(--divider-color); pointer-events: none; }
                 .mia-config-card .dc-weekly-bar { position: absolute; left: 2px; right: 2px; border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; cursor: pointer; transition: box-shadow 0.2s; overflow: visible; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; box-sizing: border-box; border-top: 2px solid rgba(0,0,0,0.3); border-bottom: 2px solid rgba(0,0,0,0.3); z-index: 1; }
                 .mia-config-card .dc-weekly-bar:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 9999 !important; }
+                .mia-config-card .dc-weekly-bar:focus { outline: 3px solid var(--primary-color); outline-offset: 2px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 9999 !important; }
                 .mia-config-card .dc-weekly-bar-time { background: #2196f3; color: white; border-left: 3px solid #0d47a1; border-right: 3px solid #0d47a1; }
                 .mia-config-card .dc-weekly-bar-schedule { background: #ff9800; color: white; border-left: 3px solid #e65100; border-right: 3px solid #e65100; }
                 .mia-config-card .dc-weekly-bar-conditional { background: #9c27b0; color: white; border-left: 3px solid #7b1fa2; border-right: 3px solid #7b1fa2; }
@@ -2605,6 +2606,13 @@ class MiaConfigCard extends HTMLElement {
         
         window.dcShowWeeklyEventModal = (barElement) => {
             try {
+                // Helper per escape HTML e prevenire XSS
+                const escapeHtml = (text) => {
+                    const div = document.createElement('div');
+                    div.textContent = text;
+                    return div.innerHTML;
+                };
+                
                 // Ottieni i dati del segmento dall'attributo data
                 const segmentJson = barElement.getAttribute('data-segment');
                 if (!segmentJson) return;
@@ -2629,7 +2637,7 @@ class MiaConfigCard extends HTMLElement {
                 
                 let html = `<div style="padding: 10px;">`;
                 html += `<div style="background: var(--secondary-background-color); padding: 15px; border-radius: 8px; margin-bottom: 15px;">`;
-                html += `<div style="font-size: 20px; font-weight: bold; margin-bottom: 8px;">Valore: ${segment.value}</div>`;
+                html += `<div style="font-size: 20px; font-weight: bold; margin-bottom: 8px;">Valore: ${escapeHtml(String(segment.value))}</div>`;
                 html += `<div style="font-size: 16px; color: var(--secondary-text-color);">`;
                 html += `⏰ ${String(startHour).padStart(2,'0')}:${String(startMin).padStart(2,'0')} - ${String(endHour).padStart(2,'0')}:${String(endMin).padStart(2,'0')}`;
                 html += `</div>`;
@@ -2675,8 +2683,8 @@ class MiaConfigCard extends HTMLElement {
                     html += `<div style="margin-bottom: 15px;">`;
                     html += `<div style="font-size: 18px; font-weight: bold; margin-bottom: 8px;">🎯 Override Condizionale</div>`;
                     html += `<div style="color: var(--secondary-text-color); line-height: 1.8;">`;
-                    html += `<strong>Condizione:</strong> ${segment.condition || 'N/D'}<br>`;
-                    html += `<strong>Entità:</strong> ${segment.entity || 'N/D'}`;
+                    html += `<strong>Condizione:</strong> ${escapeHtml(String(segment.condition || 'N/D'))}<br>`;
+                    html += `<strong>Entità:</strong> ${escapeHtml(String(segment.entity || 'N/D'))}`;
                     const hasWindow = typeof segment.validFrom === 'number' && typeof segment.validTo === 'number';
                     if (hasWindow) {
                         const fromTotalMin = Math.round(segment.validFrom * 60);
@@ -2692,7 +2700,7 @@ class MiaConfigCard extends HTMLElement {
                     }
                     html += `</div>`;
                     html += `</div>`;
-                } else if (segment.type === 'standard') {
+                }else if (segment.type === 'standard') {
                     html += `<div style="margin-bottom: 15px;">`;
                     html += `<div style="font-size: 18px; font-weight: bold; margin-bottom: 8px;">⚙️ Valore Standard</div>`;
                     html += `<div style="color: var(--secondary-text-color);">`;
@@ -3704,9 +3712,15 @@ class MiaConfigCard extends HTMLElement {
                         from: seg.from ? seg.from.toISOString() : undefined,
                         to: seg.to ? seg.to.toISOString() : undefined
                     };
-                    const segmentDataJson = JSON.stringify(segmentData).replace(/"/g, '&quot;');
+                    // Usa encoding più sicuro per l'attributo HTML
+                    const segmentDataJson = JSON.stringify(segmentData)
+                        .replace(/&/g, '&amp;')
+                        .replace(/'/g, '&#39;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;');
                     
-                    html += `<div class="${barClass} dc-weekly-tooltip" data-day-index="${dayIdx}" data-total-days="${days.length}" data-segment='${segmentDataJson}' onclick="window.dcShowWeeklyEventModal(this)" style="top: ${topPos}px; height: ${height}px; left: ${leftPercent}%; width: ${widthPercent}%;">`;
+                    html += `<div class="${barClass} dc-weekly-tooltip" data-day-index="${dayIdx}" data-total-days="${days.length}" data-segment='${segmentDataJson}' onclick="window.dcShowWeeklyEventModal(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.dcShowWeeklyEventModal(this);}" tabindex="0" role="button" aria-label="Visualizza dettagli configurazione" style="top: ${topPos}px; height: ${height}px; left: ${leftPercent}%; width: ${widthPercent}%;">`;
                     if (height > 20) {
                         html += seg.value;
                     }
