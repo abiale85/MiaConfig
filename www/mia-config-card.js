@@ -1,5 +1,5 @@
 // Version 2.0.0 - Major UX refresh: modal-only insertion, backup manager, override grouping fixes, history enable/disable logging - 20260103
-console.log('MIA-CONFIG-CARD Loading Version 2.0.0 - 20260103');
+console.log('MIA-CONFIG-CARD Loading Version 2.1.0-beta.2 - 20260106');
 
 class MiaConfigCard extends HTMLElement {
     constructor() {
@@ -192,7 +192,7 @@ class MiaConfigCard extends HTMLElement {
                 .mia-config-card .dc-toggle-arrow { transition: transform 0.3s ease; display: inline-block; }
                 
                 /* Modal styles (outside mia-config-card scope) */
-                #dc-add-config-modal, #dc-edit-modal { 
+                #dc-add-config-modal { 
                     display: none; 
                     position: fixed; 
                     top: 0; 
@@ -201,6 +201,19 @@ class MiaConfigCard extends HTMLElement {
                     height: 100%; 
                     background: rgba(0,0,0,0.5); 
                     z-index: 9999; 
+                    justify-content: center; 
+                    align-items: center;
+                    font-family: inherit;
+                }
+                #dc-edit-modal { 
+                    display: none; 
+                    position: fixed; 
+                    top: 0; 
+                    left: 0; 
+                    width: 100%; 
+                    height: 100%; 
+                    background: rgba(0,0,0,0.5); 
+                    z-index: 10000; 
                     justify-content: center; 
                     align-items: center;
                     font-family: inherit;
@@ -1892,7 +1905,7 @@ class MiaConfigCard extends HTMLElement {
             html += `<strong style="font-size: 1.1em;">📦 ${name}</strong>`;
             html += `<span style="color: var(--secondary-text-color); font-size: 0.9em; margin-left: 8px;">(${sortedConfigs.length} configurazioni)</span>`;
             html += `</div>`;
-            html += `<button class="dc-btn-delete" onclick="event.stopPropagation(); window.dcDeleteConfig('${name}')" style="margin-left: 10px;">Elimina Tutto</button>`;
+            html += `<button class="dc-btn-delete" onclick="event.stopPropagation(); window.dcDeleteConfig('${name}')" style="margin-left: 10px; padding: 6px 12px;" title="Elimina tutte le configurazioni di ${name}">🗑️</button>`;
             html += `</div>`;
             html += `<div class="dc-config-group-content" id="${groupId}-content">`;
             html += `<div class="dc-config-group-inner">`;
@@ -2051,6 +2064,12 @@ class MiaConfigCard extends HTMLElement {
         
         window.dcEditConfig = async (name, type, id, cfgDataEncoded) => {
             try {
+                // Chiudi il modal di add se è aperto
+                const addModal = this.content.querySelector('#dc-add-config-modal');
+                if (addModal && addModal.classList.contains('active')) {
+                    addModal.classList.remove('active');
+                }
+                
                 const cfg = JSON.parse(decodeURIComponent(cfgDataEncoded));
                 const modal = this.content.querySelector('#dc-edit-modal');
                 const modalBody = this.content.querySelector('#dc-edit-modal-body');
@@ -2724,10 +2743,19 @@ class MiaConfigCard extends HTMLElement {
                 if (segment.to) segment.to = new Date(segment.to);
                 
                 // Genera il contenuto del modal
-                const modalBody = this.content.querySelector('#dc-weekly-event-modal-body');
-                const modal = this.content.querySelector('#dc-weekly-event-modal');
+                // Trova il modal partendo dall'elemento cliccato risalendo al componente
+                const cardElement = barElement.closest('mia-config-card');
+                if (!cardElement || !cardElement.shadowRoot) {
+                    console.error('Impossibile trovare il componente card');
+                    return;
+                }
+                const modalBody = cardElement.shadowRoot.querySelector('#dc-weekly-event-modal-body');
+                const modal = cardElement.shadowRoot.querySelector('#dc-weekly-event-modal');
                 
-                if (!modalBody || !modal) return;
+                if (!modalBody || !modal) {
+                    console.error('Modal elements not found:', {modalBody, modal});
+                    return;
+                }
                 
                 // Genera l'HTML del contenuto usando la stessa logica del tooltip ma formattato meglio
                 const startHour = Math.floor(segment.startTime / 60);
@@ -2823,9 +2851,13 @@ class MiaConfigCard extends HTMLElement {
         };
         
         window.dcCloseWeeklyEventModal = () => {
-            const modal = this.content.querySelector('#dc-weekly-event-modal');
-            if (modal) {
-                modal.classList.remove('active');
+            // Trova il modal attivo nel shadow DOM del componente card
+            const cardElement = document.querySelector('mia-config-card');
+            if (cardElement && cardElement.shadowRoot) {
+                const modal = cardElement.shadowRoot.querySelector('#dc-weekly-event-modal');
+                if (modal) {
+                    modal.classList.remove('active');
+                }
             }
         };
         
@@ -3345,14 +3377,14 @@ class MiaConfigCard extends HTMLElement {
                 name: group.configs[0].name
             }));
             html += `<div class="dc-config-group">`;
-            html += `<div class="dc-config-group-header" onclick="window.dcToggleOverrideGroup('${safeKey}')">`;
+            html += `<div class="dc-config-group-header" onclick="window.dcToggleOverrideGroup(this, '${safeKey}')">`;
             html += `<div class="dc-config-group-title">`;
             html += `<span class="dc-config-group-toggle" id="${safeKey}-toggle">▼</span>`;
             html += `<span>${group.title}</span>`;
             html += `</div>`;
             if (group.type !== 'standard') {
                 // Pulsante per inserire un nuovo override con le stesse condizioni
-                html += `<button class="dc-btn" onclick="event.stopPropagation(); window.dcInsertOverrideGroup('${group.type}', '${templateData}')">Inserisci</button>`;
+                html += `<button class="dc-btn" onclick="event.stopPropagation(); window.dcInsertOverrideGroup('${group.type}', '${templateData}')" style="padding: 6px 12px;" title="Inserisci nuovo override con stesse condizioni">➕</button>`;
             }
             html += `</div>`;
             html += `<div class="dc-config-group-content" id="${safeKey}-content">`;
@@ -3554,10 +3586,20 @@ class MiaConfigCard extends HTMLElement {
             }, 200);
         };
 
-        window.dcToggleOverrideGroup = (safeKey) => {
-            const content = this.content.querySelector(`#${safeKey}-content`);
-            const toggle = this.content.querySelector(`#${safeKey}-toggle`);
-            if (!content || !toggle) return;
+        window.dcToggleOverrideGroup = (headerElement, safeKey) => {
+            // Trova il componente card risalendo dal DOM
+            const cardElement = headerElement.closest('mia-config-card');
+            if (!cardElement || !cardElement.shadowRoot) {
+                console.error('Impossibile trovare il componente card');
+                return;
+            }
+            
+            const content = cardElement.shadowRoot.querySelector(`#${safeKey}-content`);
+            const toggle = cardElement.shadowRoot.querySelector(`#${safeKey}-toggle`);
+            if (!content || !toggle) {
+                console.error('Elementi collapse non trovati:', {safeKey, content, toggle});
+                return;
+            }
             const isOpen = content.style.display !== 'none';
             content.style.display = isOpen ? 'none' : 'block';
             toggle.textContent = isOpen ? '▶' : '▼';

@@ -1,5 +1,39 @@
 # 📋 Changelog - Mia Config
 
+## v2.1.0-beta.2 - 6 Gennaio 2026 🐛 Bugfix Release
+
+### 🐛 Fix Critici
+- **Modal Edit**: Corretto problema sovrapposizione modali quando si apriva edit da dentro il modal di inserimento
+  - Aggiunta chiusura automatica del modal "add" quando si apre "edit"
+  - Aumentato z-index del modal edit a 10000 (vs 9999 del modal add)
+  - **Impatto**: Il tasto edit ora funziona correttamente e il modal appare in primo piano
+
+- **Popup vista settimanale**: Corretto accesso al shadow DOM per visualizzazione dettagli eventi
+  - Risolto problema "this" context quando chiamato da onclick HTML
+  - Utilizzato `closest('mia-config-card')` per risalire al componente corretto
+  - **Impatto**: Click/tap sulle barre della vista settimanale ora apre correttamente il modal dettagli
+
+- **Collapse gruppi override**: Corretto toggle espansione/collasso dei gruppi
+  - Modificata funzione `dcToggleOverrideGroup` per passare elemento DOM
+  - Corretto accesso al shadow DOM del componente
+  - **Impatto**: Il collapse nei gruppi per override ora funziona correttamente
+
+### 🎨 UI/UX Mobile
+- **Pulsanti compatti**: Sostituiti testi con icone per ottimizzare spazio su mobile
+  - "Elimina Tutto" → 🗑️ con tooltip
+  - "Inserisci" (gruppi override) → ➕ con tooltip
+  - Padding ottimizzato per pulsanti più compatti
+  - **Impatto**: Interfaccia più pulita e adatta a schermi piccoli
+
+### 📝 Note Tecniche
+Tutti i fix riguardano problemi di scope con `this` in funzioni window chiamate da onclick HTML inline. Soluzione: passare l'elemento DOM e usare `closest()` + `shadowRoot` per accedere agli elementi del custom element.
+
+**Versioni**
+- integrazione: 2.1.0-beta.2
+- card: 2.1.0-beta.2
+
+---
+
 ## v2.1.0-beta.1 - 6 Gennaio 2026 🧪 Beta Release
 
 ### 🎨 Frontend (mia-config-card.js)
