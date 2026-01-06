@@ -1,5 +1,15 @@
 # 📋 Changelog - Mia Config
 
+## Unreleased
+
+### 🎨 Frontend (mia-config-card.js)
+- **Vista settimanale mobile**: Aggiunto modal con dettagli completi per tocco/click sulle barre
+  - **Problema**: I tooltip hover erano tagliati e illeggibili su smartphone
+  - **Soluzione**: Click/tap sulle barre apre un modal mobile-friendly con tutti i dettagli
+  - Mantiene i tooltip hover per desktop (progressive enhancement)
+  - Chiusura modal con click sul backdrop o pulsante X
+  - Aggiunta nota nella legenda sulla funzionalità tap/click
+
 ## v2.0.0 - 3 Gennaio 2026 🚀 Major UX + Backup
 
 ### ✨ Novità principali
