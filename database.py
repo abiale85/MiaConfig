@@ -17,6 +17,9 @@ class ConfigDatabase:
         # Cache per descrizioni (raramente cambiano, evita query ripetute)
         self._descriptions_cache = None
         self._cache_timestamp = None
+        # Cache per get_next_changes: evita ricalcoli se il valore corrente e le configurazioni non cambiano
+        self._next_changes_cache = {}  # {setup_name: {'value': current_value, 'result': next_changes, 'timestamp': calc_time}}
+        self._config_version = 0  # Incrementato ad ogni modifica di configurazione
     
     @staticmethod
     def validate_setup_name(setup_name: str) -> str:
@@ -448,6 +451,16 @@ class ConfigDatabase:
         all_configs = self.get_all_configurations()
         return all_configs.get(setup_name)
     
+    def _invalidate_next_changes_cache(self):
+        """Invalida la cache dei prossimi cambiamenti dopo modifiche alle configurazioni.
+        
+        Chiamato automaticamente da tutti i metodi che modificano le configurazioni
+        (set_config, set_time_config, delete_config, etc.) per garantire che
+        get_next_changes ricalcoli i risultati dopo cambiamenti al setup.
+        """
+        self._next_changes_cache.clear()
+        self._config_version += 1
+    
     def _check_priority_conflict(self, setup_name: str, priority: int, exclude_id: int = None) -> bool:
         """Verifica se esiste già una configurazione standard con la stessa priorità per questo nome."""
         cursor = self.conn.cursor()
@@ -497,6 +510,9 @@ class ConfigDatabase:
         
         self.conn.commit()
         _LOGGER.debug(f"Set config: {setup_name} = {setup_value} (priority: {priority})")
+        
+        # Invalida cache next_changes dopo modifica configurazione
+        self._invalidate_next_changes_cache()
     
     def update_standard_config(self, config_id: int, setup_value: str, priority: int, description: str = None) -> None:
         """Aggiorna una configurazione standard esistente."""
@@ -539,6 +555,9 @@ class ConfigDatabase:
         
         self.conn.commit()
         _LOGGER.debug(f"Updated config id {config_id}: {setup_name} = {setup_value} (priority: {priority})")
+        
+        # Invalida cache next_changes dopo modifica configurazione
+        self._invalidate_next_changes_cache()
     
     def set_time_config(
         self, 
@@ -574,6 +593,9 @@ class ConfigDatabase:
         
         self.conn.commit()
         _LOGGER.debug(f"Set time config: {setup_name} = {setup_value} ({valid_from_date} - {valid_to_date})")
+        
+        # Invalida cache next_changes dopo modifica configurazione
+        self._invalidate_next_changes_cache()
     
     def set_schedule_config(
         self, 
@@ -607,6 +629,9 @@ class ConfigDatabase:
         
         self.conn.commit()
         _LOGGER.debug(f"Set schedule config: {setup_name} = {setup_value} ({valid_from_ora} - {valid_to_ora}) Days: {days_of_week}")
+        
+        # Invalida cache next_changes dopo modifica configurazione
+        self._invalidate_next_changes_cache()
     
     def set_conditional_config(
         self,
@@ -664,6 +689,9 @@ class ConfigDatabase:
         
         self.conn.commit()
         _LOGGER.debug(f"Set conditional config: {setup_name} = {setup_value} if {conditional_config} {conditional_operator} {conditional_value}")
+        
+        # Invalida cache next_changes dopo modifica configurazione
+        self._invalidate_next_changes_cache()
     
     def _check_circular_dependency(self, setup_name: str, conditional_config: str, visited: set = None) -> bool:
         """Verifica se aggiungere una dipendenza creerebbe un loop ciclico.
@@ -821,6 +849,9 @@ class ConfigDatabase:
         
         self.conn.commit()
         _LOGGER.debug(f"Deleted config: {setup_name} (type: {config_type})")
+        
+        # Invalida cache next_changes dopo eliminazione configurazione
+        self._invalidate_next_changes_cache()
     
     def get_all_setup_names(self) -> List[str]:
         """Ottiene tutti i nomi delle configurazioni esistenti."""
@@ -1151,6 +1182,9 @@ class ConfigDatabase:
         
         self.conn.commit()
         _LOGGER.info(f"Configurazione {config_type} con ID {config_id} eliminata")
+        
+        # Invalida cache next_changes dopo eliminazione configurazione
+        self._invalidate_next_changes_cache()
     
     def set_config_enabled(self, config_type: str, config_id: int, enabled: bool) -> None:
         """Abilita o disabilita una configurazione."""
@@ -1231,11 +1265,19 @@ class ConfigDatabase:
 
         status = "abilitata" if enabled else "disabilitata"
         _LOGGER.info(f"Configurazione {config_type} con ID {config_id} {status}")
+        
+        # Invalida cache next_changes dopo modifica enable/disable
+        self._invalidate_next_changes_cache()
     
     def get_next_changes(self, setup_name: str, limit_hours: int = 24, max_results: int = 5) -> List[Dict[str, Any]]:
         """
         Calcola i prossimi cambiamenti di valore per una configurazione.
         USA LA LOGICA UNIFICATA _get_configurations_at_time per garantire coerenza con runtime e vista settimanale.
+        
+        OTTIMIZZAZIONE PERFORMANCE:
+        - Cache basata sul valore corrente e config_version
+        - Ricalcolo solo se: valore corrente cambiato O configurazioni modificate
+        - La cache viene invalidata automaticamente dopo ogni modifica alle configurazioni
         
         Args:
             setup_name: Nome della configurazione per cui calcolare i prossimi cambiamenti
@@ -1249,14 +1291,39 @@ class ConfigDatabase:
             - timestamp: Timestamp ISO del cambiamento
             - type: Tipo di evento che causa il cambiamento (time, schedule, conditional, etc.)
         """
-        cursor = self.conn.cursor()
-        now = datetime.now()
-        limit_time = now + timedelta(hours=limit_hours)
-        
         # Ottieni il valore attuale usando la logica unificata
         current_config = self.get_all_configurations()
         current_value = current_config.get(setup_name, {}).get('value')
         current_source = current_config.get(setup_name, {}).get('source', 'unknown')
+        
+        # Controlla cache: ricalcola solo se valore corrente cambiato O configurazioni modificate
+        cache_key = setup_name
+        cached = self._next_changes_cache.get(cache_key)
+        
+        if cached is not None:
+            # Cache hit: verifica se è ancora valida
+            if (cached['value'] == current_value and 
+                cached['config_version'] == self._config_version):
+                # Cache valida: aggiorna solo minutes_until basandosi sul tempo trascorso
+                now = datetime.now()
+                cached_timestamp = datetime.fromisoformat(cached['timestamp'])
+                elapsed_minutes = int((now - cached_timestamp).total_seconds() / 60)
+                
+                # Aggiorna minutes_until per ogni evento
+                updated_changes = []
+                for change in cached['result']:
+                    new_minutes_until = change['minutes_until'] - elapsed_minutes
+                    if new_minutes_until > 0:  # Solo eventi futuri
+                        updated_change = change.copy()
+                        updated_change['minutes_until'] = new_minutes_until
+                        updated_changes.append(updated_change)
+                
+                return updated_changes[:max_results]
+        
+        # Cache miss o invalidata: ricalcola
+        cursor = self.conn.cursor()
+        now = datetime.now()
+        limit_time = now + timedelta(hours=limit_hours)
         
         # Costanti per la gestione degli eventi
         MAX_DAYS_TO_CHECK = 7  # Numero massimo di giorni futuri da considerare per eventi ricorrenti
@@ -1265,11 +1332,6 @@ class ConfigDatabase:
         def get_days_to_check(hours: int) -> int:
             """Calcola quanti giorni verificare per eventi ricorrenti, max MAX_DAYS_TO_CHECK."""
             return min(int(hours / 24) + 2, MAX_DAYS_TO_CHECK)  # +2 per sicurezza (oggi e domani)
-        
-        # Ottieni il valore attuale usando la logica unificata
-        current_config = self.get_all_configurations()
-        current_value = current_config.get(setup_name, {}).get('value')
-        current_source = current_config.get(setup_name, {}).get('source', 'unknown')
         
         # Raccogli tutti i timestamp di eventi potenziali (inizio/fine di configurazioni)
         # IMPORTANTE: Raccogliamo eventi da TUTTE le configurazioni, non solo per setup_name,
@@ -1386,7 +1448,16 @@ class ConfigDatabase:
                     last_value = new_value
                     last_source = new_source
         
-        return changes[:max_results]
+        # Salva in cache prima di restituire
+        result = changes[:max_results]
+        self._next_changes_cache[cache_key] = {
+            'value': current_value,
+            'config_version': self._config_version,
+            'result': result,
+            'timestamp': now.isoformat()
+        }
+        
+        return result
     
     def get_current_config_start_time(self, setup_name: str) -> Optional[int]:
         """
