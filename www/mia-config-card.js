@@ -1,5 +1,5 @@
-// Version 2.0.0 - Major UX refresh: modal-only insertion, backup manager, override grouping fixes, history enable/disable logging - 20260103
-console.log('MIA-CONFIG-CARD Loading Version 2.1.0-beta.3 - 20260106');
+// Version 2.1.0-beta.4 - Shadow DOM stability fixes for edit + weekly modal - 20260106
+console.log('MIA-CONFIG-CARD Loading Version 2.1.0-beta.4 - 20260106');
 
 class MiaConfigCard extends HTMLElement {
     constructor() {
@@ -1977,7 +1977,7 @@ class MiaConfigCard extends HTMLElement {
                                 <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="window.dcToggleConfigEnabled('${type}', ${configId}, this.checked)" style="cursor: pointer;">
                                 <span style="font-size: 10px;">${isEnabled ? '✓' : '✗'}</span>
                             </label>
-                            <button class="dc-btn" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcEditConfig('${name}', '${type}', ${configId}, '${cfgData}')">✏️</button>
+                            <button class="dc-btn" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcEditConfig(this, '${name}', '${type}', ${configId}, '${cfgData}')">✏️</button>
                             <button class="dc-btn-delete" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcDeleteSingleConfig('${type}', ${configId})">🗑️</button>
                         </div>
                     </div>
@@ -2062,15 +2062,25 @@ class MiaConfigCard extends HTMLElement {
             }
         };
         
-        window.dcEditConfig = async (name, type, id, cfgDataEncoded) => {
+        window.dcEditConfig = async (triggerEl, name, type, id, cfgDataEncoded) => {
             try {
-                // Trova il shadow root dal primo elemento della card nel documento
-                const cardElement = document.querySelector('mia-config-card');
-                if (!cardElement || !cardElement.shadowRoot) {
-                    console.error('Impossibile trovare il componente card');
-                    return;
+                // Trova il shadow root a partire dal bottone cliccato
+                let shadowRoot = null;
+                if (triggerEl && typeof triggerEl.getRootNode === 'function') {
+                    const root = triggerEl.getRootNode();
+                    if (root && root !== document && root.host && root.host.tagName === 'MIA-CONFIG-CARD') {
+                        shadowRoot = root;
+                    }
                 }
-                const shadowRoot = cardElement.shadowRoot;
+                // Fallback: prova dal global card (retrocompatibilità se triggerEl manca)
+                if (!shadowRoot) {
+                    const cardElement = document.querySelector('mia-config-card');
+                    if (!cardElement || !cardElement.shadowRoot) {
+                        console.error('Impossibile trovare il componente card');
+                        return;
+                    }
+                    shadowRoot = cardElement.shadowRoot;
+                }
                 
                 // Chiudi il modal di add se è aperto
                 const addModal = shadowRoot.querySelector('#dc-add-config-modal');
@@ -2755,15 +2765,14 @@ class MiaConfigCard extends HTMLElement {
                 if (segment.from) segment.from = new Date(segment.from);
                 if (segment.to) segment.to = new Date(segment.to);
                 
-                // Genera il contenuto del modal
-                // Trova il modal partendo dall'elemento cliccato risalendo al componente
-                const cardElement = barElement.closest('mia-config-card');
-                if (!cardElement || !cardElement.shadowRoot) {
+                // Genera il contenuto del modal partendo dal shadow root del segmento cliccato
+                const shadowRoot = barElement && typeof barElement.getRootNode === 'function' ? barElement.getRootNode() : null;
+                if (!shadowRoot || shadowRoot === document || !shadowRoot.host || shadowRoot.host.tagName !== 'MIA-CONFIG-CARD') {
                     console.error('Impossibile trovare il componente card');
                     return;
                 }
-                const modalBody = cardElement.shadowRoot.querySelector('#dc-weekly-event-modal-body');
-                const modal = cardElement.shadowRoot.querySelector('#dc-weekly-event-modal');
+                const modalBody = shadowRoot.querySelector('#dc-weekly-event-modal-body');
+                const modal = shadowRoot.querySelector('#dc-weekly-event-modal');
                 
                 if (!modalBody || !modal) {
                     console.error('Modal elements not found:', {modalBody, modal});
@@ -3430,7 +3439,7 @@ class MiaConfigCard extends HTMLElement {
                                 <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="window.dcToggleConfigEnabled('${cfg.type}', ${cfg.id}, this.checked)" style="cursor: pointer;">
                                 <span style="font-size: 10px;">${isEnabled ? '✓' : '✗'}</span>
                             </label>
-                            <button class="dc-btn" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcEditConfig('${name}', '${cfg.type}', ${cfg.id}, '${cfgData}')">✏️</button>
+                            <button class="dc-btn" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcEditConfig(this, '${name}', '${cfg.type}', ${cfg.id}, '${cfgData}')">✏️</button>
                             <button class="dc-btn-delete" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcDeleteSingleConfig('${cfg.type}', ${cfg.id})">🗑️</button>
                         </div>
                     </div>

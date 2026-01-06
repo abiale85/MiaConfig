@@ -1,5 +1,19 @@
 # 📋 Changelog - Mia Config
 
+## v2.1.0-beta.4 - 6 Gennaio 2026 🐛 Shadow DOM Hotfix
+
+### 🛠️ Fix Critico
+- **Modal Edit & Weekly Popup**: Risolto definitivamente l'accesso al shadow DOM per modali edit e popup settimanale
+  - I pulsanti passano ora l'elemento cliccato; il codice usa `getRootNode()` con validazione dell'host `mia-config-card`
+  - Eliminati gli errori "Impossibile trovare il componente card" su edit e popup
+  - Allineato fallback legacy per garantire compatibilità
+
+### 📦 Versioni
+- integrazione: 2.1.0-beta.4
+- card: 2.1.0-beta.4
+
+---
+
 ## v2.1.0-beta.3 - 6 Gennaio 2026 🌍 Internationalization
 
 ### 🌐 Internationalization & Multilingual Support
