@@ -1232,7 +1232,7 @@ class ConfigDatabase:
         status = "abilitata" if enabled else "disabilitata"
         _LOGGER.info(f"Configurazione {config_type} con ID {config_id} {status}")
     
-    def get_next_changes(self, setup_name: str, limit_hours: int = 24) -> List[Dict[str, Any]]:
+    def get_next_changes(self, setup_name: str, limit_hours: int = 24, max_results: int = 5) -> List[Dict[str, Any]]:
         """
         Calcola i prossimi cambiamenti di valore per una configurazione.
         USA LA LOGICA UNIFICATA _get_configurations_at_time per garantire coerenza con runtime e vista settimanale.
@@ -1240,6 +1240,7 @@ class ConfigDatabase:
         Args:
             setup_name: Nome della configurazione per cui calcolare i prossimi cambiamenti
             limit_hours: Numero di ore future da considerare (default 24)
+            max_results: Numero massimo di eventi da restituire (default 5)
         
         Returns:
             Lista di cambiamenti futuri ordinati per tempo, ognuno con:
@@ -1251,6 +1252,19 @@ class ConfigDatabase:
         cursor = self.conn.cursor()
         now = datetime.now()
         limit_time = now + timedelta(hours=limit_hours)
+        
+        # Ottieni il valore attuale usando la logica unificata
+        current_config = self.get_all_configurations()
+        current_value = current_config.get(setup_name, {}).get('value')
+        current_source = current_config.get(setup_name, {}).get('source', 'unknown')
+        
+        # Costanti per la gestione degli eventi
+        MAX_DAYS_TO_CHECK = 7  # Numero massimo di giorni futuri da considerare per eventi ricorrenti
+        
+        # Helper per calcolare giorni da verificare basato su limit_hours
+        def get_days_to_check(hours: int) -> int:
+            """Calcola quanti giorni verificare per eventi ricorrenti, max MAX_DAYS_TO_CHECK."""
+            return min(int(hours / 24) + 2, MAX_DAYS_TO_CHECK)  # +2 per sicurezza (oggi e domani)
         
         # Ottieni il valore attuale usando la logica unificata
         current_config = self.get_all_configurations()
@@ -1283,12 +1297,11 @@ class ConfigDatabase:
             FROM configurazioni_a_orario
             WHERE enabled = 1
         """)
+        days_to_check = get_days_to_check(limit_hours)
         for row in cursor.fetchall():
             days_str = row['days_of_week'] if row['days_of_week'] else '0,1,2,3,4,5,6'
             days_list = [int(d) for d in days_str.split(',') if d]
             
-            # Controlla oggi e i prossimi giorni fino al limite
-            days_to_check = min(int(limit_hours / 24) + 2, 7)  # Almeno 2 giorni, max 7
             for day_offset in range(days_to_check):
                 check_date = now + timedelta(days=day_offset)
                 weekday = check_date.weekday()
@@ -1321,8 +1334,6 @@ class ConfigDatabase:
             WHERE enabled = 1 AND valid_from_ora IS NOT NULL AND valid_to_ora IS NOT NULL
         """)
         for row in cursor.fetchall():
-            # Genera eventi per i prossimi giorni
-            days_to_check = min(int(limit_hours / 24) + 2, 7)
             for day_offset in range(days_to_check):
                 check_date = now + timedelta(days=day_offset)
                 
@@ -1375,7 +1386,7 @@ class ConfigDatabase:
                     last_value = new_value
                     last_source = new_source
         
-        return changes[:5]  # Max 5 eventi
+        return changes[:max_results]
     
     def get_current_config_start_time(self, setup_name: str) -> Optional[int]:
         """
