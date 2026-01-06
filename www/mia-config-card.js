@@ -171,6 +171,7 @@ class MiaConfigCard extends HTMLElement {
                     .mia-config-card .dc-tab.active { border: 2px solid var(--primary-color); background: var(--primary-color); color: white; }
                     .mia-config-card .dc-btn, .mia-config-card .dc-btn-secondary, .mia-config-card .dc-btn-danger { padding: 10px 12px; font-size: 13px; min-height: 44px; }
                     .mia-config-card .dc-config-item { flex-direction: column; align-items: flex-start; gap: 10px; }
+                    .mia-config-card .dc-config-item .dc-btn, .mia-config-card .dc-config-item .dc-btn-delete { min-height: 44px; min-width: 44px; padding: 10px 12px; font-size: 16px; }
                     .mia-config-card .dc-dashboard-actions { flex-direction: row; width: 100%; }
                     .mia-config-card .dc-dashboard-actions button { flex: 1; }
                     .mia-config-card .dc-time-group { grid-template-columns: 1fr; }
@@ -886,7 +887,10 @@ class MiaConfigCard extends HTMLElement {
                     form.reset();
                     window.dcCloseAddConfigModal();
                     this.showToast('Configurazione salvata!');
-                    setTimeout(() => this.loadConfigurations(), 500);
+                    setTimeout(() => {
+                        this.loadConfigurations();
+                        this.loadConfigsForValidValues();
+                    }, 500);
                 } catch (err) {
                     console.error('Errore salvataggio:', err);
                     this.showToast('Errore: ' + err.message, true);
@@ -1961,11 +1965,18 @@ class MiaConfigCard extends HTMLElement {
         };
         
         window.dcEditConfig = async (name, type, id, cfgDataEncoded) => {
-            const cfg = JSON.parse(decodeURIComponent(cfgDataEncoded));
-            const modal = this.content.querySelector('#dc-edit-modal');
-            const modalBody = this.content.querySelector('#dc-edit-modal-body');
-            
-            let formHtml = '';
+            try {
+                const cfg = JSON.parse(decodeURIComponent(cfgDataEncoded));
+                const modal = this.content.querySelector('#dc-edit-modal');
+                const modalBody = this.content.querySelector('#dc-edit-modal-body');
+                
+                if (!modal || !modalBody) {
+                    console.error('Modal elements not found in DOM');
+                    this.showToast('Errore: impossibile aprire il modal', true);
+                    return;
+                }
+                
+                let formHtml = '';
             
             if (type === 'standard') {
                 formHtml = `
@@ -2548,6 +2559,10 @@ class MiaConfigCard extends HTMLElement {
                     this.showToast('Errore: ' + err.message, true);
                 }
             });
+            } catch (err) {
+                console.error('Error in dcEditConfig:', err);
+                this.showToast('Errore apertura modal: ' + err.message, true);
+            }
         };
         
         // Funzioni per modal di inserimento configurazione
