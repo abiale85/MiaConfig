@@ -7,11 +7,20 @@
   - Causa problema: Le modifiche beta.2-beta.5 hanno introdotto complessità inutile che rompeva il funzionamento
   - Soluzione: Ripristinato il codice originale v2.0.0/v2.0.1 che usava `this.content.querySelector()` direttamente
   - Arrow functions mantengono correttamente il contesto `this` dell'istanza della card
+
+### 🐛 Correzioni Aggiuntive
+- **Modal edit visibilità**: Ora il modal edit si apre correttamente
+- **Chiusura modal incrociata**: Quando si apre il modal "Inserisci", il modal "Edit" viene chiuso automaticamente
+- **Vista settimanale**: Corretta funzione `dcShowWeeklyEventModal` per usare `this.content` invece di shadowRoot
+- **Funzioni close modal**: Tutte le funzioni di chiusura modal ora usano `this.content` in modo coerente
   
 ### 📝 Dettagli Tecnici  
-- `dcEditConfig` ora usa `this.content` invece di shadowRoot (come in v2.0.0)
-- Rimosso parametro `triggerEl` dagli onclick (ripristinato signature originale)
-- Tutti i querySelector dentro dcEditConfig ora usano `this.content`
+- `dcEditConfig` usa `this.content` invece di shadowRoot
+- `dcOpenAddConfigModal` chiude il modal edit se aperto
+- `dcCloseEditModal` usa `this.content.querySelector`
+- `dcShowWeeklyEventModal` usa `this.content.querySelector`
+- `dcCloseWeeklyEventModal` usa `this.content.querySelector`
+- Rimossi tutti i riferimenti a `document.querySelector('mia-config-card')` e `shadowRoot`
 
 ### 📦 Versioni
 - integrazione: 2.1.0-beta.6
