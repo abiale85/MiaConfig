@@ -17,6 +17,10 @@ class ConfigDatabase:
         # Cache per descrizioni (raramente cambiano, evita query ripetute)
         self._descriptions_cache = None
         self._cache_timestamp = None
+        # Cache per get_next_changes: evita ricalcoli se il valore corrente e le configurazioni non cambiano
+        # Struttura: {(setup_name, limit_hours, max_results): {'value': str, 'config_version': int, 'result': list, 'timestamp': str}}
+        self._next_changes_cache = {}
+        self._config_version = 0  # Incrementato ad ogni modifica di configurazione
     
     @staticmethod
     def validate_setup_name(setup_name: str) -> str:
@@ -448,6 +452,16 @@ class ConfigDatabase:
         all_configs = self.get_all_configurations()
         return all_configs.get(setup_name)
     
+    def _invalidate_next_changes_cache(self):
+        """Invalida la cache dei prossimi cambiamenti dopo modifiche alle configurazioni.
+        
+        Chiamato automaticamente da tutti i metodi che modificano le configurazioni
+        (set_config, set_time_config, delete_config, etc.) per garantire che
+        get_next_changes ricalcoli i risultati dopo cambiamenti al setup.
+        """
+        self._next_changes_cache.clear()
+        self._config_version += 1
+    
     def _check_priority_conflict(self, setup_name: str, priority: int, exclude_id: int = None) -> bool:
         """Verifica se esiste già una configurazione standard con la stessa priorità per questo nome."""
         cursor = self.conn.cursor()
@@ -497,6 +511,9 @@ class ConfigDatabase:
         
         self.conn.commit()
         _LOGGER.debug(f"Set config: {setup_name} = {setup_value} (priority: {priority})")
+        
+        # Invalida cache next_changes dopo modifica configurazione
+        self._invalidate_next_changes_cache()
     
     def update_standard_config(self, config_id: int, setup_value: str, priority: int, description: str = None) -> None:
         """Aggiorna una configurazione standard esistente."""
@@ -539,6 +556,9 @@ class ConfigDatabase:
         
         self.conn.commit()
         _LOGGER.debug(f"Updated config id {config_id}: {setup_name} = {setup_value} (priority: {priority})")
+        
+        # Invalida cache next_changes dopo modifica configurazione
+        self._invalidate_next_changes_cache()
     
     def set_time_config(
         self, 
@@ -574,6 +594,9 @@ class ConfigDatabase:
         
         self.conn.commit()
         _LOGGER.debug(f"Set time config: {setup_name} = {setup_value} ({valid_from_date} - {valid_to_date})")
+        
+        # Invalida cache next_changes dopo modifica configurazione
+        self._invalidate_next_changes_cache()
     
     def set_schedule_config(
         self, 
@@ -607,6 +630,9 @@ class ConfigDatabase:
         
         self.conn.commit()
         _LOGGER.debug(f"Set schedule config: {setup_name} = {setup_value} ({valid_from_ora} - {valid_to_ora}) Days: {days_of_week}")
+        
+        # Invalida cache next_changes dopo modifica configurazione
+        self._invalidate_next_changes_cache()
     
     def set_conditional_config(
         self,
@@ -664,6 +690,9 @@ class ConfigDatabase:
         
         self.conn.commit()
         _LOGGER.debug(f"Set conditional config: {setup_name} = {setup_value} if {conditional_config} {conditional_operator} {conditional_value}")
+        
+        # Invalida cache next_changes dopo modifica configurazione
+        self._invalidate_next_changes_cache()
     
     def _check_circular_dependency(self, setup_name: str, conditional_config: str, visited: set = None) -> bool:
         """Verifica se aggiungere una dipendenza creerebbe un loop ciclico.
@@ -821,6 +850,9 @@ class ConfigDatabase:
         
         self.conn.commit()
         _LOGGER.debug(f"Deleted config: {setup_name} (type: {config_type})")
+        
+        # Invalida cache next_changes dopo eliminazione configurazione
+        self._invalidate_next_changes_cache()
     
     def get_all_setup_names(self) -> List[str]:
         """Ottiene tutti i nomi delle configurazioni esistenti."""
@@ -1151,6 +1183,9 @@ class ConfigDatabase:
         
         self.conn.commit()
         _LOGGER.info(f"Configurazione {config_type} con ID {config_id} eliminata")
+        
+        # Invalida cache next_changes dopo eliminazione configurazione
+        self._invalidate_next_changes_cache()
     
     def set_config_enabled(self, config_type: str, config_id: int, enabled: bool) -> None:
         """Abilita o disabilita una configurazione."""
@@ -1231,77 +1266,114 @@ class ConfigDatabase:
 
         status = "abilitata" if enabled else "disabilitata"
         _LOGGER.info(f"Configurazione {config_type} con ID {config_id} {status}")
+        
+        # Invalida cache next_changes dopo modifica enable/disable
+        self._invalidate_next_changes_cache()
     
-    def get_next_changes(self, setup_name: str, limit_hours: int = 24) -> List[Dict[str, Any]]:
+    def get_next_changes(self, setup_name: str, limit_hours: int = 24, max_results: int = 5) -> List[Dict[str, Any]]:
         """
         Calcola i prossimi cambiamenti di valore per una configurazione.
-        Considera le priorità e le sovrapposizioni tra configurazioni.
-        Restituisce una lista di eventi futuri con il valore effettivo che sarà attivo.
+        USA LA LOGICA UNIFICATA _get_configurations_at_time per garantire coerenza con runtime e vista settimanale.
+        
+        OTTIMIZZAZIONE PERFORMANCE:
+        - Cache basata sul valore corrente e config_version
+        - Ricalcolo solo se: valore corrente cambiato O configurazioni modificate
+        - La cache viene invalidata automaticamente dopo ogni modifica alle configurazioni
+        
+        Args:
+            setup_name: Nome della configurazione per cui calcolare i prossimi cambiamenti
+            limit_hours: Numero di ore future da considerare (default 24)
+            max_results: Numero massimo di eventi da restituire (default 5)
+        
+        Returns:
+            Lista di cambiamenti futuri ordinati per tempo, ognuno con:
+            - value: Il nuovo valore che sarà attivo
+            - minutes_until: Minuti da ora fino al cambiamento
+            - timestamp: Timestamp ISO del cambiamento
+            - type: Tipo di evento che causa il cambiamento (time, schedule, conditional, etc.)
         """
+        # Ottieni il valore attuale usando la logica unificata
+        current_config = self.get_all_configurations()
+        current_value = current_config.get(setup_name, {}).get('value')
+        current_source = current_config.get(setup_name, {}).get('source', 'unknown')
+        
+        # Controlla cache: ricalcola solo se valore corrente cambiato O configurazioni modificate
+        # Cache key include parametri per evitare collisioni tra chiamate con parametri diversi
+        cache_key = (setup_name, limit_hours, max_results)
+        cached = self._next_changes_cache.get(cache_key)
+        
+        if cached is not None:
+            # Cache hit: verifica se è ancora valida
+            if (cached['value'] == current_value and 
+                cached['config_version'] == self._config_version):
+                # Cache valida: aggiorna solo minutes_until basandosi sul tempo trascorso
+                now = datetime.now()
+                cached_timestamp = datetime.fromisoformat(cached['timestamp'])
+                # Usa round invece di int per evitare drift nei calcoli temporali
+                elapsed_minutes = round((now - cached_timestamp).total_seconds() / 60)
+                
+                # Aggiorna minutes_until per ogni evento e filtra eventi passati
+                updated_changes = []
+                for change in cached['result']:
+                    new_minutes_until = change['minutes_until'] - elapsed_minutes
+                    if new_minutes_until > 0:  # Solo eventi futuri
+                        updated_change = change.copy()
+                        updated_change['minutes_until'] = new_minutes_until
+                        updated_changes.append(updated_change)
+                
+                # Se troppi eventi sono diventati passati e abbiamo meno di max_results,
+                # potremmo perdere eventi futuri -> invalida cache e ricalcola
+                if len(cached['result']) > 0 and len(updated_changes) < max_results // 2:
+                    # Troppi eventi sono diventati passati, meglio ricalcolare
+                    pass  # Continua con il ricalcolo
+                else:
+                    return updated_changes[:max_results]
+        
+        # Cache miss o invalidata: ricalcola
         cursor = self.conn.cursor()
         now = datetime.now()
         limit_time = now + timedelta(hours=limit_hours)
         
-        # Ottieni il valore attuale
-        current_config = self.get_all_configurations()
-        current_value = current_config.get(setup_name, {}).get('value')
+        # Costanti per la gestione degli eventi
+        MAX_DAYS_TO_CHECK = 7  # Numero massimo di giorni futuri da considerare per eventi ricorrenti
         
-        # Ottieni valore default (standard)
-        cursor.execute("""
-            SELECT setup_value, priority
-            FROM configurazioni
-            WHERE setup_name = ?
-        """, (setup_name,))
-        default_row = cursor.fetchone()
-        default_value = default_row['setup_value'] if default_row else None
-        default_priority = default_row['priority'] if default_row else 99
+        # Helper per calcolare giorni da verificare basato su limit_hours
+        def get_days_to_check(hours: int) -> int:
+            """Calcola quanti giorni verificare per eventi ricorrenti, max MAX_DAYS_TO_CHECK."""
+            return min(int(hours / 24) + 2, MAX_DAYS_TO_CHECK)  # +2 per sicurezza (oggi e domani)
         
-        # Raccogli tutti i timestamp di eventi (inizio/fine) con le configurazioni attive in quel momento
+        # Raccogli tutti i timestamp di eventi potenziali (inizio/fine di configurazioni)
+        # IMPORTANTE: Raccogliamo eventi da TUTTE le configurazioni, non solo per setup_name,
+        # perché le configurazioni condizionali possono dipendere da altre configurazioni
         event_times = set()
         
-        # Configurazioni a tempo
+        # Eventi da configurazioni a tempo (per setup_name e dipendenze)
         cursor.execute("""
-            SELECT setup_value, priority, valid_from_date, valid_to_date, 
-                   valid_from_ora, valid_to_ora, days_of_week
+            SELECT valid_from_date, valid_to_date
             FROM configurazioni_a_tempo
-            WHERE setup_name = ?
-        """, (setup_name,))
-        
-        time_configs = []
+            WHERE enabled = 1
+        """)
         for row in cursor.fetchall():
             valid_from = datetime.fromisoformat(row['valid_from_date'])
             valid_to = datetime.fromisoformat(row['valid_to_date']) if row['valid_to_date'] else None
             
-            if valid_from <= limit_time:
-                if valid_from > now:
-                    event_times.add(valid_from)
-                time_configs.append({
-                    'value': row['setup_value'],
-                    'priority': row['priority'],
-                    'valid_from': valid_from,
-                    'valid_to': valid_to,
-                    'valid_from_ora': row['valid_from_ora'],
-                    'valid_to_ora': row['valid_to_ora'],
-                    'days_of_week': row['days_of_week']
-                })
-                
-                if valid_to and valid_to <= limit_time and valid_to > now:
-                    event_times.add(valid_to)
+            if valid_from > now and valid_from <= limit_time:
+                event_times.add(valid_from)
+            if valid_to and valid_to > now and valid_to <= limit_time:
+                event_times.add(valid_to)
         
-        # Configurazioni a orario
+        # Eventi da configurazioni a orario (per setup_name e dipendenze)
         cursor.execute("""
-            SELECT setup_value, priority, valid_from_ora, valid_to_ora, days_of_week
+            SELECT valid_from_ora, valid_to_ora, days_of_week
             FROM configurazioni_a_orario
-            WHERE setup_name = ?
-        """, (setup_name,))
-        
-        schedule_configs = []
+            WHERE enabled = 1
+        """)
+        days_to_check = get_days_to_check(limit_hours)
         for row in cursor.fetchall():
             days_str = row['days_of_week'] if row['days_of_week'] else '0,1,2,3,4,5,6'
             days_list = [int(d) for d in days_str.split(',') if d]
             
-            # Controlla oggi, domani e dopodomani
-            for day_offset in range(3):
+            for day_offset in range(days_to_check):
                 check_date = now + timedelta(days=day_offset)
                 weekday = check_date.weekday()
                 
@@ -1316,124 +1388,85 @@ class ConfigDatabase:
                     to_hour = int(to_decimal)
                     to_min = int((to_decimal - to_hour) * 60)
                     
-                    # Gestisce attraversamento mezzanotte
-                    if to_decimal < from_decimal:
+                    if to_decimal < from_decimal:  # Attraversa la mezzanotte
                         event_to = (check_date + timedelta(days=1)).replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
                     else:
                         event_to = check_date.replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
                     
-                    if event_from <= limit_time:
-                        if event_from > now:
-                            event_times.add(event_from)
-                        schedule_configs.append({
-                            'value': row['setup_value'],
-                            'priority': row['priority'],
-                            'valid_from': event_from,
-                            'valid_to': event_to,
-                            'days_of_week': days_list
-                        })
-                        
-                        if event_to <= limit_time and event_to > now:
-                            event_times.add(event_to)
+                    if event_from > now and event_from <= limit_time:
+                        event_times.add(event_from)
+                    if event_to > now and event_to <= limit_time:
+                        event_times.add(event_to)
         
-        # Funzione helper per calcolare il valore attivo a un dato momento
-        def get_value_at_time(check_time):
-            """Calcola quale valore sarà attivo a un dato momento considerando priorità."""
-            active_configs = []
-            
-            # Config a tempo attive
-            for cfg in time_configs:
-                if cfg['valid_from'] <= check_time:
-                    if cfg['valid_to'] is None or check_time < cfg['valid_to']:
-                        # Verifica filtri opzionali orari e giorni
-                        is_valid = True
-                        
-                        if cfg['valid_from_ora'] is not None and cfg['valid_to_ora'] is not None:
-                            # Conversione corretta: ore + minuti/60
-                            current_time = check_time.hour + check_time.minute / 60.0
-                            from_ora = cfg['valid_from_ora']
-                            to_ora = cfg['valid_to_ora']
-                            
-                            if to_ora < from_ora:
-                                is_valid = (current_time >= from_ora or current_time < to_ora)
-                            else:
-                                is_valid = (from_ora <= current_time < to_ora)
-                        
-                        if is_valid and cfg['days_of_week']:
-                            valid_days = [int(d) for d in cfg['days_of_week'].split(',') if d]
-                            if check_time.weekday() not in valid_days:
-                                is_valid = False
-                        
-                        if is_valid:
-                            active_configs.append({
-                                'value': cfg['value'],
-                                'priority': cfg['priority'],
-                                'source_order': 1
-                            })
-            
-            # Config a orario attive
-            for cfg in schedule_configs:
-                if cfg['valid_from'] <= check_time < cfg['valid_to']:
-                    if check_time.weekday() in cfg['days_of_week']:
-                        active_configs.append({
-                            'value': cfg['value'],
-                            'priority': cfg['priority'],
-                            'source_order': 2
-                        })
-            
-            # Config standard sempre attiva
-            if default_value:
-                active_configs.append({
-                    'value': default_value,
-                    'priority': default_priority,
-                    'source_order': 3
-                })
-            
-            # Ordina per priorità (crescente) e source_order
-            active_configs.sort(key=lambda x: (x['priority'], x['source_order']))
-            
-            return active_configs[0]['value'] if active_configs else None
+        # Eventi da filtri orari di configurazioni condizionali
+        cursor.execute("""
+            SELECT valid_from_ora, valid_to_ora
+            FROM configurazioni_condizionali
+            WHERE enabled = 1 AND valid_from_ora IS NOT NULL AND valid_to_ora IS NOT NULL
+        """)
+        for row in cursor.fetchall():
+            for day_offset in range(days_to_check):
+                check_date = now + timedelta(days=day_offset)
+                
+                from_decimal = row['valid_from_ora']
+                to_decimal = row['valid_to_ora']
+                
+                from_hour = int(from_decimal)
+                from_min = int((from_decimal - from_hour) * 60)
+                event_from = check_date.replace(hour=from_hour, minute=from_min, second=0, microsecond=0)
+                
+                to_hour = int(to_decimal)
+                to_min = int((to_decimal - to_hour) * 60)
+                
+                if to_decimal < from_decimal:
+                    event_to = (check_date + timedelta(days=1)).replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
+                else:
+                    event_to = check_date.replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
+                
+                if event_from > now and event_from <= limit_time:
+                    event_times.add(event_from)
+                if event_to > now and event_to <= limit_time:
+                    event_times.add(event_to)
         
-        # Calcola i cambiamenti di valore
+        # Calcola i cambiamenti di valore usando la logica unificata
         changes = []
         last_value = current_value
+        last_source = current_source
         
         for event_time in sorted(event_times):
-            new_value = get_value_at_time(event_time)
+            # Usa la logica unificata per calcolare tutte le configurazioni a questo momento
+            all_configs_at_time = self._get_configurations_at_time(event_time)
             
-            # Aggiungi solo se il valore cambia effettivamente
-            if new_value != last_value and new_value is not None:
-                minutes_until = int((event_time - now).total_seconds() / 60)
+            # Estrai il valore per il setup specifico
+            if setup_name in all_configs_at_time:
+                config_at_time = all_configs_at_time[setup_name]
+                new_value = config_at_time['value']
+                new_source = config_at_time['source']
                 
-                # Determina il tipo di evento
-                event_type = 'unknown'
-                for cfg in time_configs:
-                    if cfg['valid_from'] == event_time and cfg['value'] == new_value:
-                        event_type = 'time'
-                        break
-                    if cfg['valid_to'] == event_time:
-                        event_type = 'time_end'
-                        break
-                
-                if event_type == 'unknown':
-                    for cfg in schedule_configs:
-                        if cfg['valid_from'] == event_time and cfg['value'] == new_value:
-                            event_type = 'schedule'
-                            break
-                        if cfg['valid_to'] == event_time:
-                            event_type = 'schedule_end'
-                            break
-                
-                changes.append({
-                    'value': new_value,
-                    'minutes_until': minutes_until,
-                    'timestamp': event_time.isoformat(),
-                    'type': event_type
-                })
-                
-                last_value = new_value
+                # Aggiungi solo se il valore cambia effettivamente
+                if new_value != last_value:
+                    minutes_until = int((event_time - now).total_seconds() / 60)
+                    
+                    changes.append({
+                        'value': new_value,
+                        'minutes_until': minutes_until,
+                        'timestamp': event_time.isoformat(),
+                        'type': new_source  # Il tipo è la sorgente che ha vinto (time, schedule, conditional, standard)
+                    })
+                    
+                    last_value = new_value
+                    last_source = new_source
         
-        return changes[:5]  # Max 5 eventi
+        # Salva in cache prima di restituire
+        result = changes[:max_results]
+        self._next_changes_cache[cache_key] = {
+            'value': current_value,
+            'config_version': self._config_version,
+            'result': result,
+            'timestamp': now.isoformat()
+        }
+        
+        return result
     
     def get_current_config_start_time(self, setup_name: str) -> Optional[int]:
         """
