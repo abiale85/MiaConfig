@@ -1,5 +1,19 @@
 # 📋 Changelog - Mia Config
 
+## v2.1.0-beta.5 - 6 Gennaio 2026 🔧 Shadow DOM Fallback Fix
+
+### 🛠️ Fix Critico Shadow Root
+- **Fallback migliorato**: Usa `window._miaConfigCardInstance.shadowRoot` invece di `document.querySelector()`
+  - Il problema: `document.querySelector('mia-config-card')` non funziona in contesti isolati
+  - La soluzione: L'istanza globale è sempre disponibile e mantiene il riferimento al shadowRoot
+  - Impatto: Elimina completamente gli errori "Impossibile trovare il componente card"
+
+### 📦 Versioni
+- integrazione: 2.1.0-beta.5
+- card: 2.1.0-beta.5
+
+---
+
 ## v2.1.0-beta.4 - 6 Gennaio 2026 🐛 Shadow DOM Hotfix
 
 ### 🛠️ Fix Critico

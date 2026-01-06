@@ -1,5 +1,5 @@
-// Version 2.1.0-beta.4 - Shadow DOM stability fixes for edit + weekly modal - 20260106
-console.log('MIA-CONFIG-CARD Loading Version 2.1.0-beta.4 - 20260106');
+// Version 2.1.0-beta.5 - Improved shadow DOM fallback using global instance - 20260106
+console.log('MIA-CONFIG-CARD Loading Version 2.1.0-beta.5 - 20260106');
 
 class MiaConfigCard extends HTMLElement {
     constructor() {
@@ -2072,14 +2072,13 @@ class MiaConfigCard extends HTMLElement {
                         shadowRoot = root;
                     }
                 }
-                // Fallback: prova dal global card (retrocompatibilità se triggerEl manca)
+                // Fallback: usa l'istanza globale della card
+                if (!shadowRoot && window._miaConfigCardInstance) {
+                    shadowRoot = window._miaConfigCardInstance.shadowRoot;
+                }
                 if (!shadowRoot) {
-                    const cardElement = document.querySelector('mia-config-card');
-                    if (!cardElement || !cardElement.shadowRoot) {
-                        console.error('Impossibile trovare il componente card');
-                        return;
-                    }
-                    shadowRoot = cardElement.shadowRoot;
+                    console.error('Impossibile trovare il componente card');
+                    return;
                 }
                 
                 // Chiudi il modal di add se è aperto
@@ -2766,8 +2765,18 @@ class MiaConfigCard extends HTMLElement {
                 if (segment.to) segment.to = new Date(segment.to);
                 
                 // Genera il contenuto del modal partendo dal shadow root del segmento cliccato
-                const shadowRoot = barElement && typeof barElement.getRootNode === 'function' ? barElement.getRootNode() : null;
-                if (!shadowRoot || shadowRoot === document || !shadowRoot.host || shadowRoot.host.tagName !== 'MIA-CONFIG-CARD') {
+                let shadowRoot = null;
+                if (barElement && typeof barElement.getRootNode === 'function') {
+                    const root = barElement.getRootNode();
+                    if (root && root !== document && root.host && root.host.tagName === 'MIA-CONFIG-CARD') {
+                        shadowRoot = root;
+                    }
+                }
+                // Fallback: usa l'istanza globale della card
+                if (!shadowRoot && window._miaConfigCardInstance) {
+                    shadowRoot = window._miaConfigCardInstance.shadowRoot;
+                }
+                if (!shadowRoot) {
                     console.error('Impossibile trovare il componente card');
                     return;
                 }
