@@ -2607,10 +2607,22 @@ class MiaConfigCard extends HTMLElement {
         window.dcShowWeeklyEventModal = (barElement) => {
             try {
                 // Helper per escape HTML e prevenire XSS
+                // Usa textContent per evitare l'interpretazione di HTML, poi legge innerHTML
+                // che contiene gli entity-encoded characters
                 const escapeHtml = (text) => {
                     const div = document.createElement('div');
                     div.textContent = text;
                     return div.innerHTML;
+                };
+                
+                // Helper per escape attributi HTML
+                const escapeHtmlAttribute = (str) => {
+                    return String(str)
+                        .replace(/&/g, '&amp;')
+                        .replace(/'/g, '&#39;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;');
                 };
                 
                 // Ottieni i dati del segmento dall'attributo data
@@ -2700,7 +2712,7 @@ class MiaConfigCard extends HTMLElement {
                     }
                     html += `</div>`;
                     html += `</div>`;
-                }else if (segment.type === 'standard') {
+                } else if (segment.type === 'standard') {
                     html += `<div style="margin-bottom: 15px;">`;
                     html += `<div style="font-size: 18px; font-weight: bold; margin-bottom: 8px;">⚙️ Valore Standard</div>`;
                     html += `<div style="color: var(--secondary-text-color);">`;
@@ -3712,13 +3724,16 @@ class MiaConfigCard extends HTMLElement {
                         from: seg.from ? seg.from.toISOString() : undefined,
                         to: seg.to ? seg.to.toISOString() : undefined
                     };
-                    // Usa encoding più sicuro per l'attributo HTML
-                    const segmentDataJson = JSON.stringify(segmentData)
-                        .replace(/&/g, '&amp;')
-                        .replace(/'/g, '&#39;')
-                        .replace(/"/g, '&quot;')
-                        .replace(/</g, '&lt;')
-                        .replace(/>/g, '&gt;');
+                    // Helper per escape attributi HTML (condiviso con dcShowWeeklyEventModal)
+                    const escapeHtmlAttribute = (str) => {
+                        return String(str)
+                            .replace(/&/g, '&amp;')
+                            .replace(/'/g, '&#39;')
+                            .replace(/"/g, '&quot;')
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;');
+                    };
+                    const segmentDataJson = escapeHtmlAttribute(JSON.stringify(segmentData));
                     
                     html += `<div class="${barClass} dc-weekly-tooltip" data-day-index="${dayIdx}" data-total-days="${days.length}" data-segment='${segmentDataJson}' onclick="window.dcShowWeeklyEventModal(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.dcShowWeeklyEventModal(this);}" tabindex="0" role="button" aria-label="Visualizza dettagli configurazione" style="top: ${topPos}px; height: ${height}px; left: ${leftPercent}%; width: ${widthPercent}%;">`;
                     if (height > 20) {
