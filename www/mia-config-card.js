@@ -6,6 +6,8 @@ class MiaConfigCard extends HTMLElement {
         super();
         // Salva riferimento all'istanza nell'elemento stesso per multi-instance support
         this._instance = this;
+        // Mantiene anche variabile globale per compatibilità con funzioni esistenti
+        window._miaConfigCardInstance = this;
         // Definisci subito le funzioni window che potrebbero essere chiamate dalla dashboard
         // prima che render() sia completato
         this.initializeWindowFunctions();
@@ -821,7 +823,7 @@ class MiaConfigCard extends HTMLElement {
         
         window.dcShowWeeklyFor = (setupName) => {
             // Verifica che il contenuto sia renderizzato
-            if (!this.content) {
+            if (!this.window._miaConfigCardInstance.content) {
                 console.warn('Content not ready, waiting...');
                 setTimeout(() => window.dcShowWeeklyFor(setupName), 100);
                 return;
@@ -2063,7 +2065,8 @@ class MiaConfigCard extends HTMLElement {
         };
         
         window.dcEditConfig = async (cardElement, name, type, id, cfgDataEncoded) => {
-            const content = cardElement.content;
+            const content = instance.content;
+            const instance = instance._instance;
                 if (addModal && addModal.classList.contains('active')) {
                     addModal.classList.remove('active');
                 }
@@ -2131,11 +2134,11 @@ class MiaConfigCard extends HTMLElement {
                                         <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
                                         <div class="dc-time-input">
                                             <select id="edit-time-from-hour">
-                                                ${cardElement.generateHourOptions(0, 23)}
+                                                ${instance.generateHourOptions(0, 23)}
                                             </select>
                                             <span class="dc-time-separator">:</span>
                                             <select id="edit-time-from-minute">
-                                                ${cardElement.generateMinuteOptions()}
+                                                ${instance.generateMinuteOptions()}
                                             </select>
                                         </div>
                                     </div>
@@ -2144,11 +2147,11 @@ class MiaConfigCard extends HTMLElement {
                                         <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
                                         <div class="dc-time-input">
                                             <select id="edit-time-to-hour">
-                                                ${cardElement.generateHourOptions(0, 23)}
+                                                ${instance.generateHourOptions(0, 23)}
                                             </select>
                                             <span class="dc-time-separator">:</span>
                                             <select id="edit-time-to-minute">
-                                                ${cardElement.generateMinuteOptions()}
+                                                ${instance.generateMinuteOptions()}
                                             </select>
                                         </div>
                                     </div>
@@ -2168,11 +2171,11 @@ class MiaConfigCard extends HTMLElement {
                                         <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
                                         <div class="dc-time-input">
                                             <select id="edit-time-from-hour">
-                                                ${cardElement.generateHourOptions(0, 23)}
+                                                ${instance.generateHourOptions(0, 23)}
                                             </select>
                                             <span class="dc-time-separator">:</span>
                                             <select id="edit-time-from-minute">
-                                                ${cardElement.generateMinuteOptions()}
+                                                ${instance.generateMinuteOptions()}
                                             </select>
                                         </div>
                                     </div>
@@ -2181,11 +2184,11 @@ class MiaConfigCard extends HTMLElement {
                                         <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
                                         <div class="dc-time-input">
                                             <select id="edit-time-to-hour">
-                                                ${cardElement.generateHourOptions(0, 23)}
+                                                ${instance.generateHourOptions(0, 23)}
                                             </select>
                                             <span class="dc-time-separator">:</span>
                                             <select id="edit-time-to-minute">
-                                                ${cardElement.generateMinuteOptions()}
+                                                ${instance.generateMinuteOptions()}
                                             </select>
                                         </div>
                                     </div>
@@ -2308,11 +2311,11 @@ class MiaConfigCard extends HTMLElement {
                                     <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
                                     <div class="dc-time-input">
                                         <select id="edit-from-hour" required>
-                                            ${cardElement.generateHourOptions(0, 23)}
+                                            ${instance.generateHourOptions(0, 23)}
                                         </select>
                                         <span class="dc-time-separator">:</span>
                                         <select id="edit-from-minute" required>
-                                            ${cardElement.generateMinuteOptions()}
+                                            ${instance.generateMinuteOptions()}
                                         </select>
                                     </div>
                                 </div>
@@ -2321,11 +2324,11 @@ class MiaConfigCard extends HTMLElement {
                                     <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
                                     <div class="dc-time-input">
                                         <select id="edit-to-hour" required>
-                                            ${cardElement.generateHourOptions(0, 23)}
+                                            ${instance.generateHourOptions(0, 23)}
                                         </select>
                                         <span class="dc-time-separator">:</span>
                                         <select id="edit-to-minute" required>
-                                            ${cardElement.generateMinuteOptions()}
+                                            ${instance.generateMinuteOptions()}
                                         </select>
                                     </div>
                                 </div>
@@ -2378,11 +2381,11 @@ class MiaConfigCard extends HTMLElement {
                                         <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
                                         <div class="dc-time-input">
                                             <select id="edit-conditional-from-hour">
-                                                ${cardElement.generateHourOptions(0, 23)}
+                                                ${instance.generateHourOptions(0, 23)}
                                             </select>
                                             <span class="dc-time-separator">:</span>
                                             <select id="edit-conditional-from-minute">
-                                                ${cardElement.generateMinuteOptions()}
+                                                ${instance.generateMinuteOptions()}
                                             </select>
                                         </div>
                                     </div>
@@ -2391,11 +2394,11 @@ class MiaConfigCard extends HTMLElement {
                                         <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
                                         <div class="dc-time-input">
                                             <select id="edit-conditional-to-hour">
-                                                ${cardElement.generateHourOptions(0, 23)}
+                                                ${instance.generateHourOptions(0, 23)}
                                             </select>
                                             <span class="dc-time-separator">:</span>
                                             <select id="edit-conditional-to-minute">
-                                                ${cardElement.generateMinuteOptions()}
+                                                ${instance.generateMinuteOptions()}
                                             </select>
                                         </div>
                                     </div>
@@ -2415,11 +2418,11 @@ class MiaConfigCard extends HTMLElement {
                                         <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
                                         <div class="dc-time-input">
                                             <select id="edit-conditional-from-hour">
-                                                ${cardElement.generateHourOptions(0, 23)}
+                                                ${instance.generateHourOptions(0, 23)}
                                             </select>
                                             <span class="dc-time-separator">:</span>
                                             <select id="edit-conditional-from-minute">
-                                                ${cardElement.generateMinuteOptions()}
+                                                ${instance.generateMinuteOptions()}
                                             </select>
                                         </div>
                                     </div>
@@ -2428,11 +2431,11 @@ class MiaConfigCard extends HTMLElement {
                                         <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
                                         <div class="dc-time-input">
                                             <select id="edit-conditional-to-hour">
-                                                ${cardElement.generateHourOptions(0, 23)}
+                                                ${instance.generateHourOptions(0, 23)}
                                             </select>
                                             <span class="dc-time-separator">:</span>
                                             <select id="edit-conditional-to-minute">
-                                                ${cardElement.generateMinuteOptions()}
+                                                ${instance.generateMinuteOptions()}
                                             </select>
                                         </div>
                                     </div>
@@ -2557,10 +2560,10 @@ class MiaConfigCard extends HTMLElement {
                             serviceData.description = description.trim();
                         }
                         
-                        await cardElement.callMiaConfigService('update_standard_config', serviceData);
+                        await instance.callMiaConfigService('update_standard_config', serviceData);
                     } else if (type === 'time') {
                         // Prima elimina la vecchia configurazione
-                        await cardElement.callMiaConfigService('delete_single_config', {
+                        await instance.callMiaConfigService('delete_single_config', {
                             config_type: 'time',
                             config_id: parseInt(id)
                         });
@@ -2583,8 +2586,8 @@ class MiaConfigCard extends HTMLElement {
                             const toHour = parseInt(content.querySelector('#edit-time-to-hour').value);
                             const toMinute = parseInt(content.querySelector('#edit-time-to-minute').value);
                             
-                            serviceData.valid_from_ora = cardElement.timeSelectorsToDecimal(fromHour, fromMinute);
-                            serviceData.valid_to_ora = cardElement.timeSelectorsToDecimal(toHour, toMinute);
+                            serviceData.valid_from_ora = instance.timeSelectorsToDecimal(fromHour, fromMinute);
+                            serviceData.valid_to_ora = instance.timeSelectorsToDecimal(toHour, toMinute);
                         }
                         
                         // Aggiungi filtro giorni se abilitato
@@ -2595,10 +2598,10 @@ class MiaConfigCard extends HTMLElement {
                             serviceData.days_of_week = days.join(',');
                         }
                         
-                        await cardElement.callMiaConfigService('set_time_config', serviceData);
+                        await instance.callMiaConfigService('set_time_config', serviceData);
                     } else if (type === 'schedule') {
                         // Prima elimina la vecchia configurazione
-                        await cardElement.callMiaConfigService('delete_single_config', {
+                        await instance.callMiaConfigService('delete_single_config', {
                             config_type: 'schedule',
                             config_id: parseInt(id)
                         });
@@ -2612,17 +2615,17 @@ class MiaConfigCard extends HTMLElement {
                         const toHour = parseInt(content.querySelector('#edit-to-hour').value);
                         const toMinute = parseInt(content.querySelector('#edit-to-minute').value);
                         
-                        await cardElement.callMiaConfigService('set_schedule_config', {
+                        await instance.callMiaConfigService('set_schedule_config', {
                             setup_name: name,
                             setup_value: formData.get('setup_value'),
-                            valid_from_ora: cardElement.timeSelectorsToDecimal(fromHour, fromMinute),
-                            valid_to_ora: cardElement.timeSelectorsToDecimal(toHour, toMinute),
+                            valid_from_ora: instance.timeSelectorsToDecimal(fromHour, fromMinute),
+                            valid_to_ora: instance.timeSelectorsToDecimal(toHour, toMinute),
                             days_of_week: days,
                             priority: parseInt(formData.get('priority'))
                         });
                     } else if (type === 'conditional') {
                         // Prima elimina la vecchia configurazione
-                        await cardElement.callMiaConfigService('delete_single_config', {
+                        await instance.callMiaConfigService('delete_single_config', {
                             config_type: 'conditional',
                             config_id: parseInt(id)
                         });
@@ -2645,24 +2648,24 @@ class MiaConfigCard extends HTMLElement {
                             const toHour = parseInt(content.querySelector('#edit-conditional-to-hour').value);
                             const toMinute = parseInt(content.querySelector('#edit-conditional-to-minute').value);
                             
-                            serviceData.valid_from_ora = cardElement.timeSelectorsToDecimal(fromHour, fromMinute);
-                            serviceData.valid_to_ora = cardElement.timeSelectorsToDecimal(toHour, toMinute);
+                            serviceData.valid_from_ora = instance.timeSelectorsToDecimal(fromHour, fromMinute);
+                            serviceData.valid_to_ora = instance.timeSelectorsToDecimal(toHour, toMinute);
                         }
                         
-                        await cardElement.callMiaConfigService('set_conditional_config', serviceData);
+                        await instance.callMiaConfigService('set_conditional_config', serviceData);
                     }
                     
                     window.dcCloseEditModal(this);
-                    cardElement.showToast('Configurazione modificata!');
-                    setTimeout(() => cardElement.loadConfigurations(), 500);
+                    instance.showToast('Configurazione modificata!');
+                    setTimeout(() => instance.loadConfigurations(), 500);
                 } catch (err) {
                     console.error('Errore modifica:', err);
-                    cardElement.showToast('Errore: ' + err.message, true);
+                    instance.showToast('Errore: ' + err.message, true);
                 }
             });
             } catch (err) {
                 console.error('Error in dcEditConfig:', err);
-                cardElement.showToast('Errore apertura modal: ' + err.message, true);
+                instance.showToast('Errore apertura modal: ' + err.message, true);
             }
         };
         
@@ -2717,7 +2720,8 @@ class MiaConfigCard extends HTMLElement {
         };
         
         window.dcShowWeeklyEventModal = (cardElement, barElement) => {
-            const content = cardElement.content;
+            const content = instance.content;
+            const instance = instance._instance;
                 
                 if (!modalBody || !modal) {
                     console.error('Modal elements not found:', {modalBody, modal});
@@ -3380,7 +3384,7 @@ class MiaConfigCard extends HTMLElement {
                                 <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="window.dcToggleConfigEnabled('${cfg.type}', ${cfg.id}, this.checked)" style="cursor: pointer;">
                                 <span style="font-size: 10px;">${isEnabled ? '✓' : '✗'}</span>
                             </label>
-                            <button class="dc-btn" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcEditConfig('${name}', '${cfg.type}', ${cfg.id}, '${cfgData}')">✏️</button>
+                            <button class="dc-btn" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcEditConfig(this.closest('mia-config-card'), '${name}', '${cfg.type}', ${cfg.id}, '${cfgData}')">✏️</button>
                             <button class="dc-btn-delete" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcDeleteSingleConfig('${cfg.type}', ${cfg.id})">🗑️</button>
                         </div>
                     </div>
@@ -3550,7 +3554,8 @@ class MiaConfigCard extends HTMLElement {
         };
 
         window.dcToggleOverrideGroup = (cardElement, headerElement, safeKey) => {
-            const content = cardElement.content;
+            const content = instance.content;
+            const instance = instance._instance;
             const toggle = content.querySelector(`#${safeKey}-toggle`);
             
             if (content && toggle) {
