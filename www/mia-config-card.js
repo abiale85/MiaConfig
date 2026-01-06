@@ -756,6 +756,7 @@ class MiaConfigCard extends HTMLElement {
                     </form>
                     </div>
                 </div>
+            </div>
             <!-- Modal per editare configurazioni -->
             <div id="dc-edit-modal" class="dc-modal">
                 <div class="dc-modal-content">
@@ -776,7 +777,6 @@ class MiaConfigCard extends HTMLElement {
                     </div>
                     <div id="dc-weekly-event-modal-body" style="line-height: 1.6;"></div>
                 </div>
-            </div>
             </div>
         `;
 
@@ -3582,36 +3582,21 @@ class MiaConfigCard extends HTMLElement {
         };
 
         window.dcToggleOverrideGroup = (cardElement, headerElement, safeKey) => {
-            console.log('dcToggleOverrideGroup called with:', {cardElement, headerElement, safeKey});
             const instance = cardElement._instance;
             const content = instance.content;
-            
-            // Debug: mostra tutti gli elementi toggle e content disponibili
-            const allToggles = content.querySelectorAll('[id*="-toggle"]');
-            const allContents = content.querySelectorAll('[id*="-content"]');
-            console.log('Available toggles:', Array.from(allToggles).map(el => el.id));
-            console.log('Available contents:', Array.from(allContents).map(el => el.id));
             
             const toggle = content.querySelector(`#${safeKey}-toggle`);
             const groupContent = content.querySelector(`#${safeKey}-content`);
             
-            console.log('Looking for:', `#${safeKey}-toggle`, `#${safeKey}-content`);
-            console.log('Elements found:', {toggle, groupContent, toggleExists: !!toggle, groupContentExists: !!groupContent});
-            
             if (toggle && groupContent) {
                 const isExpanded = toggle.classList.contains('expanded');
-                console.log('Current state - isExpanded:', isExpanded);
                 if (isExpanded) {
                     toggle.classList.remove('expanded');
                     groupContent.classList.remove('expanded');
-                    console.log('Collapsed group');
                 } else {
                     toggle.classList.add('expanded');
                     groupContent.classList.add('expanded');
-                    console.log('Expanded group');
                 }
-            } else {
-                console.error('Toggle or group content not found for key:', safeKey);
             }
         };
     }
