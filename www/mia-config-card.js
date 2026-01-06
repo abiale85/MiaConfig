@@ -2069,6 +2069,7 @@ class MiaConfigCard extends HTMLElement {
         };
         
         window.dcEditConfig = async (cardElement, name, type, id, cfgDataEncoded) => {
+            console.log('dcEditConfig called with:', {cardElement, name, type, id, cfgDataEncoded});
             const instance = cardElement._instance;
             const content = instance.content;
             
@@ -2082,7 +2083,7 @@ class MiaConfigCard extends HTMLElement {
                 const modalBody = content.querySelector('#dc-edit-modal-body');
                 
                 if (!modal || !modalBody) {
-                    console.error('Modal elements not found in DOM');
+                    console.error('Modal elements not found in DOM:', {modal, modalBody, content});
                     return;
                 }
                 
@@ -2714,8 +2715,10 @@ class MiaConfigCard extends HTMLElement {
             }
         };
         
-        window.dcCloseEditModal = (cardElement) => {
-            const modal = cardElement.content.querySelector('#dc-edit-modal');
+        window.dcCloseEditModal = (buttonElement) => {
+            const cardElement = buttonElement.closest('mia-config-card');
+            const instance = cardElement._instance;
+            const modal = instance.content.querySelector('#dc-edit-modal');
             if (modal) {
                 modal.classList.remove('active');
             }
@@ -3579,19 +3582,36 @@ class MiaConfigCard extends HTMLElement {
         };
 
         window.dcToggleOverrideGroup = (cardElement, headerElement, safeKey) => {
+            console.log('dcToggleOverrideGroup called with:', {cardElement, headerElement, safeKey});
             const instance = cardElement._instance;
             const content = instance.content;
-            const toggle = content.querySelector(`#${safeKey}-toggle`);
             
-            if (content && toggle) {
-                const isExpanded = content.classList.contains('expanded');
+            // Debug: mostra tutti gli elementi toggle e content disponibili
+            const allToggles = content.querySelectorAll('[id*="-toggle"]');
+            const allContents = content.querySelectorAll('[id*="-content"]');
+            console.log('Available toggles:', Array.from(allToggles).map(el => el.id));
+            console.log('Available contents:', Array.from(allContents).map(el => el.id));
+            
+            const toggle = content.querySelector(`#${safeKey}-toggle`);
+            const groupContent = content.querySelector(`#${safeKey}-content`);
+            
+            console.log('Looking for:', `#${safeKey}-toggle`, `#${safeKey}-content`);
+            console.log('Elements found:', {toggle, groupContent, toggleExists: !!toggle, groupContentExists: !!groupContent});
+            
+            if (toggle && groupContent) {
+                const isExpanded = toggle.classList.contains('expanded');
+                console.log('Current state - isExpanded:', isExpanded);
                 if (isExpanded) {
-                    content.classList.remove('expanded');
                     toggle.classList.remove('expanded');
+                    groupContent.classList.remove('expanded');
+                    console.log('Collapsed group');
                 } else {
-                    content.classList.add('expanded');
                     toggle.classList.add('expanded');
+                    groupContent.classList.add('expanded');
+                    console.log('Expanded group');
                 }
+            } else {
+                console.error('Toggle or group content not found for key:', safeKey);
             }
         };
     }
