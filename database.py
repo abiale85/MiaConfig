@@ -1398,6 +1398,59 @@ class ConfigDatabase:
         dependencies = get_all_dependencies(setup_name)
         dep_configs_map = {}
         
+        # IMPORTANT: Also load events from dependency configurations
+        # This ensures we re-evaluate when a dependency's value changes
+        for dep_name in dependencies:
+            # Load time-based events from this dependency
+            cursor.execute("""
+                SELECT valid_from_date, valid_to_date
+                FROM configurazioni_a_tempo
+                WHERE setup_name = ? AND enabled = 1
+            """, (dep_name,))
+            for row in cursor.fetchall():
+                valid_from = datetime.fromisoformat(row['valid_from_date'])
+                valid_to = datetime.fromisoformat(row['valid_to_date']) if row['valid_to_date'] else None
+                
+                if valid_from <= limit_time and valid_from > now:
+                    event_times.add(valid_from)
+                if valid_to and valid_to <= limit_time and valid_to > now:
+                    event_times.add(valid_to)
+            
+            # Load schedule-based events from this dependency
+            cursor.execute("""
+                SELECT valid_from_ora, valid_to_ora, days_of_week
+                FROM configurazioni_a_orario
+                WHERE setup_name = ? AND enabled = 1
+            """, (dep_name,))
+            for row in cursor.fetchall():
+                days_str = row['days_of_week'] if row['days_of_week'] else '0,1,2,3,4,5,6'
+                days_list = [int(d) for d in days_str.split(',') if d]
+                
+                for day_offset in range(3):
+                    check_date = now + timedelta(days=day_offset)
+                    weekday = check_date.weekday()
+                    
+                    if weekday in days_list:
+                        from_decimal = row['valid_from_ora']
+                        to_decimal = row['valid_to_ora']
+                        
+                        from_hour = int(from_decimal)
+                        from_min = int((from_decimal - from_hour) * 60)
+                        event_from = check_date.replace(hour=from_hour, minute=from_min, second=0, microsecond=0)
+                        
+                        to_hour = int(to_decimal)
+                        to_min = int((to_decimal - to_hour) * 60)
+                        
+                        if to_decimal < from_decimal:
+                            event_to = (check_date + timedelta(days=1)).replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
+                        else:
+                            event_to = check_date.replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
+                        
+                        if event_from <= limit_time and event_from > now:
+                            event_times.add(event_from)
+                        if event_to <= limit_time and event_to > now:
+                            event_times.add(event_to)
+        
         for dep_name in dependencies:
             # Carica le configurazioni di questa dipendenza
             dep_configs_map[dep_name] = {
