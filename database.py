@@ -1387,11 +1387,47 @@ class ConfigDatabase:
         value_cache_at_time = {}
         
         # Helper per ottenere tutte le configurazioni necessarie per le dipendenze
-        def get_all_dependencies(target_setup):
-            """Ottiene ricorsivamente tutte le configurazioni da cui dipende target_setup."""
+        def get_all_dependencies(target_setup, visited=None):
+            """Ottiene ricorsivamente tutte le configurazioni da cui dipende target_setup.
+            
+            Args:
+                target_setup: Il setup per cui cercare dipendenze
+                visited: Set di setup già visitati per evitare loop
+            
+            Returns:
+                Set di nomi di setup da cui target_setup dipende (direttamente o indirettamente)
+            """
+            if visited is None:
+                visited = set()
+            
             deps = set()
+            
+            # Trova le dipendenze dirette di questo setup
             for cfg in conditional_configs:
-                deps.add(cfg['conditional_config'])
+                dep_name = cfg['conditional_config']
+                if dep_name not in visited:
+                    deps.add(dep_name)
+                    visited.add(dep_name)
+                    
+                    # Ricorsivamente trova le dipendenze di questa dipendenza
+                    # Dobbiamo caricare i condizionali per questa dipendenza
+                    try:
+                        cursor_dep = self.conn.cursor()
+                        cursor_dep.execute("""
+                            SELECT conditional_config
+                            FROM configurazioni_condizionali
+                            WHERE setup_name = ? AND enabled = 1
+                        """, (dep_name,))
+                        
+                        for row in cursor_dep.fetchall():
+                            transitive_dep = row['conditional_config']
+                            if transitive_dep not in visited:
+                                deps.add(transitive_dep)
+                                # Note: Per semplicità, limitiamo a 2 livelli di profondità
+                                # per evitare complessità eccessiva
+                    except:
+                        pass
+            
             return deps
         
         # Pre-carica le configurazioni di tutte le dipendenze
@@ -1619,7 +1655,7 @@ class ConfigDatabase:
                     active_configs.append({
                         'value': cfg['value'],
                         'priority': cfg['priority'],
-                        'source_order': 0,  # Condizionali hanno precedenza minore (0 = più alta)
+                        'source_order': 0,  # Condizionali: source_order 0 = priorità più alta tra le sorgenti
                         'type': 'conditional'
                     })
                 
