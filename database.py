@@ -1235,73 +1235,61 @@ class ConfigDatabase:
     def get_next_changes(self, setup_name: str, limit_hours: int = 24) -> List[Dict[str, Any]]:
         """
         Calcola i prossimi cambiamenti di valore per una configurazione.
-        Considera le priorità e le sovrapposizioni tra configurazioni.
-        Restituisce una lista di eventi futuri con il valore effettivo che sarà attivo.
+        USA LA LOGICA UNIFICATA _get_configurations_at_time per garantire coerenza con runtime e vista settimanale.
+        
+        Args:
+            setup_name: Nome della configurazione per cui calcolare i prossimi cambiamenti
+            limit_hours: Numero di ore future da considerare (default 24)
+        
+        Returns:
+            Lista di cambiamenti futuri ordinati per tempo, ognuno con:
+            - value: Il nuovo valore che sarà attivo
+            - minutes_until: Minuti da ora fino al cambiamento
+            - timestamp: Timestamp ISO del cambiamento
+            - type: Tipo di evento che causa il cambiamento (time, schedule, conditional, etc.)
         """
         cursor = self.conn.cursor()
         now = datetime.now()
         limit_time = now + timedelta(hours=limit_hours)
         
-        # Ottieni il valore attuale
+        # Ottieni il valore attuale usando la logica unificata
         current_config = self.get_all_configurations()
         current_value = current_config.get(setup_name, {}).get('value')
+        current_source = current_config.get(setup_name, {}).get('source', 'unknown')
         
-        # Ottieni valore default (standard)
-        cursor.execute("""
-            SELECT setup_value, priority
-            FROM configurazioni
-            WHERE setup_name = ?
-        """, (setup_name,))
-        default_row = cursor.fetchone()
-        default_value = default_row['setup_value'] if default_row else None
-        default_priority = default_row['priority'] if default_row else 99
-        
-        # Raccogli tutti i timestamp di eventi (inizio/fine) con le configurazioni attive in quel momento
+        # Raccogli tutti i timestamp di eventi potenziali (inizio/fine di configurazioni)
+        # IMPORTANTE: Raccogliamo eventi da TUTTE le configurazioni, non solo per setup_name,
+        # perché le configurazioni condizionali possono dipendere da altre configurazioni
         event_times = set()
         
-        # Configurazioni a tempo
+        # Eventi da configurazioni a tempo (per setup_name e dipendenze)
         cursor.execute("""
-            SELECT setup_value, priority, valid_from_date, valid_to_date, 
-                   valid_from_ora, valid_to_ora, days_of_week
+            SELECT valid_from_date, valid_to_date
             FROM configurazioni_a_tempo
-            WHERE setup_name = ?
-        """, (setup_name,))
-        
-        time_configs = []
+            WHERE enabled = 1
+        """)
         for row in cursor.fetchall():
             valid_from = datetime.fromisoformat(row['valid_from_date'])
             valid_to = datetime.fromisoformat(row['valid_to_date']) if row['valid_to_date'] else None
             
-            if valid_from <= limit_time:
-                if valid_from > now:
-                    event_times.add(valid_from)
-                time_configs.append({
-                    'value': row['setup_value'],
-                    'priority': row['priority'],
-                    'valid_from': valid_from,
-                    'valid_to': valid_to,
-                    'valid_from_ora': row['valid_from_ora'],
-                    'valid_to_ora': row['valid_to_ora'],
-                    'days_of_week': row['days_of_week']
-                })
-                
-                if valid_to and valid_to <= limit_time and valid_to > now:
-                    event_times.add(valid_to)
+            if valid_from > now and valid_from <= limit_time:
+                event_times.add(valid_from)
+            if valid_to and valid_to > now and valid_to <= limit_time:
+                event_times.add(valid_to)
         
-        # Configurazioni a orario
+        # Eventi da configurazioni a orario (per setup_name e dipendenze)
         cursor.execute("""
-            SELECT setup_value, priority, valid_from_ora, valid_to_ora, days_of_week
+            SELECT valid_from_ora, valid_to_ora, days_of_week
             FROM configurazioni_a_orario
-            WHERE setup_name = ?
-        """, (setup_name,))
-        
-        schedule_configs = []
+            WHERE enabled = 1
+        """)
         for row in cursor.fetchall():
             days_str = row['days_of_week'] if row['days_of_week'] else '0,1,2,3,4,5,6'
             days_list = [int(d) for d in days_str.split(',') if d]
             
-            # Controlla oggi, domani e dopodomani
-            for day_offset in range(3):
+            # Controlla oggi e i prossimi giorni fino al limite
+            days_to_check = min(int(limit_hours / 24) + 2, 7)  # Almeno 2 giorni, max 7
+            for day_offset in range(days_to_check):
                 check_date = now + timedelta(days=day_offset)
                 weekday = check_date.weekday()
                 
@@ -1316,476 +1304,76 @@ class ConfigDatabase:
                     to_hour = int(to_decimal)
                     to_min = int((to_decimal - to_hour) * 60)
                     
-                    # Gestisce attraversamento mezzanotte
-                    if to_decimal < from_decimal:
+                    if to_decimal < from_decimal:  # Attraversa la mezzanotte
                         event_to = (check_date + timedelta(days=1)).replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
                     else:
                         event_to = check_date.replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
                     
-                    if event_from <= limit_time:
-                        if event_from > now:
-                            event_times.add(event_from)
-                        schedule_configs.append({
-                            'value': row['setup_value'],
-                            'priority': row['priority'],
-                            'valid_from': event_from,
-                            'valid_to': event_to,
-                            'days_of_week': days_list
-                        })
-                        
-                        if event_to <= limit_time and event_to > now:
-                            event_times.add(event_to)
-        
-        # Configurazioni condizionali
-        cursor.execute("""
-            SELECT setup_value, priority, conditional_config, conditional_operator, 
-                   conditional_value, valid_from_ora, valid_to_ora
-            FROM configurazioni_condizionali
-            WHERE setup_name = ? AND enabled = 1
-        """, (setup_name,))
-        
-        conditional_configs = []
-        for row in cursor.fetchall():
-            conditional_configs.append({
-                'value': row['setup_value'],
-                'priority': row['priority'],
-                'conditional_config': row['conditional_config'],
-                'conditional_operator': row['conditional_operator'],
-                'conditional_value': row['conditional_value'],
-                'valid_from_ora': row['valid_from_ora'],
-                'valid_to_ora': row['valid_to_ora']
-            })
-            
-            # Aggiungi eventi per i filtri orari dei condizionali (se presenti)
-            if row['valid_from_ora'] is not None and row['valid_to_ora'] is not None:
-                for day_offset in range(3):
-                    check_date = now + timedelta(days=day_offset)
-                    
-                    from_decimal = row['valid_from_ora']
-                    to_decimal = row['valid_to_ora']
-                    
-                    from_hour = int(from_decimal)
-                    from_min = int((from_decimal - from_hour) * 60)
-                    event_from = check_date.replace(hour=from_hour, minute=from_min, second=0, microsecond=0)
-                    
-                    to_hour = int(to_decimal)
-                    to_min = int((to_decimal - to_hour) * 60)
-                    
-                    # Gestisce attraversamento mezzanotte
-                    if to_decimal < from_decimal:
-                        event_to = (check_date + timedelta(days=1)).replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
-                    else:
-                        event_to = check_date.replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
-                    
-                    if event_from <= limit_time and event_from > now:
+                    if event_from > now and event_from <= limit_time:
                         event_times.add(event_from)
-                    if event_to <= limit_time and event_to > now:
+                    if event_to > now and event_to <= limit_time:
                         event_times.add(event_to)
         
-        # Cache per valori di altre configurazioni a un dato momento
-        # (per evitare chiamate ricorsive infinite con configurazioni condizionali)
-        value_cache_at_time = {}
+        # Eventi da filtri orari di configurazioni condizionali
+        cursor.execute("""
+            SELECT valid_from_ora, valid_to_ora
+            FROM configurazioni_condizionali
+            WHERE enabled = 1 AND valid_from_ora IS NOT NULL AND valid_to_ora IS NOT NULL
+        """)
+        for row in cursor.fetchall():
+            # Genera eventi per i prossimi giorni
+            days_to_check = min(int(limit_hours / 24) + 2, 7)
+            for day_offset in range(days_to_check):
+                check_date = now + timedelta(days=day_offset)
+                
+                from_decimal = row['valid_from_ora']
+                to_decimal = row['valid_to_ora']
+                
+                from_hour = int(from_decimal)
+                from_min = int((from_decimal - from_hour) * 60)
+                event_from = check_date.replace(hour=from_hour, minute=from_min, second=0, microsecond=0)
+                
+                to_hour = int(to_decimal)
+                to_min = int((to_decimal - to_hour) * 60)
+                
+                if to_decimal < from_decimal:
+                    event_to = (check_date + timedelta(days=1)).replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
+                else:
+                    event_to = check_date.replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
+                
+                if event_from > now and event_from <= limit_time:
+                    event_times.add(event_from)
+                if event_to > now and event_to <= limit_time:
+                    event_times.add(event_to)
         
-        # Helper per ottenere tutte le configurazioni necessarie per le dipendenze
-        def get_all_dependencies(target_setup, visited=None):
-            """Ottiene ricorsivamente tutte le configurazioni da cui dipende target_setup.
-            
-            Args:
-                target_setup: Il setup per cui cercare dipendenze
-                visited: Set di setup già visitati per evitare loop
-            
-            Returns:
-                Set di nomi di setup da cui target_setup dipende (direttamente o indirettamente)
-            """
-            if visited is None:
-                visited = set()
-            
-            deps = set()
-            
-            # Trova le dipendenze dirette di questo setup
-            for cfg in conditional_configs:
-                dep_name = cfg['conditional_config']
-                if dep_name not in visited:
-                    deps.add(dep_name)
-                    visited.add(dep_name)
-                    
-                    # Ricorsivamente trova le dipendenze di questa dipendenza
-                    # Dobbiamo caricare i condizionali per questa dipendenza
-                    try:
-                        cursor_dep = self.conn.cursor()
-                        cursor_dep.execute("""
-                            SELECT conditional_config
-                            FROM configurazioni_condizionali
-                            WHERE setup_name = ? AND enabled = 1
-                        """, (dep_name,))
-                        
-                        for row in cursor_dep.fetchall():
-                            transitive_dep = row['conditional_config']
-                            if transitive_dep not in visited:
-                                deps.add(transitive_dep)
-                                # Note: Per semplicità, limitiamo a 2 livelli di profondità
-                                # per evitare complessità eccessiva
-                    except:
-                        pass
-            
-            return deps
-        
-        # Pre-carica le configurazioni di tutte le dipendenze
-        dependencies = get_all_dependencies(setup_name)
-        dep_configs_map = {}
-        
-        # IMPORTANT: Also load events from dependency configurations
-        # This ensures we re-evaluate when a dependency's value changes
-        for dep_name in dependencies:
-            # Load time-based events from this dependency
-            cursor.execute("""
-                SELECT valid_from_date, valid_to_date
-                FROM configurazioni_a_tempo
-                WHERE setup_name = ? AND enabled = 1
-            """, (dep_name,))
-            for row in cursor.fetchall():
-                valid_from = datetime.fromisoformat(row['valid_from_date'])
-                valid_to = datetime.fromisoformat(row['valid_to_date']) if row['valid_to_date'] else None
-                
-                if valid_from <= limit_time and valid_from > now:
-                    event_times.add(valid_from)
-                if valid_to and valid_to <= limit_time and valid_to > now:
-                    event_times.add(valid_to)
-            
-            # Load schedule-based events from this dependency
-            cursor.execute("""
-                SELECT valid_from_ora, valid_to_ora, days_of_week
-                FROM configurazioni_a_orario
-                WHERE setup_name = ? AND enabled = 1
-            """, (dep_name,))
-            for row in cursor.fetchall():
-                days_str = row['days_of_week'] if row['days_of_week'] else '0,1,2,3,4,5,6'
-                days_list = [int(d) for d in days_str.split(',') if d]
-                
-                for day_offset in range(3):
-                    check_date = now + timedelta(days=day_offset)
-                    weekday = check_date.weekday()
-                    
-                    if weekday in days_list:
-                        from_decimal = row['valid_from_ora']
-                        to_decimal = row['valid_to_ora']
-                        
-                        from_hour = int(from_decimal)
-                        from_min = int((from_decimal - from_hour) * 60)
-                        event_from = check_date.replace(hour=from_hour, minute=from_min, second=0, microsecond=0)
-                        
-                        to_hour = int(to_decimal)
-                        to_min = int((to_decimal - to_hour) * 60)
-                        
-                        if to_decimal < from_decimal:
-                            event_to = (check_date + timedelta(days=1)).replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
-                        else:
-                            event_to = check_date.replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
-                        
-                        if event_from <= limit_time and event_from > now:
-                            event_times.add(event_from)
-                        if event_to <= limit_time and event_to > now:
-                            event_times.add(event_to)
-        
-        for dep_name in dependencies:
-            # Carica le configurazioni di questa dipendenza
-            dep_configs_map[dep_name] = {
-                'standard': None,
-                'time': [],
-                'schedule': [],
-                'conditional': []
-            }
-            
-            # Standard
-            cursor.execute("""
-                SELECT setup_value, priority
-                FROM configurazioni
-                WHERE setup_name = ? AND enabled = 1
-            """, (dep_name,))
-            dep_row = cursor.fetchone()
-            if dep_row:
-                dep_configs_map[dep_name]['standard'] = {
-                    'value': dep_row['setup_value'],
-                    'priority': dep_row['priority']
-                }
-            
-            # Time-based
-            cursor.execute("""
-                SELECT setup_value, priority, valid_from_date, valid_to_date, 
-                       valid_from_ora, valid_to_ora, days_of_week
-                FROM configurazioni_a_tempo
-                WHERE setup_name = ? AND enabled = 1
-            """, (dep_name,))
-            for row in cursor.fetchall():
-                valid_from = datetime.fromisoformat(row['valid_from_date'])
-                valid_to = datetime.fromisoformat(row['valid_to_date']) if row['valid_to_date'] else None
-                dep_configs_map[dep_name]['time'].append({
-                    'value': row['setup_value'],
-                    'priority': row['priority'],
-                    'valid_from': valid_from,
-                    'valid_to': valid_to,
-                    'valid_from_ora': row['valid_from_ora'],
-                    'valid_to_ora': row['valid_to_ora'],
-                    'days_of_week': row['days_of_week']
-                })
-            
-            # Schedule-based
-            cursor.execute("""
-                SELECT setup_value, priority, valid_from_ora, valid_to_ora, days_of_week
-                FROM configurazioni_a_orario
-                WHERE setup_name = ? AND enabled = 1
-            """, (dep_name,))
-            for row in cursor.fetchall():
-                days_str = row['days_of_week'] if row['days_of_week'] else '0,1,2,3,4,5,6'
-                days_list = [int(d) for d in days_str.split(',') if d]
-                dep_configs_map[dep_name]['schedule'].append({
-                    'value': row['setup_value'],
-                    'priority': row['priority'],
-                    'valid_from_ora': row['valid_from_ora'],
-                    'valid_to_ora': row['valid_to_ora'],
-                    'days_of_week': days_list
-                })
-        
-        # Funzione helper per calcolare il valore attivo a un dato momento
-        def get_value_at_time(check_time, target_setup=None, visited=None):
-            """Calcola quale valore sarà attivo a un dato momento considerando priorità e condizionali.
-            
-            Args:
-                check_time: Momento da verificare
-                target_setup: Nome del setup da valutare (None = setup_name corrente)
-                visited: Set di setup già visitati per evitare loop infiniti
-            """
-            if target_setup is None:
-                target_setup = setup_name
-            
-            # Protezione contro loop infiniti
-            if visited is None:
-                visited = set()
-            if target_setup in visited:
-                # Loop rilevato, ritorna None
-                return None
-            visited = visited.copy()
-            visited.add(target_setup)
-            
-            # Usa cache se disponibile
-            cache_key = (check_time, target_setup)
-            if cache_key in value_cache_at_time:
-                return value_cache_at_time[cache_key]
-            
-            active_configs = []
-            
-            # Se stiamo valutando il setup principale
-            if target_setup == setup_name:
-                # Config a tempo attive
-                for cfg in time_configs:
-                    if cfg['valid_from'] <= check_time:
-                        if cfg['valid_to'] is None or check_time < cfg['valid_to']:
-                            # Verifica filtri opzionali orari e giorni
-                            is_valid = True
-                            
-                            if cfg['valid_from_ora'] is not None and cfg['valid_to_ora'] is not None:
-                                # Conversione corretta: ore + minuti/60
-                                current_time = check_time.hour + check_time.minute / 60.0
-                                from_ora = cfg['valid_from_ora']
-                                to_ora = cfg['valid_to_ora']
-                                
-                                if to_ora < from_ora:
-                                    is_valid = (current_time >= from_ora or current_time < to_ora)
-                                else:
-                                    is_valid = (from_ora <= current_time < to_ora)
-                            
-                            if is_valid and cfg['days_of_week']:
-                                valid_days = [int(d) for d in cfg['days_of_week'].split(',') if d]
-                                if check_time.weekday() not in valid_days:
-                                    is_valid = False
-                            
-                            if is_valid:
-                                active_configs.append({
-                                    'value': cfg['value'],
-                                    'priority': cfg['priority'],
-                                    'source_order': 1,
-                                    'type': 'time'
-                                })
-                
-                # Config a orario attive
-                for cfg in schedule_configs:
-                    if cfg['valid_from'] <= check_time < cfg['valid_to']:
-                        if check_time.weekday() in cfg['days_of_week']:
-                            active_configs.append({
-                                'value': cfg['value'],
-                                'priority': cfg['priority'],
-                                'source_order': 2,
-                                'type': 'schedule'
-                            })
-                
-                # Config condizionali
-                for cfg in conditional_configs:
-                    # Ottieni il valore della configurazione da cui dipende
-                    dependent_config = cfg['conditional_config']
-                    dependent_value = get_value_at_time(check_time, dependent_config, visited)
-                    
-                    if dependent_value is None:
-                        continue
-                    
-                    # Valuta la condizione
-                    condition_met = self._evaluate_condition(
-                        dependent_value,
-                        cfg['conditional_operator'],
-                        cfg['conditional_value']
-                    )
-                    
-                    if not condition_met:
-                        continue
-                    
-                    # Verifica filtro orario se presente
-                    if cfg['valid_from_ora'] is not None and cfg['valid_to_ora'] is not None:
-                        current_time = check_time.hour + check_time.minute / 60.0
-                        from_ora = cfg['valid_from_ora']
-                        to_ora = cfg['valid_to_ora']
-                        
-                        is_valid_time = False
-                        if to_ora < from_ora:  # Attraversa la mezzanotte
-                            is_valid_time = (current_time >= from_ora or current_time < to_ora)
-                        else:
-                            is_valid_time = (from_ora <= current_time < to_ora)
-                        
-                        if not is_valid_time:
-                            continue
-                    
-                    active_configs.append({
-                        'value': cfg['value'],
-                        'priority': cfg['priority'],
-                        'source_order': 0,  # Condizionali: source_order 0 = priorità più alta tra le sorgenti
-                        'type': 'conditional'
-                    })
-                
-                # Config standard sempre attiva
-                if default_value:
-                    active_configs.append({
-                        'value': default_value,
-                        'priority': default_priority,
-                        'source_order': 3,
-                        'type': 'standard'
-                    })
-            else:
-                # Stiamo valutando una dipendenza
-                if target_setup not in dep_configs_map:
-                    # Dipendenza non trovata
-                    value_cache_at_time[cache_key] = None
-                    return None
-                
-                dep_cfg = dep_configs_map[target_setup]
-                
-                # Time-based configs
-                for cfg in dep_cfg['time']:
-                    if cfg['valid_from'] <= check_time:
-                        if cfg['valid_to'] is None or check_time < cfg['valid_to']:
-                            is_valid = True
-                            
-                            if cfg['valid_from_ora'] is not None and cfg['valid_to_ora'] is not None:
-                                current_time = check_time.hour + check_time.minute / 60.0
-                                from_ora = cfg['valid_from_ora']
-                                to_ora = cfg['valid_to_ora']
-                                
-                                if to_ora < from_ora:
-                                    is_valid = (current_time >= from_ora or current_time < to_ora)
-                                else:
-                                    is_valid = (from_ora <= current_time < to_ora)
-                            
-                            if is_valid and cfg['days_of_week']:
-                                valid_days = [int(d) for d in cfg['days_of_week'].split(',') if d]
-                                if check_time.weekday() not in valid_days:
-                                    is_valid = False
-                            
-                            if is_valid:
-                                active_configs.append({
-                                    'value': cfg['value'],
-                                    'priority': cfg['priority'],
-                                    'source_order': 1
-                                })
-                
-                # Schedule-based configs
-                for cfg in dep_cfg['schedule']:
-                    current_time = check_time.hour + check_time.minute / 60.0
-                    from_ora = cfg['valid_from_ora']
-                    to_ora = cfg['valid_to_ora']
-                    
-                    is_valid = False
-                    if to_ora < from_ora:
-                        is_valid = (current_time >= from_ora or current_time < to_ora)
-                    else:
-                        is_valid = (from_ora <= current_time < to_ora)
-                    
-                    if is_valid and check_time.weekday() in cfg['days_of_week']:
-                        active_configs.append({
-                            'value': cfg['value'],
-                            'priority': cfg['priority'],
-                            'source_order': 2
-                        })
-                
-                # Standard config
-                if dep_cfg['standard']:
-                    active_configs.append({
-                        'value': dep_cfg['standard']['value'],
-                        'priority': dep_cfg['standard']['priority'],
-                        'source_order': 3
-                    })
-            
-            # Ordina per priorità (crescente) e source_order
-            active_configs.sort(key=lambda x: (x['priority'], x['source_order']))
-            
-            result = active_configs[0]['value'] if active_configs else None
-            value_cache_at_time[cache_key] = result
-            return result
-        
-        # Calcola i cambiamenti di valore
+        # Calcola i cambiamenti di valore usando la logica unificata
         changes = []
         last_value = current_value
+        last_source = current_source
         
         for event_time in sorted(event_times):
-            new_value = get_value_at_time(event_time)
+            # Usa la logica unificata per calcolare tutte le configurazioni a questo momento
+            all_configs_at_time = self._get_configurations_at_time(event_time)
             
-            # Aggiungi solo se il valore cambia effettivamente
-            if new_value != last_value and new_value is not None:
-                minutes_until = int((event_time - now).total_seconds() / 60)
+            # Estrai il valore per il setup specifico
+            if setup_name in all_configs_at_time:
+                config_at_time = all_configs_at_time[setup_name]
+                new_value = config_at_time['value']
+                new_source = config_at_time['source']
                 
-                # Determina il tipo di evento
-                event_type = 'unknown'
-                for cfg in time_configs:
-                    if cfg['valid_from'] == event_time and cfg['value'] == new_value:
-                        event_type = 'time'
-                        break
-                    if cfg['valid_to'] == event_time:
-                        event_type = 'time_end'
-                        break
-                
-                if event_type == 'unknown':
-                    for cfg in schedule_configs:
-                        if cfg['valid_from'] == event_time and cfg['value'] == new_value:
-                            event_type = 'schedule'
-                            break
-                        if cfg['valid_to'] == event_time:
-                            event_type = 'schedule_end'
-                            break
-                
-                # Controlla se il cambio è dovuto a una configurazione condizionale
-                if event_type == 'unknown':
-                    for cfg in conditional_configs:
-                        if cfg['value'] == new_value:
-                            # Il cambio potrebbe essere dovuto a un condizionale
-                            # Questo accade quando cambia il valore della configurazione da cui dipende,
-                            # o quando il filtro orario del condizionale si attiva/disattiva
-                            event_type = 'conditional'
-                            break
-                
-                changes.append({
-                    'value': new_value,
-                    'minutes_until': minutes_until,
-                    'timestamp': event_time.isoformat(),
-                    'type': event_type
-                })
-                
-                last_value = new_value
+                # Aggiungi solo se il valore cambia effettivamente
+                if new_value != last_value:
+                    minutes_until = int((event_time - now).total_seconds() / 60)
+                    
+                    changes.append({
+                        'value': new_value,
+                        'minutes_until': minutes_until,
+                        'timestamp': event_time.isoformat(),
+                        'type': new_source  # Il tipo è la sorgente che ha vinto (time, schedule, conditional, standard)
+                    })
+                    
+                    last_value = new_value
+                    last_source = new_source
         
         return changes[:5]  # Max 5 eventi
     
