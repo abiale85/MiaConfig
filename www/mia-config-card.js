@@ -2663,10 +2663,6 @@ class MiaConfigCard extends HTMLElement {
                     instance.showToast('Errore: ' + err.message, true);
                 }
             });
-            } catch (err) {
-                console.error('Error in dcEditConfig:', err);
-                instance.showToast('Errore apertura modal: ' + err.message, true);
-            }
         };
         
         // Funzioni per modal di inserimento configurazione

@@ -15,17 +15,23 @@
       display: flex !important;
   }
   ```
-- **JavaScript**: Restored v2.0.0 working pattern using window._miaConfigCardInstance.content.querySelector() throughout
+- **JavaScript**: Complete multi-instance support using `cardElement._instance` instead of global variables
 - **Collapse Fix**: dcToggleOverrideGroup now uses CSS classes instead of inline styles (like dcToggleConfigGroup)
+
+### 🎯 Multi-Instance Support:
+- **Before**: Used `window._miaConfigCardInstance` (breaks with multiple cards)
+- **After**: Functions accept `cardElement` parameter and use `cardElement._instance`
+- **Compatible**: Works with single or multiple MiaConfig cards on same page
 
 ### 🧪 How to test:
 1. **Hard-reload** (Ctrl+F5)
 2. **Edit button** → Modal should appear in foreground
 3. **Collapse in group by override** → Should toggle open/close
 4. **Weekly view bar click** → Detail popup should appear
+5. **Multiple cards** → Each card works independently
 
 ### 📦 Versions:
 - Integration: 2.1.0-beta.6
 - Card: 2.1.0-beta.6
 
-**All modals and collapse functionality now work correctly!** 🎉
+**All modals work correctly + full multi-instance support!** 🎉
