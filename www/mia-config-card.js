@@ -129,6 +129,7 @@ class MiaConfigCard extends HTMLElement {
                 .mia-config-card .dc-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center; }
                 .mia-config-card .dc-modal.active { display: flex; }
                 .mia-config-card .dc-modal-content { background: var(--card-background-color); padding: 20px; border-radius: 8px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; }
+                .mia-config-card #dc-add-config-modal .dc-modal-content { max-width: 550px; margin: 0 auto; }
                 .mia-config-card .dc-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid var(--divider-color); }
                 .mia-config-card .dc-modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--primary-text-color); }
                 .mia-config-card .dc-weekly-tooltip { position: relative; cursor: help; }
@@ -334,8 +335,14 @@ class MiaConfigCard extends HTMLElement {
                     .mia-config-card .dc-tab { padding: 8px 12px; }
                     .mia-config-card .dc-tabs { flex-wrap: wrap; }
                     .mia-config-card .dc-modal-content { width: 98%; padding: 10px; }
+                    .mia-config-card #dc-add-config-modal .dc-modal-content { width: 95%; max-width: none; margin: 0 auto; }
                     .mia-config-card .dc-btn { width: 100%; max-width: none; }
                     .mia-config-card .dc-view-mode-toggle { flex-wrap: wrap; }
+                    /* Responsive per il nuovo layout del modal */
+                    .mia-config-card #dc-add-config-modal .dc-modal-content > div:first-of-type { flex-direction: column; gap: 10px; }
+                    .mia-config-card #dc-add-config-modal .dc-modal-content > div:first-of-type > div { flex: none !important; width: 100% !important; }
+                    .mia-config-card .dc-form-group[style*="display: flex"] { flex-direction: column; gap: 10px; }
+                    .mia-config-card .dc-form-group[style*="display: flex"] > div { flex: none !important; width: 100% !important; }
                 }
             </style>
         `;
@@ -478,20 +485,26 @@ class MiaConfigCard extends HTMLElement {
             
             <!-- Modal per aggiungere nuove configurazioni -->
             <div id="dc-add-config-modal" class="dc-modal">
-                <div class="dc-modal-content" style="max-width: 600px; padding: 20px;">
+                <div class="dc-modal-content" style="max-width: 550px; padding: 20px; margin: 0 auto;">
                     <div class="dc-modal-header">
                         <h3>Aggiungi Nuova Configurazione</h3>
                         <button class="dc-modal-close" onclick="window.dcCloseAddConfigModal()">×</button>
                     </div>
                     
-                    <div style="margin-bottom: 20px;">
-                        <label style="font-weight: 500; font-size: 16px;">Seleziona Tipo:</label>
-                        <select id="modal-config-type-selector" onchange="window.dcShowModalConfigForm(this.value)" style="width: 100%; padding: 10px; margin-top: 8px; border: 1px solid var(--divider-color); border-radius: 4px;">
-                            <option value="standard">⚙️ Standard</option>
-                            <option value="schedule">🕐 Override Orario</option>
-                            <option value="time">⏰ Override Temporale</option>
-                            <option value="conditional">🎯 Override Condizionale</option>
-                        </select>
+                    <div style="margin-bottom: 20px; display: flex; gap: 15px; align-items: end;">
+                        <div style="flex: 1;">
+                            <label style="font-weight: 500; font-size: 16px;">Seleziona Tipo:</label>
+                            <select id="modal-config-type-selector" onchange="window.dcShowModalConfigForm(this.value)" style="width: 100%; padding: 10px; margin-top: 8px; border: 1px solid var(--divider-color); border-radius: 4px;">
+                                <option value="standard">⚙️ Standard</option>
+                                <option value="schedule">🕐 Override Orario</option>
+                                <option value="time">⏰ Override Temporale</option>
+                                <option value="conditional">🎯 Override Condizionale</option>
+                            </select>
+                        </div>
+                        <div style="flex: 0 0 150px;">
+                            <label style="font-weight: 500; font-size: 16px;">Priorità:</label>
+                            <input type="number" id="modal-global-priority" min="1" max="999" value="99" style="width: 100%; padding: 10px; margin-top: 8px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); color: var(--primary-text-color);">
+                        </div>
                     </div>
 
                     <div id="modal-form-container-standard" class="dc-form-container" style="display: none;">
@@ -577,11 +590,6 @@ class MiaConfigCard extends HTMLElement {
                                 <label class="dc-checkbox-label"><input type="checkbox" name="days" value="6" checked> Dom</label>
                             </div>
                         </div>
-                        <div class="dc-form-group">
-                            <label>Priorità (1-999):</label>
-                            <input type="number" name="priority" min="1" max="999" value="99">
-                            <small style="color: var(--secondary-text-color);">Più basso = più prioritario (1 = massima)</small>
-                        </div>
                         <button type="submit" class="dc-btn">Aggiungi Override Orario</button>
                         <button type="button" class="dc-btn-secondary" onclick="window.dcCloseAddConfigModal()" style="margin-left: 10px;">Annulla</button>
                     </form>
@@ -602,18 +610,15 @@ class MiaConfigCard extends HTMLElement {
                                 <input type="text" id="modal-time-setup-value" name="setup_value" required placeholder="es. 18">
                             </div>
                         </div>
-                        <div class="dc-form-group">
-                            <label>Data/Ora Inizio:</label>
-                            <input type="datetime-local" name="valid_from" required>
-                        </div>
-                        <div class="dc-form-group">
-                            <label>Data/Ora Fine:</label>
-                            <input type="datetime-local" name="valid_to" required>
-                        </div>
-                        <div class="dc-form-group">
-                            <label>Priorità (1-999):</label>
-                            <input type="number" name="priority" min="1" max="999" value="99">
-                            <small style="color: var(--secondary-text-color);">Più basso = più prioritario (1 = massima)</small>
+                        <div class="dc-form-group" style="display: flex; gap: 15px;">
+                            <div style="flex: 1;">
+                                <label>Data/Ora Inizio:</label>
+                                <input type="datetime-local" name="valid_from" required>
+                            </div>
+                            <div style="flex: 1;">
+                                <label>Data/Ora Fine:</label>
+                                <input type="datetime-local" name="valid_to" required>
+                            </div>
                         </div>
                         
                         <hr style="margin: 15px 0; border: none; border-top: 1px solid var(--divider-color);">
@@ -623,7 +628,10 @@ class MiaConfigCard extends HTMLElement {
                         </small>
                         
                         <div class="dc-form-group">
-                            <label><input type="checkbox" id="modal-time-enable-hours"> Limita a fascia oraria</label>
+                            <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 0;">
+                                <input type="checkbox" id="modal-time-enable-hours" style="margin: 0;">
+                                Limita a fascia oraria
+                            </label>
                             <div id="modal-time-hours-container" style="display: none; margin-top: 10px;">
                                 <div class="dc-time-picker">
                                     <div>
@@ -648,7 +656,10 @@ class MiaConfigCard extends HTMLElement {
                         </div>
                         
                         <div class="dc-form-group">
-                            <label><input type="checkbox" id="modal-time-enable-days"> Limita a giorni specifici</label>
+                            <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 0;">
+                                <input type="checkbox" id="modal-time-enable-days" style="margin: 0;">
+                                Limita a giorni specifici
+                            </label>
                             <div id="modal-time-days-container" style="display: none; margin-top: 10px;">
                                 <div class="dc-checkbox-group">
                                     <label class="dc-checkbox-label"><input type="checkbox" name="time-days" value="0" checked> Lun</label>
@@ -709,14 +720,12 @@ class MiaConfigCard extends HTMLElement {
                             </div>
                         </div>
                         <div style="color: var(--secondary-text-color); font-size: 12px; margin: -5px 0 10px 0;">L'override si attiva se: <strong id="modal-conditional-preview">configurazione operatore valore</strong></div>
-                        <div class="dc-form-group">
-                            <label>Priorità (1-999):</label>
-                            <input type="number" name="priority" min="1" max="999" value="50">
-                            <small style="color: var(--secondary-text-color);">Gli override condizionali hanno priorità intermedia (default 50)</small>
-                        </div>
                         
                         <div class="dc-form-group">
-                            <label><input type="checkbox" id="modal-conditional-enable-hours"> Limita a fascia oraria</label>
+                            <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 0;">
+                                <input type="checkbox" id="modal-conditional-enable-hours" style="margin: 0;">
+                                Limita a fascia oraria
+                            </label>
                             <div id="modal-conditional-hours-container" style="display: none; margin-top: 10px;">
                                 <div class="dc-time-picker">
                                     <div>
@@ -943,7 +952,7 @@ class MiaConfigCard extends HTMLElement {
                 const toHour = window._miaConfigCardInstance.content.querySelector('#modal-to-hour').value;
                 const toMinute = window._miaConfigCardInstance.content.querySelector('#modal-to-minute').value;
                 const selectedDays = Array.from(window._miaConfigCardInstance.content.querySelectorAll('#modal-dc-form-schedule input[name="days"]:checked')).map(el => el.value);
-                const priority = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-schedule input[name="priority"]').value;
+                const priority = window._miaConfigCardInstance.content.querySelector('#modal-global-priority').value;
                 try {
                     const validFromOra = parseFloat(fromHour) + parseFloat(fromMinute) / 60;
                     const validToOra = parseFloat(toHour) + parseFloat(toMinute) / 60;
@@ -976,7 +985,7 @@ class MiaConfigCard extends HTMLElement {
                 const setupValue = window._miaConfigCardInstance.content.querySelector('#modal-time-setup-value').value;
                 const validFrom = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-time input[name="valid_from"]').value;
                 const validTo = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-time input[name="valid_to"]').value;
-                const priority = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-time input[name="priority"]').value;
+                const priority = window._miaConfigCardInstance.content.querySelector('#modal-global-priority').value;
                 const enableHours = window._miaConfigCardInstance.content.querySelector('#modal-time-enable-hours').checked;
                 const enableDays = window._miaConfigCardInstance.content.querySelector('#modal-time-enable-days').checked;
                 try {
@@ -1023,7 +1032,7 @@ class MiaConfigCard extends HTMLElement {
                 const conditionalConfigElement = window._miaConfigCardInstance.content.querySelector('#modal-conditional-source-config');
                 const conditionalOperatorElement = window._miaConfigCardInstance.content.querySelector('#modal-conditional-operator');
                 const conditionalValueElement = window._miaConfigCardInstance.content.querySelector('#modal-conditional-comparison-value');
-                const priorityElement = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-conditional input[name="priority"]');
+                const priorityElement = window._miaConfigCardInstance.content.querySelector('#modal-global-priority');
                 
                 // Se mancano elementi critici, annulla il submit
                 if (!setupNameElement?.value || !setupValueElement?.value || !conditionalConfigElement?.value || !conditionalOperatorElement?.value || !conditionalValueElement?.value || !priorityElement?.value) {
