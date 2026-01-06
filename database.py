@@ -18,7 +18,8 @@ class ConfigDatabase:
         self._descriptions_cache = None
         self._cache_timestamp = None
         # Cache per get_next_changes: evita ricalcoli se il valore corrente e le configurazioni non cambiano
-        self._next_changes_cache = {}  # {setup_name: {'value': current_value, 'result': next_changes, 'timestamp': calc_time}}
+        # Struttura: {(setup_name, limit_hours, max_results): {'value': str, 'config_version': int, 'result': list, 'timestamp': str}}
+        self._next_changes_cache = {}
         self._config_version = 0  # Incrementato ad ogni modifica di configurazione
     
     @staticmethod
@@ -1297,7 +1298,8 @@ class ConfigDatabase:
         current_source = current_config.get(setup_name, {}).get('source', 'unknown')
         
         # Controlla cache: ricalcola solo se valore corrente cambiato O configurazioni modificate
-        cache_key = setup_name
+        # Cache key include parametri per evitare collisioni tra chiamate con parametri diversi
+        cache_key = (setup_name, limit_hours, max_results)
         cached = self._next_changes_cache.get(cache_key)
         
         if cached is not None:
@@ -1307,9 +1309,10 @@ class ConfigDatabase:
                 # Cache valida: aggiorna solo minutes_until basandosi sul tempo trascorso
                 now = datetime.now()
                 cached_timestamp = datetime.fromisoformat(cached['timestamp'])
-                elapsed_minutes = int((now - cached_timestamp).total_seconds() / 60)
+                # Usa round invece di int per evitare drift nei calcoli temporali
+                elapsed_minutes = round((now - cached_timestamp).total_seconds() / 60)
                 
-                # Aggiorna minutes_until per ogni evento
+                # Aggiorna minutes_until per ogni evento e filtra eventi passati
                 updated_changes = []
                 for change in cached['result']:
                     new_minutes_until = change['minutes_until'] - elapsed_minutes
@@ -1318,7 +1321,13 @@ class ConfigDatabase:
                         updated_change['minutes_until'] = new_minutes_until
                         updated_changes.append(updated_change)
                 
-                return updated_changes[:max_results]
+                # Se troppi eventi sono diventati passati e abbiamo meno di max_results,
+                # potremmo perdere eventi futuri -> invalida cache e ricalcola
+                if len(cached['result']) > 0 and len(updated_changes) < max_results // 2:
+                    # Troppi eventi sono diventati passati, meglio ricalcolare
+                    pass  # Continua con il ricalcolo
+                else:
+                    return updated_changes[:max_results]
         
         # Cache miss o invalidata: ricalcola
         cursor = self.conn.cursor()
