@@ -2725,6 +2725,16 @@ class MiaConfigCard extends HTMLElement {
             const instance = cardElement._instance;
             const content = instance.content;
             
+            // Helper function to escape HTML content
+            const escapeHtml = (str) => {
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            };
+            
             try {
                 const modal = content.querySelector('#dc-weekly-event-modal');
                 const modalBody = content.querySelector('#dc-weekly-event-modal-body');
