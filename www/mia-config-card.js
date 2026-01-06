@@ -141,6 +141,7 @@ class MiaConfigCard extends HTMLElement {
                 .mia-config-card .dc-weekly-hour-line { position: absolute; left: 0; right: 0; height: 1px; background: var(--divider-color); pointer-events: none; }
                 .mia-config-card .dc-weekly-bar { position: absolute; left: 2px; right: 2px; border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; cursor: pointer; transition: box-shadow 0.2s; overflow: visible; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; box-sizing: border-box; border-top: 2px solid rgba(0,0,0,0.3); border-bottom: 2px solid rgba(0,0,0,0.3); z-index: 1; }
                 .mia-config-card .dc-weekly-bar:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 9999 !important; }
+                .mia-config-card .dc-weekly-bar:focus { outline: 3px solid var(--primary-color); outline-offset: 2px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 9999 !important; }
                 .mia-config-card .dc-weekly-bar-time { background: #2196f3; color: white; border-left: 3px solid #0d47a1; border-right: 3px solid #0d47a1; }
                 .mia-config-card .dc-weekly-bar-schedule { background: #ff9800; color: white; border-left: 3px solid #e65100; border-right: 3px solid #e65100; }
                 .mia-config-card .dc-weekly-bar-conditional { background: #9c27b0; color: white; border-left: 3px solid #7b1fa2; border-right: 3px solid #7b1fa2; }
@@ -734,6 +735,17 @@ class MiaConfigCard extends HTMLElement {
                         <button class="dc-modal-close" onclick="window.dcCloseEditModal()">×</button>
                     </div>
                     <div id="dc-edit-modal-body"></div>
+                </div>
+            </div>
+            
+            <!-- Modal per dettagli evento settimanale -->
+            <div id="dc-weekly-event-modal" class="dc-modal">
+                <div class="dc-modal-content" style="max-width: 500px;">
+                    <div class="dc-modal-header">
+                        <h3>📅 Dettagli Configurazione</h3>
+                        <button class="dc-modal-close" onclick="window.dcCloseWeeklyEventModal()">×</button>
+                    </div>
+                    <div id="dc-weekly-event-modal-body" style="line-height: 1.6;"></div>
                 </div>
             </div>
             </div>
@@ -2607,6 +2619,143 @@ class MiaConfigCard extends HTMLElement {
             modal.classList.remove('active');
         };
         
+        window.dcShowWeeklyEventModal = (barElement) => {
+            try {
+                // Helper per escape HTML e prevenire XSS
+                // Usa textContent per evitare l'interpretazione di HTML, poi legge innerHTML
+                // che contiene gli entity-encoded characters
+                const escapeHtml = (text) => {
+                    const div = document.createElement('div');
+                    div.textContent = text;
+                    return div.innerHTML;
+                };
+                
+                // Helper per escape attributi HTML
+                const escapeHtmlAttribute = (str) => {
+                    return String(str)
+                        .replace(/&/g, '&amp;')
+                        .replace(/'/g, '&#39;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;');
+                };
+                
+                // Ottieni i dati del segmento dall'attributo data
+                const segmentJson = barElement.getAttribute('data-segment');
+                if (!segmentJson) return;
+                
+                const segment = JSON.parse(segmentJson);
+                
+                // Riconverti le date da string a Date object se presenti
+                if (segment.from) segment.from = new Date(segment.from);
+                if (segment.to) segment.to = new Date(segment.to);
+                
+                // Genera il contenuto del modal
+                const modalBody = this.content.querySelector('#dc-weekly-event-modal-body');
+                const modal = this.content.querySelector('#dc-weekly-event-modal');
+                
+                if (!modalBody || !modal) return;
+                
+                // Genera l'HTML del contenuto usando la stessa logica del tooltip ma formattato meglio
+                const startHour = Math.floor(segment.startTime / 60);
+                const startMin = segment.startTime % 60;
+                const endHour = Math.floor(segment.endTime / 60);
+                const endMin = segment.endTime % 60;
+                
+                let html = `<div style="padding: 10px;">`;
+                html += `<div style="background: var(--secondary-background-color); padding: 15px; border-radius: 8px; margin-bottom: 15px;">`;
+                html += `<div style="font-size: 20px; font-weight: bold; margin-bottom: 8px;">Valore: ${escapeHtml(String(segment.value))}</div>`;
+                html += `<div style="font-size: 16px; color: var(--secondary-text-color);">`;
+                html += `⏰ ${String(startHour).padStart(2,'0')}:${String(startMin).padStart(2,'0')} - ${String(endHour).padStart(2,'0')}:${String(endMin).padStart(2,'0')}`;
+                html += `</div>`;
+                html += `</div>`;
+                
+                if (segment.type === 'time') {
+                    const hasDates = segment.from instanceof Date && segment.to instanceof Date && !Number.isNaN(segment.from) && !Number.isNaN(segment.to);
+                    html += `<div style="margin-bottom: 15px;">`;
+                    html += `<div style="font-size: 18px; font-weight: bold; margin-bottom: 8px;">⏰ Override Temporale</div>`;
+                    if (hasDates) {
+                        const fromStr = `${segment.from.getDate()}/${segment.from.getMonth()+1}/${segment.from.getFullYear()} ${String(segment.from.getHours()).padStart(2,'0')}:${String(segment.from.getMinutes()).padStart(2,'0')}`;
+                        const toStr = `${segment.to.getDate()}/${segment.to.getMonth()+1}/${segment.to.getFullYear()} ${String(segment.to.getHours()).padStart(2,'0')}:${String(segment.to.getMinutes()).padStart(2,'0')}`;
+                        html += `<div style="color: var(--secondary-text-color); line-height: 1.8;">`;
+                        html += `<strong>Periodo completo:</strong><br>`;
+                        html += `📅 Dal: ${fromStr}<br>`;
+                        html += `📅 Al: ${toStr}`;
+                        html += `</div>`;
+                    } else {
+                        html += `<div style="color: var(--secondary-text-color);">Periodo temporale attivo</div>`;
+                    }
+                    html += `</div>`;
+                } else if (segment.type === 'schedule') {
+                    const daysStr = segment.days ? segment.days.map(d => ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'][d]).join(', ') : 'N/D';
+                    const fromTotalMin = Math.round(segment.validFrom * 60);
+                    const fromHour = Math.floor(fromTotalMin / 60);
+                    const fromMin = fromTotalMin % 60;
+                    const toTotalMin = Math.round(segment.validTo * 60);
+                    const toHour = Math.floor(toTotalMin / 60);
+                    const toMin = toTotalMin % 60;
+                    
+                    html += `<div style="margin-bottom: 15px;">`;
+                    html += `<div style="font-size: 18px; font-weight: bold; margin-bottom: 8px;">🕐 Override Orario</div>`;
+                    html += `<div style="color: var(--secondary-text-color); line-height: 1.8;">`;
+                    html += `<strong>Fascia configurata:</strong><br>`;
+                    html += `⏰ ${String(fromHour).padStart(2,'0')}:${String(fromMin).padStart(2,'0')} - ${String(toHour).padStart(2,'0')}:${String(toMin).padStart(2,'0')}<br>`;
+                    html += `<strong>Giorni:</strong> ${daysStr}`;
+                    if (segment.validTo < segment.validFrom) {
+                        html += `<br><em style="font-size: 14px;">(attraversa la mezzanotte)</em>`;
+                    }
+                    html += `</div>`;
+                    html += `</div>`;
+                } else if (segment.type === 'conditional') {
+                    html += `<div style="margin-bottom: 15px;">`;
+                    html += `<div style="font-size: 18px; font-weight: bold; margin-bottom: 8px;">🎯 Override Condizionale</div>`;
+                    html += `<div style="color: var(--secondary-text-color); line-height: 1.8;">`;
+                    html += `<strong>Condizione:</strong> ${escapeHtml(String(segment.condition || 'N/D'))}<br>`;
+                    html += `<strong>Entità:</strong> ${escapeHtml(String(segment.entity || 'N/D'))}`;
+                    const hasWindow = typeof segment.validFrom === 'number' && typeof segment.validTo === 'number';
+                    if (hasWindow) {
+                        const fromTotalMin = Math.round(segment.validFrom * 60);
+                        const fromHour = Math.floor(fromTotalMin / 60);
+                        const fromMin = fromTotalMin % 60;
+                        const toTotalMin = Math.round(segment.validTo * 60);
+                        const toHour = Math.floor(toTotalMin / 60);
+                        const toMin = toTotalMin % 60;
+                        html += `<br><strong>Fascia oraria:</strong> ${String(fromHour).padStart(2,'0')}:${String(fromMin).padStart(2,'0')} - ${String(toHour).padStart(2,'0')}:${String(toMin).padStart(2,'0')}`;
+                        if (segment.validTo < segment.validFrom) {
+                            html += `<br><em style="font-size: 14px;">(attraversa la mezzanotte)</em>`;
+                        }
+                    }
+                    html += `</div>`;
+                    html += `</div>`;
+                } else if (segment.type === 'standard') {
+                    html += `<div style="margin-bottom: 15px;">`;
+                    html += `<div style="font-size: 18px; font-weight: bold; margin-bottom: 8px;">⚙️ Valore Standard</div>`;
+                    html += `<div style="color: var(--secondary-text-color);">`;
+                    html += `<strong>Priorità:</strong> ${segment.priority || 99}`;
+                    html += `</div>`;
+                    html += `</div>`;
+                }
+                
+                html += `<div style="margin-top: 15px; padding: 12px; background: var(--secondary-background-color); border-radius: 6px; font-size: 14px; color: var(--secondary-text-color);">`;
+                html += `💡 <strong>Suggerimento:</strong> Su desktop, puoi passare il mouse sulle barre per vedere rapidamente i dettagli.`;
+                html += `</div>`;
+                
+                html += `</div>`;
+                
+                modalBody.innerHTML = html;
+                modal.classList.add('active');
+            } catch (error) {
+                console.error('Errore apertura modal dettagli evento:', error);
+            }
+        };
+        
+        window.dcCloseWeeklyEventModal = () => {
+            const modal = this.content.querySelector('#dc-weekly-event-modal');
+            if (modal) {
+                modal.classList.remove('active');
+            }
+        };
+        
         window.dcLoadHistory = async (page = 1) => {
             const container = this.content.querySelector('#dc-history-list');
             const filterInput = this.content.querySelector('#history-filter');
@@ -3584,7 +3733,24 @@ class MiaConfigCard extends HTMLElement {
                     const widthPercent = overlapping > 1 ? (100 / overlapping) : 100;
                     const leftPercent = overlapping > 1 ? (segIdx % overlapping) * widthPercent : 0;
                     
-                    html += `<div class="${barClass} dc-weekly-tooltip" data-day-index="${dayIdx}" data-total-days="${days.length}" style="top: ${topPos}px; height: ${height}px; left: ${leftPercent}%; width: ${widthPercent}%;">`;
+                    // Serializza i dati del segmento per il modal (converti Date a string)
+                    const segmentData = {
+                        ...seg,
+                        from: seg.from ? seg.from.toISOString() : undefined,
+                        to: seg.to ? seg.to.toISOString() : undefined
+                    };
+                    // Helper per escape attributi HTML (condiviso con dcShowWeeklyEventModal)
+                    const escapeHtmlAttribute = (str) => {
+                        return String(str)
+                            .replace(/&/g, '&amp;')
+                            .replace(/'/g, '&#39;')
+                            .replace(/"/g, '&quot;')
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;');
+                    };
+                    const segmentDataJson = escapeHtmlAttribute(JSON.stringify(segmentData));
+                    
+                    html += `<div class="${barClass} dc-weekly-tooltip" data-day-index="${dayIdx}" data-total-days="${days.length}" data-segment='${segmentDataJson}' onclick="window.dcShowWeeklyEventModal(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.dcShowWeeklyEventModal(this);}" tabindex="0" role="button" aria-label="Visualizza dettagli configurazione" style="top: ${topPos}px; height: ${height}px; left: ${leftPercent}%; width: ${widthPercent}%;">`;
                     if (height > 20) {
                         html += seg.value;
                     }
@@ -3606,6 +3772,7 @@ class MiaConfigCard extends HTMLElement {
             html += '<span style="display: inline-block; width: 30px; height: 20px; background: #9c27b0; border: 1px solid #7b1fa2; margin-right: 5px; vertical-align: middle; border-radius: 3px;"></span> Override condizionale (🎯)<br>';
             html += '<small style="color: var(--secondary-text-color); display: block; margin-top: 8px;">💡 Le barre mostrano la durata esatta con posizionamento continuo</small>';
             html += '<small style="color: var(--secondary-text-color); display: block; margin-top: 4px;">📌 Configurazioni sovrapposte vengono visualizzate affiancate</small>';
+            html += '<small style="color: var(--secondary-text-color); display: block; margin-top: 4px;">👆 Tocca/clicca su una barra per vedere i dettagli completi</small>';
             html += '</div>';
             
             container.innerHTML = html;
@@ -3655,6 +3822,20 @@ class MiaConfigCard extends HTMLElement {
                         }
                     });
                 });
+            }, 100);
+            
+            // Aggiungi event listener per chiudere il modal cliccando sul backdrop
+            setTimeout(() => {
+                if (!container.isConnected) return;
+                const modal = this.content.querySelector('#dc-weekly-event-modal');
+                if (modal) {
+                    modal.addEventListener('click', function(e) {
+                        // Chiudi solo se si clicca sul backdrop (non sul contenuto)
+                        if (e.target === modal) {
+                            window.dcCloseWeeklyEventModal();
+                        }
+                    });
+                }
             }, 100);
             
         } catch (error) {
