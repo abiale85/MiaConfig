@@ -1,5 +1,24 @@
 # 📋 Changelog - Mia Config
 
+## v2.1.0-beta.6 - 6 Gennaio 2026 🔄 Restore v2.0.0 Implementation
+
+### 🔧 Fix Definitivo
+- **Ripristinata implementazione v2.0.0 funzionante**: Rimosso completamente l'approccio `triggerEl` + `getRootNode()`
+  - Causa problema: Le modifiche beta.2-beta.5 hanno introdotto complessità inutile che rompeva il funzionamento
+  - Soluzione: Ripristinato il codice originale v2.0.0/v2.0.1 che usava `this.content.querySelector()` direttamente
+  - Arrow functions mantengono correttamente il contesto `this` dell'istanza della card
+  
+### 📝 Dettagli Tecnici  
+- `dcEditConfig` ora usa `this.content` invece di shadowRoot (come in v2.0.0)
+- Rimosso parametro `triggerEl` dagli onclick (ripristinato signature originale)
+- Tutti i querySelector dentro dcEditConfig ora usano `this.content`
+
+### 📦 Versioni
+- integrazione: 2.1.0-beta.6
+- card: 2.1.0-beta.6
+
+---
+
 ## v2.1.0-beta.5 - 6 Gennaio 2026 🔧 Shadow DOM Fallback Fix
 
 ### 🛠️ Fix Critico Shadow Root

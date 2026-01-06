@@ -1,5 +1,5 @@
-// Version 2.1.0-beta.5 - Improved shadow DOM fallback using global instance - 20260106
-console.log('MIA-CONFIG-CARD Loading Version 2.1.0-beta.5 - 20260106');
+// Version 2.1.0-beta.6 - Restored v2.0.0 working implementation - 20260106
+console.log('MIA-CONFIG-CARD Loading Version 2.1.0-beta.6 - 20260106');
 
 class MiaConfigCard extends HTMLElement {
     constructor() {
@@ -1977,7 +1977,7 @@ class MiaConfigCard extends HTMLElement {
                                 <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="window.dcToggleConfigEnabled('${type}', ${configId}, this.checked)" style="cursor: pointer;">
                                 <span style="font-size: 10px;">${isEnabled ? '✓' : '✗'}</span>
                             </label>
-                            <button class="dc-btn" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcEditConfig(this, '${name}', '${type}', ${configId}, '${cfgData}')">✏️</button>
+                            <button class="dc-btn" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcEditConfig('${name}', '${type}', ${configId}, '${cfgData}')">✏️</button>
                             <button class="dc-btn-delete" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcDeleteSingleConfig('${type}', ${configId})">🗑️</button>
                         </div>
                     </div>
@@ -2062,38 +2062,20 @@ class MiaConfigCard extends HTMLElement {
             }
         };
         
-        window.dcEditConfig = async (triggerEl, name, type, id, cfgDataEncoded) => {
+        window.dcEditConfig = async (name, type, id, cfgDataEncoded) => {
             try {
-                // Trova il shadow root a partire dal bottone cliccato
-                let shadowRoot = null;
-                if (triggerEl && typeof triggerEl.getRootNode === 'function') {
-                    const root = triggerEl.getRootNode();
-                    if (root && root !== document && root.host && root.host.tagName === 'MIA-CONFIG-CARD') {
-                        shadowRoot = root;
-                    }
-                }
-                // Fallback: usa l'istanza globale della card
-                if (!shadowRoot && window._miaConfigCardInstance) {
-                    shadowRoot = window._miaConfigCardInstance.shadowRoot;
-                }
-                if (!shadowRoot) {
-                    console.error('Impossibile trovare il componente card');
-                    return;
-                }
-                
                 // Chiudi il modal di add se è aperto
-                const addModal = shadowRoot.querySelector('#dc-add-config-modal');
+                const addModal = this.content.querySelector('#dc-add-config-modal');
                 if (addModal && addModal.classList.contains('active')) {
                     addModal.classList.remove('active');
                 }
                 
                 const cfg = JSON.parse(decodeURIComponent(cfgDataEncoded));
-                const modal = shadowRoot.querySelector('#dc-edit-modal');
-                const modalBody = shadowRoot.querySelector('#dc-edit-modal-body');
+                const modal = this.content.querySelector('#dc-edit-modal');
+                const modalBody = this.content.querySelector('#dc-edit-modal-body');
                 
                 if (!modal || !modalBody) {
                     console.error('Modal elements not found in DOM');
-                    this.showToast('Errore: impossibile aprire il modal', true);
                     return;
                 }
                 
@@ -2291,10 +2273,10 @@ class MiaConfigCard extends HTMLElement {
                         const toHour = Math.floor(cfg.valid_to_ora);
                         const toMinute = Math.round((cfg.valid_to_ora - toHour) * 60);
                         
-                        shadowRoot.querySelector('#edit-time-from-hour').value = fromHour;
-                        shadowRoot.querySelector('#edit-time-from-minute').value = fromMinute;
-                        shadowRoot.querySelector('#edit-time-to-hour').value = toHour;
-                        shadowRoot.querySelector('#edit-time-to-minute').value = toMinute;
+                        this.content.querySelector('#edit-time-from-hour').value = fromHour;
+                        this.content.querySelector('#edit-time-from-minute').value = fromMinute;
+                        this.content.querySelector('#edit-time-to-hour').value = toHour;
+                        this.content.querySelector('#edit-time-to-minute').value = toMinute;
                     }, 10);
                 }
             } else if (type === 'schedule') {
@@ -2371,10 +2353,10 @@ class MiaConfigCard extends HTMLElement {
                 
                 // Dopo aver mostrato il modal, imposta i valori dei selettori
                 setTimeout(() => {
-                    shadowRoot.querySelector('#edit-from-hour').value = fromHour;
-                    shadowRoot.querySelector('#edit-from-minute').value = fromMinute;
-                    shadowRoot.querySelector('#edit-to-hour').value = toHour;
-                    shadowRoot.querySelector('#edit-to-minute').value = toMinute;
+                    this.content.querySelector('#edit-from-hour').value = fromHour;
+                    this.content.querySelector('#edit-from-minute').value = fromMinute;
+                    this.content.querySelector('#edit-to-hour').value = toHour;
+                    this.content.querySelector('#edit-to-minute').value = toMinute;
                 }, 10);
             } else if (type === 'conditional') {
                 // Form per modifica configurazione condizionale
@@ -2505,10 +2487,10 @@ class MiaConfigCard extends HTMLElement {
                         const toHour = Math.floor(cfg.valid_to_ora);
                         const toMinute = Math.round((cfg.valid_to_ora - toHour) * 60);
                         
-                        shadowRoot.querySelector('#edit-conditional-from-hour').value = fromHour;
-                        shadowRoot.querySelector('#edit-conditional-from-minute').value = fromMinute;
-                        shadowRoot.querySelector('#edit-conditional-to-hour').value = toHour;
-                        shadowRoot.querySelector('#edit-conditional-to-minute').value = toMinute;
+                        this.content.querySelector('#edit-conditional-from-hour').value = fromHour;
+                        this.content.querySelector('#edit-conditional-from-minute').value = fromMinute;
+                        this.content.querySelector('#edit-conditional-to-hour').value = toHour;
+                        this.content.querySelector('#edit-conditional-to-minute').value = toMinute;
                     }, 10);
                 }
             }
@@ -2518,12 +2500,12 @@ class MiaConfigCard extends HTMLElement {
             
             // Aggiungi event listener per i checkbox toggle
             if (type === 'time') {
-                const enableHoursCheckbox = shadowRoot.querySelector('#edit-time-enable-hours');
-                const enableDaysCheckbox = shadowRoot.querySelector('#edit-time-enable-days');
+                const enableHoursCheckbox = this.content.querySelector('#edit-time-enable-hours');
+                const enableDaysCheckbox = this.content.querySelector('#edit-time-enable-days');
                 
                 if (enableHoursCheckbox) {
                     enableHoursCheckbox.addEventListener('change', (e) => {
-                        const container = shadowRoot.querySelector('#edit-time-hours-container');
+                        const container = this.content.querySelector('#edit-time-hours-container');
                         if (container) {
                             container.style.display = e.target.checked ? 'block' : 'none';
                         }
@@ -2532,18 +2514,18 @@ class MiaConfigCard extends HTMLElement {
                 
                 if (enableDaysCheckbox) {
                     enableDaysCheckbox.addEventListener('change', (e) => {
-                        const container = shadowRoot.querySelector('#edit-time-days-container');
+                        const container = this.content.querySelector('#edit-time-days-container');
                         if (container) {
                             container.style.display = e.target.checked ? 'block' : 'none';
                         }
                     });
                 }
             } else if (type === 'conditional') {
-                const enableHoursCheckbox = shadowRoot.querySelector('#edit-conditional-enable-hours');
+                const enableHoursCheckbox = this.content.querySelector('#edit-conditional-enable-hours');
                 
                 if (enableHoursCheckbox) {
                     enableHoursCheckbox.addEventListener('change', (e) => {
-                        const container = shadowRoot.querySelector('#edit-conditional-hours-container');
+                        const container = this.content.querySelector('#edit-conditional-hours-container');
                         if (container) {
                             container.style.display = e.target.checked ? 'block' : 'none';
                         }
@@ -2552,7 +2534,7 @@ class MiaConfigCard extends HTMLElement {
             }
             
             // Gestione submit del form
-            const editForm = shadowRoot.querySelector('#dc-edit-form');
+            const editForm = this.content.querySelector('#dc-edit-form');
             if (!editForm) {
                 console.error('Form di edit non trovato nel DOM');
                 return;
@@ -2596,21 +2578,21 @@ class MiaConfigCard extends HTMLElement {
                         };
                         
                         // Aggiungi filtro orario se abilitato
-                        const enableHours = shadowRoot.querySelector('#edit-time-enable-hours');
+                        const enableHours = this.content.querySelector('#edit-time-enable-hours');
                         if (enableHours && enableHours.checked) {
-                            const fromHour = parseInt(shadowRoot.querySelector('#edit-time-from-hour').value);
-                            const fromMinute = parseInt(shadowRoot.querySelector('#edit-time-from-minute').value);
-                            const toHour = parseInt(shadowRoot.querySelector('#edit-time-to-hour').value);
-                            const toMinute = parseInt(shadowRoot.querySelector('#edit-time-to-minute').value);
+                            const fromHour = parseInt(this.content.querySelector('#edit-time-from-hour').value);
+                            const fromMinute = parseInt(this.content.querySelector('#edit-time-from-minute').value);
+                            const toHour = parseInt(this.content.querySelector('#edit-time-to-hour').value);
+                            const toMinute = parseInt(this.content.querySelector('#edit-time-to-minute').value);
                             
                             serviceData.valid_from_ora = this.timeSelectorsToDecimal(fromHour, fromMinute);
                             serviceData.valid_to_ora = this.timeSelectorsToDecimal(toHour, toMinute);
                         }
                         
                         // Aggiungi filtro giorni se abilitato
-                        const enableDays = shadowRoot.querySelector('#edit-time-enable-days');
+                        const enableDays = this.content.querySelector('#edit-time-enable-days');
                         if (enableDays && enableDays.checked) {
-                            const days = Array.from(shadowRoot.querySelectorAll('#dc-edit-form input[name="edit-time-days"]:checked'))
+                            const days = Array.from(this.content.querySelectorAll('#dc-edit-form input[name="edit-time-days"]:checked'))
                                 .map(cb => parseInt(cb.value));
                             serviceData.days_of_week = days.join(',');
                         }
@@ -2627,10 +2609,10 @@ class MiaConfigCard extends HTMLElement {
                         const days = Array.from(this.content.querySelectorAll('#dc-edit-form input[name="days"]:checked'))
                             .map(cb => parseInt(cb.value));
                         
-                        const fromHour = parseInt(shadowRoot.querySelector('#edit-from-hour').value);
-                        const fromMinute = parseInt(shadowRoot.querySelector('#edit-from-minute').value);
-                        const toHour = parseInt(shadowRoot.querySelector('#edit-to-hour').value);
-                        const toMinute = parseInt(shadowRoot.querySelector('#edit-to-minute').value);
+                        const fromHour = parseInt(this.content.querySelector('#edit-from-hour').value);
+                        const fromMinute = parseInt(this.content.querySelector('#edit-from-minute').value);
+                        const toHour = parseInt(this.content.querySelector('#edit-to-hour').value);
+                        const toMinute = parseInt(this.content.querySelector('#edit-to-minute').value);
                         
                         await this.callMiaConfigService('set_schedule_config', {
                             setup_name: name,
@@ -2658,12 +2640,12 @@ class MiaConfigCard extends HTMLElement {
                         };
                         
                         // Aggiungi fascia oraria se abilitata
-                        const enableHours = shadowRoot.querySelector('#edit-conditional-enable-hours');
+                        const enableHours = this.content.querySelector('#edit-conditional-enable-hours');
                         if (enableHours && enableHours.checked) {
-                            const fromHour = parseInt(shadowRoot.querySelector('#edit-conditional-from-hour').value);
-                            const fromMinute = parseInt(shadowRoot.querySelector('#edit-conditional-from-minute').value);
-                            const toHour = parseInt(shadowRoot.querySelector('#edit-conditional-to-hour').value);
-                            const toMinute = parseInt(shadowRoot.querySelector('#edit-conditional-to-minute').value);
+                            const fromHour = parseInt(this.content.querySelector('#edit-conditional-from-hour').value);
+                            const fromMinute = parseInt(this.content.querySelector('#edit-conditional-from-minute').value);
+                            const toHour = parseInt(this.content.querySelector('#edit-conditional-to-hour').value);
+                            const toMinute = parseInt(this.content.querySelector('#edit-conditional-to-minute').value);
                             
                             serviceData.valid_from_ora = this.timeSelectorsToDecimal(fromHour, fromMinute);
                             serviceData.valid_to_ora = this.timeSelectorsToDecimal(toHour, toMinute);
@@ -3448,7 +3430,7 @@ class MiaConfigCard extends HTMLElement {
                                 <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="window.dcToggleConfigEnabled('${cfg.type}', ${cfg.id}, this.checked)" style="cursor: pointer;">
                                 <span style="font-size: 10px;">${isEnabled ? '✓' : '✗'}</span>
                             </label>
-                            <button class="dc-btn" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcEditConfig(this, '${name}', '${cfg.type}', ${cfg.id}, '${cfgData}')">✏️</button>
+                            <button class="dc-btn" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcEditConfig('${name}', '${cfg.type}', ${cfg.id}, '${cfgData}')">✏️</button>
                             <button class="dc-btn-delete" style="padding: 4px 8px; font-size: 11px;" onclick="window.dcDeleteSingleConfig('${cfg.type}', ${cfg.id})">🗑️</button>
                         </div>
                     </div>
