@@ -2065,11 +2065,13 @@ class MiaConfigCard extends HTMLElement {
         };
         
         window.dcEditConfig = async (cardElement, name, type, id, cfgDataEncoded) => {
+            const instance = cardElement._instance;
             const content = instance.content;
-            const instance = instance._instance;
-                if (addModal && addModal.classList.contains('active')) {
-                    addModal.classList.remove('active');
-                }
+            
+            const addModal = content.querySelector('#dc-add-config-modal');
+            if (addModal && addModal.classList.contains('active')) {
+                addModal.classList.remove('active');
+            }
                 
                 const cfg = JSON.parse(decodeURIComponent(cfgDataEncoded));
                 const modal = content.querySelector('#dc-edit-modal');
@@ -2727,6 +2729,15 @@ class MiaConfigCard extends HTMLElement {
                     console.error('Modal elements not found:', {modalBody, modal});
                     return;
                 }
+                
+                // Estrai i dati del segmento dall'attributo data-segment
+                const segmentData = barElement.getAttribute('data-segment');
+                if (!segmentData) {
+                    console.error('No segment data found in barElement');
+                    return;
+                }
+                
+                const segment = JSON.parse(segmentData);
                 
                 // Genera l'HTML del contenuto usando la stessa logica del tooltip ma formattato meglio
                 const startHour = Math.floor(segment.startTime / 60);
@@ -3554,8 +3565,8 @@ class MiaConfigCard extends HTMLElement {
         };
 
         window.dcToggleOverrideGroup = (cardElement, headerElement, safeKey) => {
+            const instance = cardElement._instance;
             const content = instance.content;
-            const instance = instance._instance;
             const toggle = content.querySelector(`#${safeKey}-toggle`);
             
             if (content && toggle) {
