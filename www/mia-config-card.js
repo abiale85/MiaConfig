@@ -536,7 +536,7 @@ class MiaConfigCard extends HTMLElement {
                             <label>Descrizione (opzionale):</label>
                             <input type="text" name="description" placeholder="Descrizione della configurazione">
                         </div>
-                        <button type="submit" class="dc-btn">Salva</button>
+                        <button type="submit" id="modal-standard-submit" class="dc-btn">Salva</button>
                         <button type="button" class="dc-btn-secondary" onclick="window.dcCloseAddConfigModal()" style="margin-left: 10px;">Annulla</button>
                     </form>
                     </div>
@@ -601,7 +601,7 @@ class MiaConfigCard extends HTMLElement {
                                 <label class="dc-checkbox-label"><input type="checkbox" name="days" value="6" checked> Dom</label>
                             </div>
                         </div>
-                        <button type="submit" class="dc-btn">Aggiungi Override Orario</button>
+                        <button type="submit" id="modal-schedule-submit" class="dc-btn">Aggiungi Override Orario</button>
                         <button type="button" class="dc-btn-secondary" onclick="window.dcCloseAddConfigModal()" style="margin-left: 10px;">Annulla</button>
                     </form>
                     </div>
@@ -684,7 +684,7 @@ class MiaConfigCard extends HTMLElement {
                             </div>
                         </div>
                         
-                        <button type="submit" class="dc-btn">Aggiungi Override Temporale</button>
+                        <button type="submit" id="modal-time-submit" class="dc-btn">Aggiungi Override Temporale</button>
                         <button type="button" class="dc-btn-secondary" onclick="window.dcCloseAddConfigModal()" style="margin-left: 10px;">Annulla</button>
                     </form>
                     </div>
@@ -763,7 +763,7 @@ class MiaConfigCard extends HTMLElement {
                         <div style="padding: 10px; background: var(--secondary-background-color); border-radius: 4px; margin: 10px 0;">
                             <strong>⚠️ Nota:</strong> Il sistema previene loop infiniti. Non puoi creare dipendenze circolari.
                         </div>
-                        <button type="submit" class="dc-btn">Aggiungi Override Condizionale</button>
+                        <button type="submit" id="modal-conditional-submit" class="dc-btn">Aggiungi Override Condizionale</button>
                         <button type="button" class="dc-btn-secondary" onclick="window.dcCloseAddConfigModal()" style="margin-left: 10px;">Annulla</button>
                     </form>
                     </div>
@@ -2172,6 +2172,20 @@ class MiaConfigCard extends HTMLElement {
             // Carica le configurazioni standard per i select PRIMA di popolare
             await instance.loadStandardConfigsForSelect();
             
+            // Aggiorna il testo del bottone submit in base al tipo
+            const submitButtons = {
+                'standard': content.querySelector('#modal-standard-submit'),
+                'schedule': content.querySelector('#modal-schedule-submit'),
+                'time': content.querySelector('#modal-time-submit'),
+                'conditional': content.querySelector('#modal-conditional-submit')
+            };
+            if (submitButtons[type]) {
+                submitButtons[type].textContent = 'Salva Modifiche';
+            }
+            
+            // Aspetta che i select siano popolati (piccolo delay)
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
             // Popola i campi in base al tipo
             if (type === 'standard') {
                 const form = content.querySelector('#modal-dc-form-standard');
@@ -2376,6 +2390,18 @@ class MiaConfigCard extends HTMLElement {
             fieldsToEnable.forEach(selector => {
                 const field = window._miaConfigCardInstance.content.querySelector(selector);
                 if (field) field.disabled = false;
+            });
+            
+            // Resetta il testo dei bottoni submit
+            const submitButtons = [
+                { id: '#modal-standard-submit', text: 'Salva' },
+                { id: '#modal-schedule-submit', text: 'Aggiungi Override Orario' },
+                { id: '#modal-time-submit', text: 'Aggiungi Override Temporale' },
+                { id: '#modal-conditional-submit', text: 'Aggiungi Override Condizionale' }
+            ];
+            submitButtons.forEach(btn => {
+                const button = window._miaConfigCardInstance.content.querySelector(btn.id);
+                if (button) button.textContent = btn.text;
             });
         };
         
