@@ -190,6 +190,7 @@ class MiaConfigCard extends HTMLElement {
                     .mia-config-card .dc-dashboard-actions button { flex: 1; }
                     .mia-config-card .dc-time-group { grid-template-columns: 1fr; }
                     .mia-config-card input[type="text"], .mia-config-card input[type="time"], .mia-config-card input[type="number"], .mia-config-card select { font-size: 16px !important; padding: 10px !important; min-height: 44px; }
+                    .mia-config-card .dc-form-group input[type="number"] { width: 80px; flex-shrink: 0; }
                     .mia-config-card .dc-weekly-container { overflow-x: auto; }
                     .mia-config-card .dc-weekly-grid { min-width: 700px; }
                 }
@@ -252,6 +253,8 @@ class MiaConfigCard extends HTMLElement {
                     display: flex;
                     gap: 15px;
                     align-items: flex-start;
+                    flex-wrap: wrap;
+                    max-width: 100%;
                 }
                 .dc-time-input {
                     display: flex;
@@ -264,8 +267,13 @@ class MiaConfigCard extends HTMLElement {
                 }
                 .dc-checkbox-group {
                     display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-                    gap: 8px;
+                    grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+                    gap: 6px;
+                    max-width: 100%;
+                }
+                .dc-form-group .dc-time-picker,
+                .dc-form-group .dc-checkbox-group {
+                    margin-left: 24px; /* indent from checkbox */
                 }
                 .dc-checkbox-label {
                     display: flex;
@@ -2153,127 +2161,162 @@ class MiaConfigCard extends HTMLElement {
             
             // Popola i campi in base al tipo
             if (type === 'standard') {
-                const nameInput = content.querySelector('#modal-setup-name');
-                if (nameInput) {
-                    nameInput.value = name;
-                    nameInput.disabled = true; // Non modificabile in edit
+                const form = content.querySelector('#modal-dc-form-standard');
+                if (form) {
+                    const nameInput = form.querySelector('input[name="setup_name"]');
+                    if (nameInput) {
+                        nameInput.value = name;
+                        nameInput.disabled = true; // Non modificabile in edit
+                    }
+                    const valueInput = form.querySelector('input[name="setup_value"]');
+                    if (valueInput) valueInput.value = cfg.value;
+                    const descInput = form.querySelector('input[name="description"]');
+                    if (descInput) descInput.value = cfg.description || '';
+                    const priorityInput = form.querySelector('input[name="priority"]');
+                    if (priorityInput) priorityInput.value = cfg.priority || 99;
                 }
-                content.querySelector('#modal-setup-value').value = cfg.value;
-                const descInput = content.querySelector('#modal-description');
-                if (descInput) descInput.value = cfg.description || '';
             } else if (type === 'time') {
-                const configSelect = content.querySelector('#modal-time-config-select');
-                if (configSelect) {
-                    configSelect.value = name;
-                    configSelect.disabled = true;
-                }
-                content.querySelector('#modal-time-setup-value').value = cfg.value;
-                
-                // Converti il formato datetime per datetime-local
-                const formatForInput = (dt) => dt.replace(' ', 'T').substring(0, 16);
-                content.querySelector('#modal-valid-from').value = formatForInput(cfg.valid_from_date);
-                content.querySelector('#modal-valid-to').value = formatForInput(cfg.valid_to_date);
-                
-                // Verifica se ci sono filtri opzionali
-                const hasTimeFilter = cfg.valid_from_ora !== undefined && cfg.valid_to_ora !== undefined;
-                const hasDaysFilter = cfg.days_of_week !== undefined;
-                
-                if (hasTimeFilter) {
-                    content.querySelector('#modal-time-enable-hours').checked = true;
-                    content.querySelector('#modal-time-hours-container').style.display = 'block';
+                const form = content.querySelector('#modal-dc-form-time');
+                if (form) {
+                    const configSelect = form.querySelector('select[name="setup_name"]');
+                    if (configSelect) {
+                        configSelect.value = name;
+                        configSelect.disabled = true;
+                    }
+                    const valueInput = form.querySelector('input[name="setup_value"]');
+                    if (valueInput) valueInput.value = cfg.value;
                     
+                    // Converti il formato datetime per datetime-local
+                    const formatForInput = (dt) => dt.replace(' ', 'T').substring(0, 16);
+                    const fromInput = form.querySelector('input[name="valid_from_date"]');
+                    if (fromInput) fromInput.value = formatForInput(cfg.valid_from_date);
+                    const toInput = form.querySelector('input[name="valid_to_date"]');
+                    if (toInput) toInput.value = formatForInput(cfg.valid_to_date);
+                    
+                    // Verifica se ci sono filtri opzionali
+                    const hasTimeFilter = cfg.valid_from_ora !== undefined && cfg.valid_to_ora !== undefined;
+                    const hasDaysFilter = cfg.days_of_week !== undefined;
+                    
+                    if (hasTimeFilter) {
+                        const enableHoursCheckbox = form.querySelector('#modal-time-enable-hours');
+                        if (enableHoursCheckbox) enableHoursCheckbox.checked = true;
+                        const hoursContainer = form.querySelector('#modal-time-hours-container');
+                        if (hoursContainer) hoursContainer.style.display = 'block';
+                        
+                        const fromHour = Math.floor(cfg.valid_from_ora);
+                        const fromMinute = Math.round((cfg.valid_from_ora - fromHour) * 60);
+                        const toHour = Math.floor(cfg.valid_to_ora);
+                        const toMinute = Math.round((cfg.valid_to_ora - toHour) * 60);
+                        
+                        setTimeout(() => {
+                            const fromHourInput = form.querySelector('#modal-time-from-hour');
+                            if (fromHourInput) fromHourInput.value = fromHour;
+                            const fromMinuteInput = form.querySelector('#modal-time-from-minute');
+                            if (fromMinuteInput) fromMinuteInput.value = fromMinute;
+                            const toHourInput = form.querySelector('#modal-time-to-hour');
+                            if (toHourInput) toHourInput.value = toHour;
+                            const toMinuteInput = form.querySelector('#modal-time-to-minute');
+                            if (toMinuteInput) toMinuteInput.value = toMinute;
+                        }, 10);
+                    }
+                    
+                    if (hasDaysFilter) {
+                        const enableDaysCheckbox = form.querySelector('#modal-time-enable-days');
+                        if (enableDaysCheckbox) enableDaysCheckbox.checked = true;
+                        const daysContainer = form.querySelector('#modal-time-days-container');
+                        if (daysContainer) daysContainer.style.display = 'block';
+                        
+                        const daysOfWeek = cfg.days_of_week || [];
+                        const dayCheckboxes = form.querySelectorAll('input[name="time-days"]');
+                        dayCheckboxes.forEach(cb => {
+                            cb.checked = daysOfWeek.includes(parseInt(cb.value));
+                        });
+                    }
+                }
+            } else if (type === 'schedule') {
+                const form = content.querySelector('#modal-dc-form-schedule');
+                if (form) {
+                    const configSelect = form.querySelector('select[name="setup_name"]');
+                    if (configSelect) {
+                        configSelect.value = name;
+                        configSelect.disabled = true;
+                    }
+                    const valueInput = form.querySelector('input[name="setup_value"]');
+                    if (valueInput) valueInput.value = cfg.value;
+                    
+                    // Converti ore decimali a ore e minuti per i selettori
                     const fromHour = Math.floor(cfg.valid_from_ora);
                     const fromMinute = Math.round((cfg.valid_from_ora - fromHour) * 60);
                     const toHour = Math.floor(cfg.valid_to_ora);
                     const toMinute = Math.round((cfg.valid_to_ora - toHour) * 60);
                     
-                    setTimeout(() => {
-                        content.querySelector('#modal-time-from-hour').value = fromHour;
-                        content.querySelector('#modal-time-from-minute').value = fromMinute;
-                        content.querySelector('#modal-time-to-hour').value = toHour;
-                        content.querySelector('#modal-time-to-minute').value = toMinute;
-                    }, 10);
-                }
-                
-                if (hasDaysFilter) {
-                    content.querySelector('#modal-time-enable-days').checked = true;
-                    content.querySelector('#modal-time-days-container').style.display = 'block';
-                    
-                    const daysOfWeek = cfg.days_of_week || [];
-                    const dayCheckboxes = content.querySelectorAll('#modal-time-days-container input[name="time-days"]');
+                    const daysOfWeek = cfg.days_of_week || [0,1,2,3,4,5,6];
+                    const dayCheckboxes = form.querySelectorAll('input[name="days"]');
                     dayCheckboxes.forEach(cb => {
                         cb.checked = daysOfWeek.includes(parseInt(cb.value));
                     });
-                }
-            } else if (type === 'schedule') {
-                const configSelect = content.querySelector('#modal-schedule-config-select');
-                if (configSelect) {
-                    configSelect.value = name;
-                    configSelect.disabled = true;
-                }
-                content.querySelector('#modal-schedule-setup-value').value = cfg.value;
-                
-                // Converti ore decimali a ore e minuti per i selettori
-                const fromHour = Math.floor(cfg.valid_from_ora);
-                const fromMinute = Math.round((cfg.valid_from_ora - fromHour) * 60);
-                const toHour = Math.floor(cfg.valid_to_ora);
-                const toMinute = Math.round((cfg.valid_to_ora - toHour) * 60);
-                
-                const daysOfWeek = cfg.days_of_week || [0,1,2,3,4,5,6];
-                const dayCheckboxes = content.querySelectorAll('#dc-add-config-modal input[name="days"]');
-                dayCheckboxes.forEach(cb => {
-                    cb.checked = daysOfWeek.includes(parseInt(cb.value));
-                });
-                
-                // Imposta i valori dei selettori
-                setTimeout(() => {
-                    content.querySelector('#modal-from-hour').value = fromHour;
-                    content.querySelector('#modal-from-minute').value = fromMinute;
-                    content.querySelector('#modal-to-hour').value = toHour;
-                    content.querySelector('#modal-to-minute').value = toMinute;
-                }, 10);
-            } else if (type === 'conditional') {
-                const configSelect = content.querySelector('#modal-conditional-config-select');
-                if (configSelect) {
-                    configSelect.value = name;
-                    configSelect.disabled = true;
-                }
-                content.querySelector('#modal-conditional-setup-value').value = cfg.value;
-                const sourceConfig = content.querySelector('#modal-conditional-source-config');
-                if (sourceConfig) {
-                    sourceConfig.value = cfg.conditional_config;
-                    sourceConfig.disabled = true;
-                }
-                const operator = content.querySelector('#modal-conditional-operator');
-                if (operator) {
-                    operator.value = cfg.conditional_operator;
-                    operator.disabled = true;
-                }
-                content.querySelector('#modal-conditional-comparison-value').value = cfg.conditional_value;
-                
-                // Verifica se c'è filtro orario
-                const hasTimeFilter = cfg.valid_from_ora !== undefined && cfg.valid_to_ora !== undefined;
-                
-                if (hasTimeFilter) {
-                    content.querySelector('#modal-conditional-enable-hours').checked = true;
-                    content.querySelector('#modal-conditional-hours-container').style.display = 'block';
                     
-                    const fromHour = Math.floor(cfg.valid_from_ora);
-                    const fromMinute = Math.round((cfg.valid_from_ora - fromHour) * 60);
-                    const toHour = Math.floor(cfg.valid_to_ora);
-                    const toMinute = Math.round((cfg.valid_to_ora - toHour) * 60);
-                    
+                    // Imposta i valori dei selettori
                     setTimeout(() => {
-                        content.querySelector('#modal-conditional-from-hour').value = fromHour;
-                        content.querySelector('#modal-conditional-from-minute').value = fromMinute;
-                        content.querySelector('#modal-conditional-to-hour').value = toHour;
-                        content.querySelector('#modal-conditional-to-minute').value = toMinute;
+                        const fromHourInput = form.querySelector('#modal-from-hour');
+                        if (fromHourInput) fromHourInput.value = fromHour;
+                        const fromMinuteInput = form.querySelector('#modal-from-minute');
+                        if (fromMinuteInput) fromMinuteInput.value = fromMinute;
+                        const toHourInput = form.querySelector('#modal-to-hour');
+                        if (toHourInput) toHourInput.value = toHour;
+                        const toMinuteInput = form.querySelector('#modal-to-minute');
+                        if (toMinuteInput) toMinuteInput.value = toMinute;
                     }, 10);
+                }
+            } else if (type === 'conditional') {
+                const form = content.querySelector('#modal-dc-form-conditional');
+                if (form) {
+                    const configSelect = form.querySelector('select[name="setup_name"]');
+                    if (configSelect) {
+                        configSelect.value = name;
+                        configSelect.disabled = true;
+                    }
+                    const valueInput = form.querySelector('input[name="setup_value"]');
+                    if (valueInput) valueInput.value = cfg.value;
+                    
+                    const conditionalConfigSelect = form.querySelector('select[name="conditional_config"]');
+                    if (conditionalConfigSelect) conditionalConfigSelect.value = cfg.conditional_config;
+                    
+                    const operatorSelect = form.querySelector('select[name="conditional_operator"]');
+                    if (operatorSelect) operatorSelect.value = cfg.conditional_operator;
+                    
+                    const conditionalValueInput = form.querySelector('input[name="conditional_value"]');
+                    if (conditionalValueInput) conditionalValueInput.value = cfg.conditional_value;
+                    
+                    // Filtri orari opzionali
+                    if (cfg.valid_from_ora !== undefined && cfg.valid_to_ora !== undefined) {
+                        const enableHoursCheckbox = form.querySelector('#modal-conditional-enable-hours');
+                        if (enableHoursCheckbox) enableHoursCheckbox.checked = true;
+                        const hoursContainer = form.querySelector('#modal-conditional-hours-container');
+                        if (hoursContainer) hoursContainer.style.display = 'block';
+                        
+                        const fromHour = Math.floor(cfg.valid_from_ora);
+                        const fromMinute = Math.round((cfg.valid_from_ora - fromHour) * 60);
+                        const toHour = Math.floor(cfg.valid_to_ora);
+                        const toMinute = Math.round((cfg.valid_to_ora - toHour) * 60);
+                        
+                        setTimeout(() => {
+                            const fromHourInput = form.querySelector('#modal-conditional-from-hour');
+                            if (fromHourInput) fromHourInput.value = fromHour;
+                            const fromMinuteInput = form.querySelector('#modal-conditional-from-minute');
+                            if (fromMinuteInput) fromMinuteInput.value = fromMinute;
+                            const toHourInput = form.querySelector('#modal-conditional-to-hour');
+                            if (toHourInput) toHourInput.value = toHour;
+                            const toMinuteInput = form.querySelector('#modal-conditional-to-minute');
+                            if (toMinuteInput) toMinuteInput.value = toMinute;
+                        }, 10);
+                    }
                 }
             }
             
-            // Apri il modal
+            // Mostra il modal
             modal.classList.add('active');
+            document.body.classList.add('dc-modal-open');
         };
         
         // Funzioni per modal di inserimento configurazione
@@ -3510,9 +3553,12 @@ class MiaConfigCard extends HTMLElement {
             
             container.innerHTML = html;
             
-            // Crea tooltip flottante che segue il mouse
-            setTimeout(() => {
-                if (!container.isConnected) return;
+            // Crea tooltip flottante che segue il mouse - esegui immediatamente
+            const setupTooltips = () => {
+                if (!container.isConnected) {
+                    console.log('Container not connected, skipping tooltip setup');
+                    return;
+                }
                 
                 // Rimuovi eventuali tooltip esistenti
                 const existingTooltip = document.querySelector('.dc-weekly-tooltip-floating');
@@ -3526,12 +3572,18 @@ class MiaConfigCard extends HTMLElement {
                 const bars = container.querySelectorAll('.dc-weekly-tooltip');
                 const weeklyContainer = container.querySelector('.dc-weekly-container');
                 
-                bars.forEach(bar => {
+                console.log('Setting up tooltip for', bars.length, 'bars');
+                
+                bars.forEach((bar, index) => {
                     // Gestione mouseenter: mostra tooltip
                     bar.addEventListener('mouseenter', function(e) {
+                        console.log('Mouse enter on bar', index);
                         if (!document.body.contains(this)) return;
                         const tooltipContent = this.getAttribute('data-tooltip');
-                        if (!tooltipContent) return;
+                        if (!tooltipContent) {
+                            console.log('No tooltip content for bar', index);
+                            return;
+                        }
                         
                         floatingTooltip.innerHTML = tooltipContent;
                         floatingTooltip.classList.add('active');
@@ -3549,6 +3601,7 @@ class MiaConfigCard extends HTMLElement {
                     
                     // Gestione mouseleave: nascondi tooltip
                     bar.addEventListener('mouseleave', function() {
+                        console.log('Mouse leave on bar', index);
                         floatingTooltip.classList.remove('active');
                     });
                 });
@@ -3605,7 +3658,15 @@ class MiaConfigCard extends HTMLElement {
                     tooltip.style.left = x + 'px';
                     tooltip.style.top = y + 'px';
                 }
-            }, 100);
+            };
+            
+            // Prova a setuppare immediatamente, se fallisce usa setTimeout
+            try {
+                setupTooltips();
+            } catch (e) {
+                console.log('Immediate tooltip setup failed, using setTimeout', e);
+                setTimeout(setupTooltips, 100);
+            }
             
             // Aggiungi event listener per chiudere il modal cliccando sul backdrop
             setTimeout(() => {
