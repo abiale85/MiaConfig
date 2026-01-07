@@ -1,5 +1,20 @@
 # 📋 Changelog - Mia Config
 
+## v2.1.0-beta.7.2 - 7 Gennaio 2026 🐛 Critical Fixes
+
+### 🐛 Correzioni Critiche
+- **Fix Null Reference**: Risolto errore `Cannot set properties of null` in dcEditConfig
+- **Campo Priority Ultra Compatto**: 60px con `!important` e `box-sizing: border-box`
+- **Checkbox Layout Corretto**: Cambiato da grid a flexbox con vincoli corretti (50-80px)
+- **Max-Width Constraints**: Aggiunti limiti per evitare overflow orizzontale
+- **Tooltip CSS Cleanup**: Rimosso prefisso `.mia-config-card` per stili tooltip
+
+### 📦 Versioni
+- Integrazione: 2.1.0-beta.7.2
+- Card: 2.1.0-beta.7.2
+
+---
+
 ## v2.1.0-beta.7.1 - 7 Gennaio 2026 🐛 Layout & Tooltip Fixes
 
 ### 🎨 Miglioramenti Layout Modal
