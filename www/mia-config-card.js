@@ -140,8 +140,8 @@ class MiaConfigCard extends HTMLElement {
                 .mia-config-card .dc-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid var(--divider-color); }
                 .mia-config-card .dc-modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--primary-text-color); }
                 .mia-config-card .dc-weekly-tooltip { position: relative; cursor: help; }
-                .mia-config-card .dc-weekly-tooltip-floating { visibility: hidden; opacity: 0; width: 300px; max-width: 90vw; background-color: rgba(0,0,0,0.95); color: #fff; text-align: left; border-radius: 6px; padding: 12px; position: fixed; z-index: 999999; font-size: 12px; line-height: 1.5; box-shadow: 0 4px 16px rgba(0,0,0,0.6); pointer-events: none; transition: opacity 0.2s, visibility 0.2s; white-space: normal; }
-                .mia-config-card .dc-weekly-tooltip-floating.active { visibility: visible; opacity: 1; }
+                .dc-weekly-tooltip-floating { visibility: hidden; opacity: 0; width: 300px; max-width: 90vw; background-color: rgba(0,0,0,0.95); color: #fff; text-align: left; border-radius: 6px; padding: 12px; position: fixed; z-index: 999999; font-size: 12px; line-height: 1.5; box-shadow: 0 4px 16px rgba(0,0,0,0.6); pointer-events: none; transition: opacity 0.2s, visibility 0.2s; white-space: normal; }
+                .dc-weekly-tooltip-floating.active { visibility: visible; opacity: 1; }
                 .mia-config-card .dc-weekly-container { overflow-x: auto; margin: 15px 0; position: relative; }
                 .mia-config-card .dc-weekly-grid { display: flex; min-width: 1000px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); position: relative; overflow: visible; }
                 .mia-config-card .dc-weekly-time-column { width: 60px; flex-shrink: 0; border-right: 2px solid var(--divider-color); background: var(--primary-color); color: white; }
@@ -190,7 +190,7 @@ class MiaConfigCard extends HTMLElement {
                     .mia-config-card .dc-dashboard-actions button { flex: 1; }
                     .mia-config-card .dc-time-group { grid-template-columns: 1fr; }
                     .mia-config-card input[type="text"], .mia-config-card input[type="time"], .mia-config-card input[type="number"], .mia-config-card select { font-size: 16px !important; padding: 10px !important; min-height: 44px; }
-                    .mia-config-card .dc-form-group input[type="number"] { width: 80px; flex-shrink: 0; }
+                    .mia-config-card .dc-form-group input[type="number"] { width: 60px !important; flex-shrink: 0; min-width: 60px; max-width: 60px; box-sizing: border-box; }
                     .mia-config-card .dc-weekly-container { overflow-x: auto; }
                     .mia-config-card .dc-weekly-grid { min-width: 700px; }
                 }
@@ -221,6 +221,7 @@ class MiaConfigCard extends HTMLElement {
                 /* Unscoped form styles for modals */
                 .dc-form-group {
                     margin-bottom: 16px;
+                    max-width: 100%;
                 }
                 .dc-form-group label {
                     display: block;
@@ -266,14 +267,21 @@ class MiaConfigCard extends HTMLElement {
                     color: var(--primary-text-color);
                 }
                 .dc-checkbox-group {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+                    display: flex;
+                    flex-wrap: wrap;
                     gap: 6px;
                     max-width: 100%;
+                    width: 100%;
+                }
+                .dc-checkbox-group .dc-checkbox-label {
+                    flex: 0 0 auto;
+                    min-width: 50px;
+                    max-width: 80px;
                 }
                 .dc-form-group .dc-time-picker,
                 .dc-form-group .dc-checkbox-group {
-                    margin-left: 24px; /* indent from checkbox */
+                    margin-left: 24px;
+                    max-width: calc(100% - 24px);
                 }
                 .dc-checkbox-label {
                     display: flex;
@@ -3567,7 +3575,9 @@ class MiaConfigCard extends HTMLElement {
                 // Crea nuovo tooltip
                 const floatingTooltip = document.createElement('div');
                 floatingTooltip.className = 'dc-weekly-tooltip-floating';
+                // Aggiungi al body invece che al componente per position: fixed
                 document.body.appendChild(floatingTooltip);
+                console.log('Tooltip created and added to body:', floatingTooltip);
                 
                 const bars = container.querySelectorAll('.dc-weekly-tooltip');
                 const weeklyContainer = container.querySelector('.dc-weekly-container');
@@ -3577,9 +3587,10 @@ class MiaConfigCard extends HTMLElement {
                 bars.forEach((bar, index) => {
                     // Gestione mouseenter: mostra tooltip
                     bar.addEventListener('mouseenter', function(e) {
-                        console.log('Mouse enter on bar', index);
-                        if (!document.body.contains(this)) return;
+                        console.log('Mouse enter on bar', index, 'element exists:', document.body.contains(this));
                         const tooltipContent = this.getAttribute('data-tooltip');
+                        console.log('Tooltip content for bar', index, ':', tooltipContent);
+                        if (!document.body.contains(this)) return;
                         if (!tooltipContent) {
                             console.log('No tooltip content for bar', index);
                             return;
@@ -3660,12 +3671,19 @@ class MiaConfigCard extends HTMLElement {
                 }
             };
             
-            // Prova a setuppare immediatamente, se fallisce usa setTimeout
+            // Prova a setuppare immediatamente, se fallisce usa requestAnimationFrame/setTimeout
             try {
                 setupTooltips();
             } catch (e) {
-                console.log('Immediate tooltip setup failed, using setTimeout', e);
-                setTimeout(setupTooltips, 100);
+                console.log('Immediate tooltip setup failed, using requestAnimationFrame', e);
+                requestAnimationFrame(() => {
+                    try {
+                        setupTooltips();
+                    } catch (e2) {
+                        console.log('requestAnimationFrame setup failed, using setTimeout', e2);
+                        setTimeout(setupTooltips, 50);
+                    }
+                });
             }
             
             // Aggiungi event listener per chiudere il modal cliccando sul backdrop
