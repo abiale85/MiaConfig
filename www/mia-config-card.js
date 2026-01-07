@@ -3674,8 +3674,9 @@ class MiaConfigCard extends HTMLElement {
             
             // Crea tooltip flottante che segue il mouse - esegui immediatamente
             const setupTooltips = () => {
+                const weeklyDebug = false;
                 if (!container.isConnected) {
-                    console.log('Container not connected, skipping tooltip setup');
+                    if (weeklyDebug) console.log('Container not connected, skipping tooltip setup');
                     return;
                 }
                 
@@ -3709,22 +3710,22 @@ class MiaConfigCard extends HTMLElement {
                 });
                 // Aggiungi al body invece che al componente per position: fixed
                 document.body.appendChild(floatingTooltip);
-                console.log('Tooltip created and added to body:', floatingTooltip);
+                if (weeklyDebug) console.log('Tooltip created and added to body:', floatingTooltip);
                 
                 const bars = container.querySelectorAll('.dc-weekly-tooltip');
                 const weeklyContainer = container.querySelector('.dc-weekly-container');
                 
-                console.log('Setting up tooltip for', bars.length, 'bars');
+                if (weeklyDebug) console.log('Setting up tooltip for', bars.length, 'bars');
                 
                 bars.forEach((bar, index) => {
                     // Gestione mouseenter: mostra tooltip
                     bar.addEventListener('mouseenter', function(e) {
-                        console.log('Mouse enter on bar', index, 'isConnected:', this.isConnected);
+                        if (weeklyDebug) console.log('Mouse enter on bar', index, 'isConnected:', this.isConnected);
                         const tooltipContent = this.getAttribute('data-tooltip');
-                        console.log('Tooltip content for bar', index, ':', tooltipContent);
+                        if (weeklyDebug) console.log('Tooltip content for bar', index, ':', tooltipContent);
                         if (!this.isConnected) return;
                         if (!tooltipContent) {
-                            console.log('No tooltip content for bar', index);
+                            if (weeklyDebug) console.log('No tooltip content for bar', index);
                             return;
                         }
                         
@@ -3747,7 +3748,7 @@ class MiaConfigCard extends HTMLElement {
                     
                     // Gestione mouseleave: nascondi tooltip
                     bar.addEventListener('mouseleave', function() {
-                        console.log('Mouse leave on bar', index);
+                        if (weeklyDebug) console.log('Mouse leave on bar', index);
                         floatingTooltip.classList.remove('active');
                         floatingTooltip.style.display = 'none';
                         floatingTooltip.style.visibility = 'hidden';
@@ -3814,7 +3815,7 @@ class MiaConfigCard extends HTMLElement {
                 try {
                     setupTooltips();
                 } catch (e) {
-                    console.log('Tooltip setup failed:', e);
+                    if (weeklyDebug) console.error('Tooltip setup failed:', e);
                     // Riprova dopo altro tempo
                     setTimeout(setupTooltips, 100);
                 }
