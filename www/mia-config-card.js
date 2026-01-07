@@ -652,7 +652,7 @@ class MiaConfigCard extends HTMLElement {
                         
                         <div class="dc-form-group">
                             <label style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 0; cursor: pointer;">
-                                <input type="checkbox" id="modal-time-enable-hours" style="margin: 2px 0 0 0; flex-shrink: 0;">
+                                <input type="checkbox" id="modal-time-enable-hours" style="margin: 2px 0 0 0; flex-shrink: 0;width:50px">
                                 <span style="font-size: 14px; line-height: 1.4;">Limita a fascia oraria</span>
                             </label>
                             <div id="modal-time-hours-container" style="display: none; margin-top: 10px;">
@@ -680,7 +680,7 @@ class MiaConfigCard extends HTMLElement {
                         
                         <div class="dc-form-group">
                             <label style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 0; cursor: pointer;">
-                                <input type="checkbox" id="modal-time-enable-days" style="margin: 2px 0 0 0; flex-shrink: 0;">
+                                <input type="checkbox" id="modal-time-enable-days" style="margin: 2px 0 0 0; flex-shrink: 0;width:50px">
                                 <span style="font-size: 14px; line-height: 1.4;">Limita a giorni specifici</span>
                             </label>
                             <div id="modal-time-days-container" style="display: none; margin-top: 10px;">
@@ -3686,6 +3686,27 @@ class MiaConfigCard extends HTMLElement {
                 // Crea nuovo tooltip
                 const floatingTooltip = document.createElement('div');
                 floatingTooltip.className = 'dc-weekly-tooltip-floating';
+                // Inline styles so it works even when appended outside shadow roots
+                Object.assign(floatingTooltip.style, {
+                    display: 'none',
+                    visibility: 'hidden',
+                    opacity: '0',
+                    width: '300px',
+                    maxWidth: '90vw',
+                    backgroundColor: 'rgba(0,0,0,0.95)',
+                    color: '#fff',
+                    textAlign: 'left',
+                    borderRadius: '6px',
+                    padding: '12px',
+                    position: 'fixed',
+                    zIndex: '2147480000',
+                    fontSize: '12px',
+                    lineHeight: '1.5',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
+                    pointerEvents: 'none',
+                    transition: 'opacity 0.15s ease',
+                    whiteSpace: 'normal'
+                });
                 // Aggiungi al body invece che al componente per position: fixed
                 document.body.appendChild(floatingTooltip);
                 console.log('Tooltip created and added to body:', floatingTooltip);
@@ -3709,6 +3730,8 @@ class MiaConfigCard extends HTMLElement {
                         
                         floatingTooltip.innerHTML = tooltipContent;
                         floatingTooltip.style.display = 'block';
+                        floatingTooltip.style.visibility = 'visible';
+                        floatingTooltip.style.opacity = '1';
                         floatingTooltip.classList.add('active');
                         
                         // Posiziona inizialmente
@@ -3727,6 +3750,8 @@ class MiaConfigCard extends HTMLElement {
                         console.log('Mouse leave on bar', index);
                         floatingTooltip.classList.remove('active');
                         floatingTooltip.style.display = 'none';
+                        floatingTooltip.style.visibility = 'hidden';
+                        floatingTooltip.style.opacity = '0';
                     });
                 });
                 
