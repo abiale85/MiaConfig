@@ -275,20 +275,20 @@ class MiaConfigCard extends HTMLElement {
                 }
                 .dc-checkbox-group .dc-checkbox-label {
                     flex: 0 0 auto;
-                    min-width: 38px;
-                    max-width: 48px;
+                    min-width: 36px;
+                    max-width: 44px;
                     white-space: nowrap;
-                    padding: 2px 0;
+                    padding: 1px 0;
                 }
                 .dc-form-group .dc-time-picker,
                 .dc-form-group .dc-checkbox-group {
-                    margin-left: 12px;
-                    max-width: calc(100% - 12px);
+                    margin-left: 0;
+                    max-width: 100%;
                 }
                 .dc-checkbox-label {
                     display: flex;
                     align-items: center;
-                    gap: 4px;
+                    gap: 3px;
                     cursor: pointer;
                     font-size: 11px;
                     white-space: nowrap;
@@ -522,9 +522,9 @@ class MiaConfigCard extends HTMLElement {
                                 <option value="conditional">🎯 Override Condizionale</option>
                             </select>
                         </div>
-                        <div style="flex: 0 0 100px;">
+                        <div style="flex: 0 0 90px;">
                             <label style="font-weight: 500; font-size: 16px;">Priorità:</label>
-                            <input type="number" id="modal-global-priority" min="1" max="999" value="99" style="width: 100%; padding: 10px; margin-top: 8px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); color: var(--primary-text-color);">
+                            <input type="number" id="modal-global-priority" min="1" max="999" value="99" style="width: 72px; padding: 8px; margin-top: 8px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); color: var(--primary-text-color); box-sizing: border-box;">
                         </div>
                     </div>
 
@@ -1574,7 +1574,7 @@ class MiaConfigCard extends HTMLElement {
             }
             
             const sourceSelect = card.content.querySelector('#modal-conditional-source-config');
-            const comparisonContainer = card.content.querySelector('#modal-conditional-comparison-container');
+                const comparisonContainer = card.content.querySelector('#modal-conditional-comparison-container');
             const previewSpan = card.content.querySelector('#modal-conditional-preview');
             
             if (!sourceSelect || !sourceSelect.value) return;
@@ -1628,6 +1628,17 @@ class MiaConfigCard extends HTMLElement {
                 const operatorElement = card.content.querySelector('#modal-conditional-operator');
                 if (previewSpan && operatorElement) {
                     previewSpan.textContent = `${configName} ${operatorElement.value} [valore]`;
+                }
+
+                // Se siamo in modalità edit, mantiene il valore precedente se presente
+                const modal = card.content.querySelector('#dc-add-config-modal');
+                if (modal?.dataset.mode === 'edit') {
+                    const existingValue = modal.dataset.editConditionalValue;
+                    if (existingValue !== undefined) {
+                        const valueField = card.content.querySelector('#modal-conditional-comparison-value');
+                        if (valueField) valueField.value = existingValue;
+                        delete modal.dataset.editConditionalValue;
+                    }
                 }
             } catch (err) {
                 console.error('Errore caricamento valori validi:', err);
@@ -2329,8 +2340,16 @@ class MiaConfigCard extends HTMLElement {
                     
                     const operatorSelect = form.querySelector('select[name="conditional_operator"]');
                     if (operatorSelect) operatorSelect.value = cfg.conditional_operator;
-                    
-                    const conditionalValueInput = form.querySelector('input[name="conditional_value"]');
+
+                    // Salva temporaneamente il valore per ripristinarlo dopo la ricostruzione del campo
+                    const modalEl = content.querySelector('#dc-add-config-modal');
+                    if (modalEl) modalEl.dataset.editConditionalValue = cfg.conditional_value;
+
+                    // Ricostruisci i valid values (select/datalist) e poi imposta il valore
+                    if (typeof window.dcUpdateConditionalOptions === 'function') {
+                        await window.dcUpdateConditionalOptions();
+                    }
+                    const conditionalValueInput = form.querySelector('#modal-conditional-comparison-value');
                     if (conditionalValueInput) conditionalValueInput.value = cfg.conditional_value;
                     
                     // Filtri orari opzionali
@@ -2391,6 +2410,47 @@ class MiaConfigCard extends HTMLElement {
             }
             
             // Resetta e mostra il form per configurazioni time (default)
+            const standardForm = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-standard');
+            const scheduleForm = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-schedule');
+            const timeForm = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-time');
+            const conditionalForm = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-conditional');
+            [standardForm, scheduleForm, timeForm, conditionalForm].forEach(f => f && f.reset());
+
+            // Ripristina contenitori opzionali
+            const timeHours = window._miaConfigCardInstance.content.querySelector('#modal-time-hours-container');
+            const timeDays = window._miaConfigCardInstance.content.querySelector('#modal-time-days-container');
+            const condHours = window._miaConfigCardInstance.content.querySelector('#modal-conditional-hours-container');
+            if (timeHours) timeHours.style.display = 'none';
+            if (timeDays) timeDays.style.display = 'none';
+            if (condHours) condHours.style.display = 'none';
+            const timeHoursToggle = window._miaConfigCardInstance.content.querySelector('#modal-time-enable-hours');
+            const timeDaysToggle = window._miaConfigCardInstance.content.querySelector('#modal-time-enable-days');
+            const condHoursToggle = window._miaConfigCardInstance.content.querySelector('#modal-conditional-enable-hours');
+            if (timeHoursToggle) timeHoursToggle.checked = false;
+            if (timeDaysToggle) timeDaysToggle.checked = false;
+            if (condHoursToggle) condHoursToggle.checked = false;
+
+            // Ripristina checkbox giorni (se erano stati modificati in edit)
+            const resetChecks = (selector) => {
+                window._miaConfigCardInstance.content.querySelectorAll(selector).forEach(cb => cb.checked = true);
+            };
+            resetChecks('#modal-dc-form-schedule input[name="days"]');
+            resetChecks('#modal-dc-form-time input[name="time-days"]');
+
+            // Ripristina campo confronto condizionale a input libero
+            const comparisonContainer = window._miaConfigCardInstance.content.querySelector('#modal-conditional-comparison-container');
+            if (comparisonContainer) {
+                comparisonContainer.innerHTML = '<input type="text" id="modal-conditional-comparison-value" name="conditional_value" required placeholder="es. 1">';
+            }
+
+            // Priorità default
+            const globalPriority = window._miaConfigCardInstance.content.querySelector('#modal-global-priority');
+            if (globalPriority) globalPriority.value = 99;
+
+            // Valori default per time picker
+            this.setDefaultTimeValues();
+
+            // Mostra form default
             window.dcShowModalConfigForm('time');
             
             // Carica le configurazioni standard per i select
@@ -3646,6 +3706,7 @@ class MiaConfigCard extends HTMLElement {
                         }
                         
                         floatingTooltip.innerHTML = tooltipContent;
+                        floatingTooltip.style.display = 'block';
                         floatingTooltip.classList.add('active');
                         
                         // Posiziona inizialmente
@@ -3663,6 +3724,7 @@ class MiaConfigCard extends HTMLElement {
                     bar.addEventListener('mouseleave', function() {
                         console.log('Mouse leave on bar', index);
                         floatingTooltip.classList.remove('active');
+                        floatingTooltip.style.display = 'none';
                     });
                 });
                 
