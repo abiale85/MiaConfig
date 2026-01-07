@@ -15,6 +15,7 @@ Un componente custom per Home Assistant che gestisce configurazioni dinamiche co
 - **Configurazioni Standard**: Valori di default con sistema di priorità personalizzabile
 - **Configurazioni a Tempo**: Valori validi in intervalli di date specifici con priorità
 - **Configurazioni a Orario**: Valori validi in fasce orarie giornaliere con selezione giorni settimana e priorità
+- **Configurazioni Condizionali**: Override che si attivano automaticamente quando altre configurazioni hanno valori specifici
 - **Sistema Priorità Avanzato**: Ogni configurazione ha priorità numerica (1 = massima, 99 = minima)
 - **Sensori Dinamici**: Ogni configurazione viene esposta come sensore in Home Assistant
 - **Predizione Eventi**: Attributi con timestamp ISO dei prossimi cambiamenti valore
@@ -128,6 +129,7 @@ Ogni istanza crea automaticamente un database SQLite separato (`<nome_istanza>.d
 Quando più configurazioni esistono per lo stesso nome, il valore attivo viene determinato da:
 
 1. **Tipo di configurazione** (source_order):
+   - Conditional (configurazioni condizionali): source_order = 0
    - Time (configurazioni a tempo): source_order = 1
    - Schedule (configurazioni a orario): source_order = 2
    - Standard (configurazioni base): source_order = 3
@@ -142,6 +144,8 @@ Quando più configurazioni esistono per lo stesso nome, il valore attivo viene d
 - Schedule "colazione" (priorità 100) dalle 07:00-08:00
 
 Viene applicata "sveglia" perché ha priorità migliore (99 < 100)
+
+**Configurazioni Condizionali**: Hanno sempre la massima priorità tra i tipi (source_order = 0), ma possono essere sovrascritte da altre condizionali con priorità numerica più bassa.
 
 ### Sensori
 
@@ -447,19 +451,56 @@ data:
   valid_to_ora: 7.00
 ```
 
-### Esempio 4: Visualizzazione in Lovelace
+### Esempio 5: Configurazioni Condizionali - Riscaldamento Automatico
+
+Sistema di riscaldamento che si attiva automaticamente in base al profilo temperatura selezionato:
 
 ```yaml
-type: entities
-title: Configurazioni Dinamiche
-entities:
-  - entity: sensor.dynamic_config_temperatura_clima
-    name: Temperatura Target
-    icon: mdi:thermometer
-  - entity: sensor.dynamic_config_brightness_soggiorno
-    name: Luminosità Soggiorno
-    icon: mdi:brightness-6
+# Profilo temperatura standard
+service: mia_config.set_config
+data:
+  setup_name: "profilo_temperatura"
+  setup_value: "comfort"
+  priority: 99
+
+# Riscaldamento automatico: si attiva quando profilo = "comfort"
+service: mia_config.set_conditional_config
+data:
+  setup_name: "riscaldamento_automatico"
+  setup_value: "1"
+  conditional_config: "profilo_temperatura"
+  conditional_operator: "=="
+  conditional_value: "comfort"
+  priority: 10
+
+# Riscaldamento spento quando profilo = "off" o "away"
+service: mia_config.set_conditional_config
+data:
+  setup_name: "riscaldamento_automatico"
+  setup_value: "0"
+  conditional_config: "profilo_temperatura"
+  conditional_operator: "contains"
+  conditional_value: "off"
+  priority: 5
+
+# Riscaldamento ridotto quando profilo = "eco" (solo nelle ore notturne)
+service: mia_config.set_conditional_config
+data:
+  setup_name: "riscaldamento_automatico"
+  setup_value: "0.5"
+  conditional_config: "profilo_temperatura"
+  conditional_operator: "=="
+  conditional_value: "eco"
+  valid_from_ora: 22.0
+  valid_to_ora: 6.0
+  priority: 15
 ```
+
+**Come funziona**:
+- Il riscaldamento si attiva automaticamente quando il profilo è "comfort"
+- Si spegne quando il profilo contiene "off" (off, away, eco_off, ecc.)
+- Di notte con profilo "eco" mantiene una temperatura ridotta (0.5)
+- Le priorità assicurano che "off" batta sempre "comfort" e "eco"
 
 ## Struttura Database
 
@@ -500,6 +541,21 @@ CREATE TABLE IF NOT EXISTS configurazioni_a_tempo (
   valid_from_ora REAL,  -- opzionale: orario di inizio (decimale base 60)
   valid_to_ora REAL,    -- opzionale: orario di fine (decimale base 60)
   days_of_week TEXT,    -- opzionale: giorni abilitati
+  priority INTEGER NOT NULL DEFAULT 99
+)
+```
+
+### Tabella `configurazioni_condizionali`
+```sql
+CREATE TABLE IF NOT EXISTS configurazioni_condizionali (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  setup_name TEXT NOT NULL,
+  setup_value TEXT,
+  conditional_config TEXT NOT NULL,  -- configurazione da monitorare
+  conditional_operator TEXT NOT NULL, -- ==, !=, >, <, >=, <=, contains, not_contains
+  conditional_value TEXT NOT NULL,   -- valore atteso
+  valid_from_ora REAL,  -- opzionale: filtro orario inizio (decimale base 60)
+  valid_to_ora REAL,    -- opzionale: filtro orario fine (decimale base 60)
   priority INTEGER NOT NULL DEFAULT 99
 )
 ```

@@ -1,5 +1,44 @@
 # 📋 Changelog - Mia Config
 
+## v2.1.0-beta.7 - 7 Gennaio 2026 🎯 UI Consolidation & Tooltip Enhancement
+
+### 🎨 Interfaccia Unificata
+- **Modal Unificato**: Accorpata l'interfaccia di modifica con quella di aggiunta
+  - Rimosso completamente il modal separato `#dc-edit-modal` (~280 righe)
+  - Il modal `#dc-add-config-modal` ora gestisce entrambe le modalità (aggiungi/modifica)
+  - Titolo dinamico: "Aggiungi Nuova Configurazione" o "Modifica Configurazione"
+  - Risparmio di **~334 righe di codice** (da 4699 a 4365 righe)
+
+### 🎯 Modalità Edit Intelligente
+- **Gestione Modalità**: Utilizzo di `data-attributes` per tracciare la modalità corrente
+  - `modal.dataset.mode = 'edit'` per modalità modifica
+  - `modal.dataset.editId`, `modal.dataset.editName`, `modal.dataset.editType` per i dati della configurazione
+  - Selettore tipo configurazione disabilitato in modalità edit
+  - Campi chiave (nome configurazione, operatore, sorgente condizionale) disabilitati dove appropriato
+
+### 🖱️ Tooltip Vista Settimanale Migliorato
+- **Tooltip Flottante**: Rimosso il sistema basato su `:hover` CSS con posizionamento statico
+  - Creato tooltip flottante che segue esattamente il cursore del mouse
+  - Posizionato con `position: fixed` per massima flessibilità
+  - Transizioni smooth con opacity (0.2s)
+
+### 📍 Posizionamento Intelligente
+- **Bounds Checking**: Il tooltip verifica automaticamente i bordi della viewport e del container
+  - Si riposiziona automaticamente per rimanere sempre visibile nell'area del componente
+  - Controllo intelligente: destra → sinistra, basso → alto, sempre dentro i bounds
+  - Offset di 15px dal cursore per migliore leggibilità
+
+### 🧹 Cleanup Automatico
+- **Memory Management**: Aggiunto `disconnectedCallback()` per rimuovere il tooltip dal DOM
+  - Previene memory leaks e tooltip "fantasma"
+  - Rimozione di eventuali tooltip esistenti prima di crearne uno nuovo
+
+### 📦 Versioni
+- integrazione: 2.1.0-beta.7
+- card: 2.1.0-beta.7
+
+---
+
 ## v2.1.0-beta.6 - 6 Gennaio 2026 🔄 Restore v2.0.0 Implementation
 
 ### 🔧 Fix Definitivo
