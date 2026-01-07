@@ -1,6 +1,6 @@
 {
   "name": "mia-config-card",
-  "version": "2.1.0-beta.7.5",
+  "version": "2.1.0-beta.7.6",
   "description": "Custom Lovelace card for MiaConfig Home Assistant integration",
   "type": "module",
   "main": "www/mia-config-card.js",

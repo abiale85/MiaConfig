@@ -126,8 +126,8 @@ class MiaConfigCard extends HTMLElement {
                 .mia-config-card .dc-form-group { margin-bottom: 16px; }
                 .mia-config-card .dc-form-group label { display: block; margin-bottom: 4px; font-weight: 500; font-size: 14px; }
                 .mia-config-card .dc-form-group input, .mia-config-card .dc-form-group select { width: 100%; padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 14px; box-sizing: border-box; }
-                .mia-config-card .dc-checkbox-group { display: flex; gap: 6px; flex-wrap: wrap; }
-                .mia-config-card .dc-checkbox-label { display: flex; align-items: center; gap: 4px; font-size: 12px; min-width: 38px; max-width: 48px; white-space: nowrap; }
+                .mia-config-card .dc-checkbox-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 6px 8px; align-items: flex-start; }
+                .mia-config-card .dc-checkbox-label { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: 12px; min-width: 0; max-width: 100%; white-space: normal; line-height: 1.25; }
                 .mia-config-card .dc-time-picker { display: flex; gap: 15px; align-items: center; }
                 .mia-config-card .dc-time-input { display: flex; gap: 8px; align-items: center; }
                 .mia-config-card .dc-time-input select { width: 70px; padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 14px; }
@@ -140,8 +140,8 @@ class MiaConfigCard extends HTMLElement {
                 .mia-config-card .dc-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid var(--divider-color); }
                 .mia-config-card .dc-modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--primary-text-color); }
                 .mia-config-card .dc-weekly-tooltip { position: relative; cursor: help; }
-                .dc-weekly-tooltip-floating { visibility: hidden; opacity: 0; width: 300px; max-width: 90vw; background-color: rgba(0,0,0,0.95); color: #fff; text-align: left; border-radius: 6px; padding: 12px; position: fixed; z-index: 999999; font-size: 12px; line-height: 1.5; box-shadow: 0 4px 16px rgba(0,0,0,0.6); pointer-events: none; transition: opacity 0.2s, visibility 0.2s; white-space: normal; }
-                .dc-weekly-tooltip-floating.active { visibility: visible; opacity: 1; }
+                .dc-weekly-tooltip-floating { display: none; visibility: hidden; opacity: 0; width: 300px; max-width: 90vw; background-color: rgba(0,0,0,0.95); color: #fff; text-align: left; border-radius: 6px; padding: 12px; position: fixed; z-index: 2147480000; font-size: 12px; line-height: 1.5; box-shadow: 0 4px 16px rgba(0,0,0,0.6); pointer-events: none; transition: opacity 0.15s ease; white-space: normal; }
+                .dc-weekly-tooltip-floating.active { display: block; visibility: visible; opacity: 1; }
                 .mia-config-card .dc-weekly-container { overflow-x: auto; margin: 15px 0; position: relative; }
                 .mia-config-card .dc-weekly-grid { display: flex; min-width: 1000px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); position: relative; overflow: visible; }
                 .mia-config-card .dc-weekly-time-column { width: 60px; flex-shrink: 0; border-right: 2px solid var(--divider-color); background: var(--primary-color); color: white; }
@@ -267,18 +267,18 @@ class MiaConfigCard extends HTMLElement {
                     color: var(--primary-text-color);
                 }
                 .dc-checkbox-group {
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 4px;
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+                    gap: 6px 8px;
                     max-width: 100%;
                     width: 100%;
                 }
                 .dc-checkbox-group .dc-checkbox-label {
-                    flex: 0 0 auto;
-                    min-width: 36px;
-                    max-width: 44px;
-                    white-space: nowrap;
-                    padding: 1px 0;
+                    flex: 1 1 auto;
+                    min-width: 0;
+                    max-width: 100%;
+                    white-space: normal;
+                    padding: 2px 0;
                 }
                 .dc-form-group .dc-time-picker,
                 .dc-form-group .dc-checkbox-group {
@@ -287,11 +287,13 @@ class MiaConfigCard extends HTMLElement {
                 }
                 .dc-checkbox-label {
                     display: flex;
-                    align-items: center;
-                    gap: 3px;
+                    flex-direction: column;
+                    align-items: flex-start;
+                    gap: 2px;
                     cursor: pointer;
                     font-size: 11px;
-                    white-space: nowrap;
+                    white-space: normal;
+                    line-height: 1.3;
                 }
                 .dc-checkbox-label input[type="checkbox"] {
                     width: auto;
@@ -3710,7 +3712,7 @@ class MiaConfigCard extends HTMLElement {
                         floatingTooltip.classList.add('active');
                         
                         // Posiziona inizialmente
-                        updateTooltipPosition(e, floatingTooltip, weeklyContainer);
+                        requestAnimationFrame(() => updateTooltipPosition(e, floatingTooltip, weeklyContainer));
                     });
                     
                     // Gestione mousemove: aggiorna posizione seguendo il mouse
