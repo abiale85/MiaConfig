@@ -275,8 +275,9 @@ class MiaConfigCard extends HTMLElement {
                 }
                 .dc-checkbox-group .dc-checkbox-label {
                     flex: 0 0 auto;
-                    min-width: 50px;
-                    max-width: 80px;
+                    min-width: 45px;
+                    max-width: 60px;
+                    white-space: nowrap;
                 }
                 .dc-form-group .dc-time-picker,
                 .dc-form-group .dc-checkbox-group {
@@ -286,9 +287,10 @@ class MiaConfigCard extends HTMLElement {
                 .dc-checkbox-label {
                     display: flex;
                     align-items: center;
-                    gap: 6px;
+                    gap: 4px;
                     cursor: pointer;
-                    font-size: 14px;
+                    font-size: 12px;
+                    white-space: nowrap;
                 }
                 .dc-checkbox-label input[type="checkbox"] {
                     width: auto;
@@ -2167,6 +2169,9 @@ class MiaConfigCard extends HTMLElement {
             // Mostra il form container corretto
             window.dcShowModalConfigForm(type);
             
+            // Carica le configurazioni standard per i select PRIMA di popolare
+            await instance.loadStandardConfigsForSelect();
+            
             // Popola i campi in base al tipo
             if (type === 'standard') {
                 const form = content.querySelector('#modal-dc-form-standard');
@@ -3671,20 +3676,16 @@ class MiaConfigCard extends HTMLElement {
                 }
             };
             
-            // Prova a setuppare immediatamente, se fallisce usa requestAnimationFrame/setTimeout
-            try {
-                setupTooltips();
-            } catch (e) {
-                console.log('Immediate tooltip setup failed, using requestAnimationFrame', e);
-                requestAnimationFrame(() => {
-                    try {
-                        setupTooltips();
-                    } catch (e2) {
-                        console.log('requestAnimationFrame setup failed, using setTimeout', e2);
-                        setTimeout(setupTooltips, 50);
-                    }
-                });
-            }
+            // Usa setTimeout per dare tempo al DOM di stabilizzarsi
+            setTimeout(() => {
+                try {
+                    setupTooltips();
+                } catch (e) {
+                    console.log('Tooltip setup failed:', e);
+                    // Riprova dopo altro tempo
+                    setTimeout(setupTooltips, 100);
+                }
+            }, 50);
             
             // Aggiungi event listener per chiudere il modal cliccando sul backdrop
             setTimeout(() => {
