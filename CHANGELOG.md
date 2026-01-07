@@ -1,6 +1,23 @@
 # 📋 Changelog - Mia Config
 
-## v2.1.0-beta.7 - 7 Gennaio 2026 🎯 UI Consolidation & Tooltip Enhancement
+## v2.1.0-beta.7.1 - 7 Gennaio 2026 🐛 Layout & Tooltip Fixes
+
+### 🎨 Miglioramenti Layout Modal
+- **Campo Priority Compatto**: Larghezza limitata a 80px per risparmiare spazio
+- **Time Picker Responsivo**: Aggiunto `flex-wrap` per layout adattivo
+- **Gruppi Checkbox Ottimizzati**: Ridotta dimensione minima a 60px, aggiunta larghezza massima
+- **Indentazione Filtri**: Margine sinistro 24px per i container di filtri orari/giorni
+
+### 🖱️ Tooltip Vista Settimanale Corretto
+- **Setup Immediato**: Eseguito immediatamente invece di aspettare setTimeout
+- **Fallback Sicuro**: Se fallisce, usa setTimeout come backup
+- **Debug Logging**: Aggiunto logging per troubleshooting eventi mouse
+
+### 📦 Versioni
+- Integrazione: 2.1.0-beta.7.1
+- Card: 2.1.0-beta.7.1
+
+---
 
 ### 🎨 Interfaccia Unificata
 - **Modal Unificato**: Accorpata l'interfaccia di modifica con quella di aggiunta
