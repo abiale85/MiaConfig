@@ -126,8 +126,8 @@ class MiaConfigCard extends HTMLElement {
                 .mia-config-card .dc-form-group { margin-bottom: 16px; }
                 .mia-config-card .dc-form-group label { display: block; margin-bottom: 4px; font-weight: 500; font-size: 14px; }
                 .mia-config-card .dc-form-group input, .mia-config-card .dc-form-group select { width: 100%; padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 14px; box-sizing: border-box; }
-                .mia-config-card .dc-checkbox-group { display: flex; gap: 10px; flex-wrap: wrap; }
-                .mia-config-card .dc-checkbox-label { display: flex; align-items: center; gap: 5px; font-size: 14px; }
+                .mia-config-card .dc-checkbox-group { display: flex; gap: 6px; flex-wrap: wrap; }
+                .mia-config-card .dc-checkbox-label { display: flex; align-items: center; gap: 4px; font-size: 12px; min-width: 38px; max-width: 48px; white-space: nowrap; }
                 .mia-config-card .dc-time-picker { display: flex; gap: 15px; align-items: center; }
                 .mia-config-card .dc-time-input { display: flex; gap: 8px; align-items: center; }
                 .mia-config-card .dc-time-input select { width: 70px; padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 14px; }
@@ -269,33 +269,43 @@ class MiaConfigCard extends HTMLElement {
                 .dc-checkbox-group {
                     display: flex;
                     flex-wrap: wrap;
-                    gap: 6px;
+                    gap: 4px;
                     max-width: 100%;
                     width: 100%;
                 }
                 .dc-checkbox-group .dc-checkbox-label {
                     flex: 0 0 auto;
-                    min-width: 45px;
-                    max-width: 60px;
+                    min-width: 38px;
+                    max-width: 48px;
                     white-space: nowrap;
+                    padding: 2px 0;
                 }
                 .dc-form-group .dc-time-picker,
                 .dc-form-group .dc-checkbox-group {
-                    margin-left: 24px;
-                    max-width: calc(100% - 24px);
+                    margin-left: 12px;
+                    max-width: calc(100% - 12px);
                 }
                 .dc-checkbox-label {
                     display: flex;
                     align-items: center;
                     gap: 4px;
                     cursor: pointer;
-                    font-size: 12px;
+                    font-size: 11px;
                     white-space: nowrap;
                 }
                 .dc-checkbox-label input[type="checkbox"] {
                     width: auto;
                     margin: 0;
                     cursor: pointer;
+                }
+                /* Priority fields compact */
+                .dc-form-group input[name="priority"],
+                #modal-global-priority {
+                    width: 72px !important;
+                    min-width: 60px;
+                    max-width: 80px;
+                    padding: 8px;
+                    box-sizing: border-box;
                 }
                 .dc-modal-content {
                     background: var(--card-background-color);
@@ -2185,6 +2195,20 @@ class MiaConfigCard extends HTMLElement {
             
             // Aspetta che i select siano popolati (piccolo delay)
             await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Helper per forzare il valore di un select aggiungendo l'opzione se manca
+            const ensureSelectValue = (selectEl, value, label) => {
+                if (!selectEl || value === undefined || value === null) return;
+                const hasOption = Array.from(selectEl.options).some(opt => opt.value === String(value));
+                if (!hasOption) {
+                    const opt = document.createElement('option');
+                    opt.value = value;
+                    opt.textContent = label || value;
+                    opt.dataset.tempOption = 'true';
+                    selectEl.appendChild(opt);
+                }
+                selectEl.value = value;
+            };
             
             // Popola i campi in base al tipo
             if (type === 'standard') {
@@ -2206,10 +2230,8 @@ class MiaConfigCard extends HTMLElement {
                 const form = content.querySelector('#modal-dc-form-time');
                 if (form) {
                     const configSelect = form.querySelector('select[name="setup_name"]');
-                    if (configSelect) {
-                        configSelect.value = name;
-                        configSelect.disabled = true;
-                    }
+                    ensureSelectValue(configSelect, name);
+                    if (configSelect) configSelect.disabled = true;
                     const valueInput = form.querySelector('input[name="setup_value"]');
                     if (valueInput) valueInput.value = cfg.value;
                     
@@ -2264,10 +2286,8 @@ class MiaConfigCard extends HTMLElement {
                 const form = content.querySelector('#modal-dc-form-schedule');
                 if (form) {
                     const configSelect = form.querySelector('select[name="setup_name"]');
-                    if (configSelect) {
-                        configSelect.value = name;
-                        configSelect.disabled = true;
-                    }
+                    ensureSelectValue(configSelect, name);
+                    if (configSelect) configSelect.disabled = true;
                     const valueInput = form.querySelector('input[name="setup_value"]');
                     if (valueInput) valueInput.value = cfg.value;
                     
@@ -2299,15 +2319,13 @@ class MiaConfigCard extends HTMLElement {
                 const form = content.querySelector('#modal-dc-form-conditional');
                 if (form) {
                     const configSelect = form.querySelector('select[name="setup_name"]');
-                    if (configSelect) {
-                        configSelect.value = name;
-                        configSelect.disabled = true;
-                    }
+                    ensureSelectValue(configSelect, name);
+                    if (configSelect) configSelect.disabled = true;
                     const valueInput = form.querySelector('input[name="setup_value"]');
                     if (valueInput) valueInput.value = cfg.value;
                     
                     const conditionalConfigSelect = form.querySelector('select[name="conditional_config"]');
-                    if (conditionalConfigSelect) conditionalConfigSelect.value = cfg.conditional_config;
+                    ensureSelectValue(conditionalConfigSelect, cfg.conditional_config);
                     
                     const operatorSelect = form.querySelector('select[name="conditional_operator"]');
                     if (operatorSelect) operatorSelect.value = cfg.conditional_operator;
@@ -3618,10 +3636,10 @@ class MiaConfigCard extends HTMLElement {
                 bars.forEach((bar, index) => {
                     // Gestione mouseenter: mostra tooltip
                     bar.addEventListener('mouseenter', function(e) {
-                        console.log('Mouse enter on bar', index, 'element exists:', document.body.contains(this));
+                        console.log('Mouse enter on bar', index, 'isConnected:', this.isConnected);
                         const tooltipContent = this.getAttribute('data-tooltip');
                         console.log('Tooltip content for bar', index, ':', tooltipContent);
-                        if (!document.body.contains(this)) return;
+                        if (!this.isConnected) return;
                         if (!tooltipContent) {
                             console.log('No tooltip content for bar', index);
                             return;
