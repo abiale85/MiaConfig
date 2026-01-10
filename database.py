@@ -371,11 +371,10 @@ class ConfigDatabase:
             # Modalità completa: valuta tutti i condizionali
             conditional_configs = [row for row in self._memory_cache['configurazioni_condizionali'] if row['enabled']]
         else:
-            # Modalità singola: valuta solo i condizionali per questo setup
-            # IMPORTANTE: Potremmo avere bisogno anche dei dati delle configurazioni
-            # da cui dipendono i condizionali, quindi carica quelli che mancano
-            conditional_configs = [row for row in self._memory_cache['configurazioni_condizionali'] 
-                                  if row['enabled'] and row['setup_name'] == setup_name]
+            # Modalità singola: per sicurezza includiamo TUTTI i condizionali abilitati
+            # Questo garantisce che le dipendenze transitive tra condizionali vengano risolte
+            # Anche se è leggermente meno ottimizzato, con pochi setup in memoria è accettabile
+            conditional_configs = [row for row in self._memory_cache['configurazioni_condizionali'] if row['enabled']]
         
         # Prima ordina per priorità, poi valuta le condizioni
         all_active_configs.sort(key=lambda x: (x['priority'], x['source_order']))
@@ -1453,6 +1452,9 @@ class ConfigDatabase:
         # INIZIA dal prossimo intervallo, non da now (now è già il valore corrente)
         current_time = now + scan_interval
         
+        _LOGGER.debug(f"get_next_changes({setup_name}): current_value={current_value}, scanning from {current_time.isoformat()} to {limit_time.isoformat()}")
+        
+        samples_count = 0
         while current_time <= limit_time:
             # Valuta la configurazione a questo timestamp (solo setup_name)
             config_at_time = self._get_configurations_at_time(current_time, setup_name=setup_name)
@@ -1461,9 +1463,15 @@ class ConfigDatabase:
                 new_value = config_at_time[setup_name]['value']
                 new_source = config_at_time[setup_name]['source']
                 
+                samples_count += 1
+                if samples_count <= 3:  # Log solo primi 3 campioni
+                    _LOGGER.debug(f"  sample at {current_time.strftime('%H:%M:%S')}: value={new_value}, source={new_source}, changed={new_value != last_value}")
+                
                 # Registra il cambiamento se il valore effettivamente cambia
                 if new_value != last_value:
                     minutes_until = int((current_time - now).total_seconds() / 60)
+                    
+                    _LOGGER.debug(f"  CHANGE DETECTED: {last_value} -> {new_value} at {current_time.isoformat()} (in {minutes_until}min)")
                     
                     changes.append({
                         'value': new_value,
@@ -1481,6 +1489,8 @@ class ConfigDatabase:
             
             # Avanza di scan_interval
             current_time += scan_interval
+        
+        _LOGGER.debug(f"get_next_changes({setup_name}): found {len(changes)} changes after {samples_count} samples")
         
         # Salva in cache prima di restituire
         result = changes[:max_results]

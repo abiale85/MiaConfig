@@ -64,9 +64,9 @@ async def async_setup_entry(
                 # Valore cambiato, ricalcola
                 needs_recalc = True
                 recalc_reason = f"valore cambiato da {last_value} a {current_value}"
-            elif cached.get('next_changes'):
+            elif cached.get('upcoming_changes'):
                 # Controlla se il prossimo evento è vicino (< 2 minuti): ricalcola per aggiornare il countdown
-                next_event_minutes = cached['next_changes'][0].get('minutes_until', 999)
+                next_event_minutes = cached['upcoming_changes'][0].get('minutes_until', 999)
                 if next_event_minutes < 2:
                     needs_recalc = True
                     recalc_reason = f"prossimo evento tra {next_event_minutes}min"
