@@ -238,21 +238,25 @@ class ConfigDatabase:
         
         _LOGGER.info("Database inizializzato con indici ottimizzati e cache in-memory: %s", self.db_path)
     
-    def _get_configurations_at_time(self, target_datetime: datetime) -> Dict[str, Any]:
+    def _get_configurations_at_time(self, target_datetime: datetime, setup_name: Optional[str] = None) -> Dict[str, Any]:
         """
-        LOGICA UNIFICATA: Ottiene tutte le configurazioni per un timestamp specifico.
-        Questa funzione è usata sia da get_all_configurations (runtime) che da simulate_configuration_schedule.
+        LOGICA UNIFICATA: Ottiene le configurazioni per un timestamp specifico.
+        Questa funzione è usata sia da get_all_configurations (runtime) che da simulate_configuration_schedule e get_next_changes.
         
         OTTIMIZZAZIONI PERFORMANCE:
         - USA CACHE IN-MEMORY invece di query ripetute (elimina ~40 query/minuto)
         - Filtraggio in Python su dati già in RAM
         - Valutazione lazy dei condizionali (solo se attivi)
+        - Se setup_name è fornito: risolve solo quella config e le sue dipendenze (non tutte)
         
         Args:
             target_datetime: Il momento per cui calcolare le configurazioni attive
+            setup_name: (Opzionale) Se fornito, risolve solo questa configurazione e le sue dipendenze.
+                       Se None, risolve tutte le configurazioni (comportamento originale).
         
         Returns:
-            Dict con tutte le configurazioni risolte ricorsivamente per quel momento
+            Dict con le configurazioni risolte ricorsivamente per quel momento.
+            Se setup_name è fornito, il dict contiene solo quella configurazione.
         """
         # Assicurati che la cache sia caricata
         if not self._memory_cache['loaded']:
@@ -264,9 +268,17 @@ class ConfigDatabase:
         # Raccogli tutte le configurazioni attive per questo timestamp
         all_active_configs = []
         
+        # OTTIMIZZAZIONE: Se setup_name è fornito, filtra solo le righe rilevanti
+        def should_process_config(config_setup_name: str) -> bool:
+            """Determina se una config deve essere processata."""
+            if setup_name is None:
+                return True  # Modalità completa: processa tutto
+            # Modalità singola: processa solo il setup richiesto
+            return config_setup_name == setup_name
+        
         # Configurazioni a tempo attive - FILTRA DA CACHE IN-MEMORY
         for row in self._memory_cache['configurazioni_a_tempo']:
-            if not row['enabled']:
+            if not should_process_config(row['setup_name']) or not row['enabled']:
                 continue
             
             # Verifica validità temporale
@@ -309,7 +321,7 @@ class ConfigDatabase:
         
         # Configurazioni a orario attive - FILTRA DA CACHE IN-MEMORY
         for row in self._memory_cache['configurazioni_a_orario']:
-            if not row['enabled']:
+            if not should_process_config(row['setup_name']) or not row['enabled']:
                 continue
             days_of_week = row['days_of_week'] if row['days_of_week'] else '0,1,2,3,4,5,6'
             valid_days = [int(d) for d in days_of_week.split(',') if d]
@@ -340,7 +352,7 @@ class ConfigDatabase:
         
         # Configurazioni standard (sempre attive) - DA CACHE IN-MEMORY
         for row in self._memory_cache['configurazioni']:
-            if not row['enabled']:
+            if not should_process_config(row['setup_name']) or not row['enabled']:
                 continue
             all_active_configs.append({
                 'setup_name': row['setup_name'],
@@ -352,7 +364,16 @@ class ConfigDatabase:
             })
         
         # Configurazioni condizionali (valutate ricorsivamente) - DA CACHE IN-MEMORY
-        conditional_configs = [row for row in self._memory_cache['configurazioni_condizionali'] if row['enabled']]
+        # OTTIMIZZAZIONE: Se setup_name è fornito, filtra solo i condizionali rilevanti
+        if setup_name is None:
+            # Modalità completa: valuta tutti i condizionali
+            conditional_configs = [row for row in self._memory_cache['configurazioni_condizionali'] if row['enabled']]
+        else:
+            # Modalità singola: valuta solo i condizionali per questo setup
+            # IMPORTANTE: Potremmo avere bisogno anche dei dati delle configurazioni
+            # da cui dipendono i condizionali, quindi carica quelli che mancano
+            conditional_configs = [row for row in self._memory_cache['configurazioni_condizionali'] 
+                                  if row['enabled'] and row['setup_name'] == setup_name]
         
         # Prima ordina per priorità, poi valuta le condizioni
         all_active_configs.sort(key=lambda x: (x['priority'], x['source_order']))
@@ -363,6 +384,18 @@ class ConfigDatabase:
             name = config['setup_name']
             if name not in temp_result:
                 temp_result[name] = config['value']
+        
+        # Se siamo in modalità singola e il setup ha condizionali, devo anche
+        # ottenere i valori delle configurazioni da cui dipendono i condizionali
+        if setup_name is not None and conditional_configs:
+            # Per ogni condizionale che dipende da setup_name, carica la config su cui dipende
+            for cond_row in conditional_configs:
+                dep_setup = cond_row['conditional_config']
+                if dep_setup not in temp_result:
+                    # Ricorsivamente risolvi la configurazione da cui questo condizionale dipende
+                    dep_result = self._get_configurations_at_time(target_datetime, setup_name=dep_setup)
+                    if dep_setup in dep_result:
+                        temp_result[dep_setup] = dep_result[dep_setup]['value']
         
         # BUGFIX: Valutazione iterativa dei condizionali per risolvere dipendenze tra condizionali
         # Es: Se profilo_temperatura dipende da tipo_sveglia (condizionale 1)
@@ -1318,7 +1351,7 @@ class ConfigDatabase:
         # Invalida cache next_changes dopo modifica enable/disable
         self._invalidate_next_changes_cache()
     
-    def get_next_changes(self, setup_name: str, limit_hours: int = 24, max_results: int = 5) -> List[Dict[str, Any]]:
+    def get_next_changes(self, setup_name: str, limit_hours: int = 24, max_results: int = 5, scan_interval_seconds: int = 60) -> List[Dict[str, Any]]:
         """
         Calcola i prossimi cambiamenti di valore per una configurazione.
         USA LA LOGICA UNIFICATA _get_configurations_at_time per garantire coerenza con runtime e vista settimanale.
@@ -1326,12 +1359,14 @@ class ConfigDatabase:
         OTTIMIZZAZIONE PERFORMANCE:
         - Cache basata sul valore corrente e config_version
         - Ricalcolo solo se: valore corrente cambiato O configurazioni modificate
+        - Campionamento rispetta scan_interval per efficienza
         - La cache viene invalidata automaticamente dopo ogni modifica alle configurazioni
         
         Args:
             setup_name: Nome della configurazione per cui calcolare i prossimi cambiamenti
             limit_hours: Numero di ore future da considerare (default 24)
             max_results: Numero massimo di eventi da restituire (default 5)
+            scan_interval_seconds: Intervallo di campionamento in secondi (default 60 = 1 minuto)
         
         Returns:
             Lista di cambiamenti futuri ordinati per tempo, ognuno con:
@@ -1346,7 +1381,6 @@ class ConfigDatabase:
         current_source = current_config.get(setup_name, {}).get('source', 'unknown')
         
         # Controlla cache: ricalcola solo se valore corrente cambiato O configurazioni modificate
-        # Cache key include parametri per evitare collisioni tra chiamate con parametri diversi
         cache_key = (setup_name, limit_hours, max_results)
         cached = self._next_changes_cache.get(cache_key)
         
@@ -1357,7 +1391,6 @@ class ConfigDatabase:
                 # Cache valida: aggiorna solo minutes_until basandosi sul tempo trascorso
                 now = datetime.now()
                 cached_timestamp = datetime.fromisoformat(cached['timestamp'])
-                # Usa round invece di int per evitare drift nei calcoli temporali
                 elapsed_minutes = round((now - cached_timestamp).total_seconds() / 60)
                 
                 # Aggiorna minutes_until per ogni evento e filtra eventi passati
@@ -1369,141 +1402,55 @@ class ConfigDatabase:
                         updated_change['minutes_until'] = new_minutes_until
                         updated_changes.append(updated_change)
                 
-                # Se troppi eventi sono diventati passati e abbiamo meno di max_results,
-                # potremmo perdere eventi futuri -> invalida cache e ricalcola
                 if len(cached['result']) > 0 and len(updated_changes) < max_results // 2:
-                    # Troppi eventi sono diventati passati, meglio ricalcolare
-                    pass  # Continua con il ricalcolo
+                    pass  # Troppi eventi passati, ricalcola
                 else:
                     return updated_changes[:max_results]
         
-        # Cache miss o invalidata: ricalcola
-        cursor = self.conn.cursor()
+        # Cache miss o invalidata: ricalcola campionando il periodo futuro
         now = datetime.now()
         limit_time = now + timedelta(hours=limit_hours)
         
-        # Costanti per la gestione degli eventi
-        MAX_DAYS_TO_CHECK = 7  # Numero massimo di giorni futuri da considerare per eventi ricorrenti
+        # Assicurati che la cache in-memory sia caricata
+        if not self._memory_cache['loaded']:
+            self._load_all_to_memory()
         
-        # Helper per calcolare giorni da verificare basato su limit_hours
-        def get_days_to_check(hours: int) -> int:
-            """Calcola quanti giorni verificare per eventi ricorrenti, max MAX_DAYS_TO_CHECK."""
-            return min(int(hours / 24) + 2, MAX_DAYS_TO_CHECK)  # +2 per sicurezza (oggi e domani)
-        
-        # Raccogli tutti i timestamp di eventi potenziali (inizio/fine di configurazioni)
-        # IMPORTANTE: Raccogliamo eventi da TUTTE le configurazioni, non solo per setup_name,
-        # perché le configurazioni condizionali possono dipendere da altre configurazioni
-        event_times = set()
-        
-        # Eventi da configurazioni a tempo (per setup_name e dipendenze)
-        cursor.execute("""
-            SELECT valid_from_date, valid_to_date
-            FROM configurazioni_a_tempo
-            WHERE enabled = 1
-        """)
-        for row in cursor.fetchall():
-            valid_from = datetime.fromisoformat(row['valid_from_date'])
-            valid_to = datetime.fromisoformat(row['valid_to_date']) if row['valid_to_date'] else None
-            
-            if valid_from > now and valid_from <= limit_time:
-                event_times.add(valid_from)
-            if valid_to and valid_to > now and valid_to <= limit_time:
-                event_times.add(valid_to)
-        
-        # Eventi da configurazioni a orario (per setup_name e dipendenze)
-        cursor.execute("""
-            SELECT valid_from_ora, valid_to_ora, days_of_week
-            FROM configurazioni_a_orario
-            WHERE enabled = 1
-        """)
-        days_to_check = get_days_to_check(limit_hours)
-        for row in cursor.fetchall():
-            days_str = row['days_of_week'] if row['days_of_week'] else '0,1,2,3,4,5,6'
-            days_list = [int(d) for d in days_str.split(',') if d]
-            
-            for day_offset in range(days_to_check):
-                check_date = now + timedelta(days=day_offset)
-                weekday = check_date.weekday()
-                
-                if weekday in days_list:
-                    from_decimal = row['valid_from_ora']
-                    to_decimal = row['valid_to_ora']
-                    
-                    from_hour = int(from_decimal)
-                    from_min = int((from_decimal - from_hour) * 60)
-                    event_from = check_date.replace(hour=from_hour, minute=from_min, second=0, microsecond=0)
-                    
-                    to_hour = int(to_decimal)
-                    to_min = int((to_decimal - to_hour) * 60)
-                    
-                    if to_decimal < from_decimal:  # Attraversa la mezzanotte
-                        event_to = (check_date + timedelta(days=1)).replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
-                    else:
-                        event_to = check_date.replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
-                    
-                    if event_from > now and event_from <= limit_time:
-                        event_times.add(event_from)
-                    if event_to > now and event_to <= limit_time:
-                        event_times.add(event_to)
-        
-        # Eventi da filtri orari di configurazioni condizionali
-        cursor.execute("""
-            SELECT valid_from_ora, valid_to_ora
-            FROM configurazioni_condizionali
-            WHERE enabled = 1 AND valid_from_ora IS NOT NULL AND valid_to_ora IS NOT NULL
-        """)
-        for row in cursor.fetchall():
-            for day_offset in range(days_to_check):
-                check_date = now + timedelta(days=day_offset)
-                
-                from_decimal = row['valid_from_ora']
-                to_decimal = row['valid_to_ora']
-                
-                from_hour = int(from_decimal)
-                from_min = int((from_decimal - from_hour) * 60)
-                event_from = check_date.replace(hour=from_hour, minute=from_min, second=0, microsecond=0)
-                
-                to_hour = int(to_decimal)
-                to_min = int((to_decimal - to_hour) * 60)
-                
-                if to_decimal < from_decimal:
-                    event_to = (check_date + timedelta(days=1)).replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
-                else:
-                    event_to = check_date.replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
-                
-                if event_from > now and event_from <= limit_time:
-                    event_times.add(event_from)
-                if event_to > now and event_to <= limit_time:
-                    event_times.add(event_to)
-        
-        # Calcola i cambiamenti di valore usando la logica unificata
+        # Campiona ogni scan_interval nel periodo futuro per trovare cambiamenti di valore
         changes = []
         last_value = current_value
         last_source = current_source
         
-        for event_time in sorted(event_times):
-            # Usa la logica unificata per calcolare tutte le configurazioni a questo momento
-            all_configs_at_time = self._get_configurations_at_time(event_time)
+        scan_interval = timedelta(seconds=scan_interval_seconds)
+        current_time = now
+        
+        while current_time <= limit_time:
+            # Valuta la configurazione a questo timestamp (solo setup_name)
+            config_at_time = self._get_configurations_at_time(current_time, setup_name=setup_name)
             
-            # Estrai il valore per il setup specifico
-            if setup_name in all_configs_at_time:
-                config_at_time = all_configs_at_time[setup_name]
-                new_value = config_at_time['value']
-                new_source = config_at_time['source']
+            if setup_name in config_at_time:
+                new_value = config_at_time[setup_name]['value']
+                new_source = config_at_time[setup_name]['source']
                 
-                # Aggiungi solo se il valore cambia effettivamente
+                # Registra il cambiamento se il valore effettivamente cambia
                 if new_value != last_value:
-                    minutes_until = int((event_time - now).total_seconds() / 60)
+                    minutes_until = int((current_time - now).total_seconds() / 60)
                     
                     changes.append({
                         'value': new_value,
                         'minutes_until': minutes_until,
-                        'timestamp': event_time.isoformat(),
-                        'type': new_source  # Il tipo è la sorgente che ha vinto (time, schedule, conditional, standard)
+                        'timestamp': current_time.isoformat(),
+                        'type': new_source
                     })
                     
                     last_value = new_value
                     last_source = new_source
+                    
+                    # Ferma se abbiamo già max_results
+                    if len(changes) >= max_results:
+                        break
+            
+            # Avanza di scan_interval
+            current_time += scan_interval
         
         # Salva in cache prima di restituire
         result = changes[:max_results]

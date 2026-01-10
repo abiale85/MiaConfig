@@ -581,6 +581,26 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 )
             _LOGGER.info(f"Cleanup storico globale completato per {len(all_names)} configurazioni")
     
+    async def handle_reload_cache(call: ServiceCall) -> None:
+        """Gestisce il servizio per ricaricare la cache in-memory dal database.
+        
+        Utile dopo:
+        - Restore manuale del database
+        - Modifiche dirette al file .db
+        - Backup/ripristino del database
+        """
+        entity_id = call.data.get("entity_id")
+        db = get_db_from_entity_id(hass, entity_id)
+        
+        await hass.async_add_executor_job(db.reload_cache)
+        
+        # Forza aggiornamento di tutti i sensori
+        for entry_id, data in hass.data.get(DOMAIN, {}).items():
+            if isinstance(data, dict) and 'coordinator' in data:
+                await data['coordinator'].async_request_refresh()
+        
+        _LOGGER.info("Cache ricaricata e sensori aggiornati")
+    
     # Schema dei servizi
     set_config_schema = vol.Schema({
         vol.Required("setup_name"): cv.string,
@@ -704,6 +724,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     
     hass.services.async_register(
         DOMAIN, "cleanup_history", handle_cleanup_history, schema=cleanup_history_schema
+    )
+    
+    hass.services.async_register(
+        DOMAIN, "reload_cache", handle_reload_cache
     )
     
     hass.services.async_register(
