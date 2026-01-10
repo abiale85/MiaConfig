@@ -20,6 +20,8 @@ class ConfigDatabase:
         # Cache per get_next_changes: evita ricalcoli se il valore corrente e le configurazioni non cambiano
         # Struttura: {(setup_name, limit_hours, max_results): {'value': str, 'config_version': int, 'result': list, 'timestamp': str}}
         self._next_changes_cache = {}
+        # Cache per get_all_configurations_detailed (UI): invalidata su modifiche config
+        self._detailed_configs_cache = None
         self._config_version = 0  # Incrementato ad ogni modifica di configurazione
         
         # CACHE IN-MEMORY per tutte le configurazioni (caricata all'avvio, aggiornata solo su modifiche)
@@ -537,11 +539,39 @@ class ConfigDatabase:
         INOLTRE: Ricarica la cache in-memory per riflettere le modifiche al DB.
         """
         self._next_changes_cache.clear()
+        self._detailed_configs_cache = None
         self._config_version += 1
+        self._descriptions_cache = None  # Invalida anche cache descrizioni
         
         # Ricarica la cache in-memory dopo modifiche (mantiene tutto sincronizzato)
         self._load_all_to_memory()
         _LOGGER.debug(f"Cache invalidata e ricaricata (config_version: {self._config_version})")
+    
+    def reload_cache(self) -> None:
+        """Ricarica manualmente tutta la cache in-memory dal database.
+        
+        Utile dopo restore di snapshot del database per sincronizzare
+        la cache con i dati ripristinati.
+        """
+        self._next_changes_cache.clear()
+        self._detailed_configs_cache = None
+        self._config_version += 1
+        self._descriptions_cache = None
+        self._load_all_to_memory()
+        _LOGGER.info("Cache manualmente ricaricata dal database")
+    
+    def reload_cache(self) -> None:
+        """Ricarica manualmente tutta la cache in-memory dal database.
+        
+        Utile dopo restore di snapshot del database per sincronizzare
+        la cache con i dati ripristinati.
+        """
+        self._next_changes_cache.clear()
+        self._config_version += 1
+        self._descriptions_cache = None
+        self._load_all_to_memory()
+        _LOGGER.info("Cache manualmente ricaricata dal database")
+
     
     def _check_priority_conflict(self, setup_name: str, priority: int, exclude_id: int = None) -> bool:
         """Verifica se esiste già una configurazione standard con la stessa priorità per questo nome."""
@@ -936,39 +966,41 @@ class ConfigDatabase:
         self._invalidate_next_changes_cache()
     
     def get_all_setup_names(self) -> List[str]:
-        """Ottiene tutti i nomi delle configurazioni esistenti."""
-        cursor = self.conn.cursor()
+        """Ottiene tutti i nomi delle configurazioni esistenti.
+        
+        OTTIMIZZAZIONE: Estrae nomi dalla cache in-memory invece di fare query ripetute.
+        """
+        # Assicurati che la cache sia caricata
+        if not self._memory_cache['loaded']:
+            self._load_all_to_memory()
         
         names = set()
         
-        cursor.execute("SELECT DISTINCT setup_name FROM configurazioni")
-        names.update(row['setup_name'] for row in cursor.fetchall())
-        
-        cursor.execute("SELECT DISTINCT setup_name FROM configurazioni_a_orario")
-        names.update(row['setup_name'] for row in cursor.fetchall())
-        
-        cursor.execute("SELECT DISTINCT setup_name FROM configurazioni_a_tempo")
-        names.update(row['setup_name'] for row in cursor.fetchall())
-        
-        cursor.execute("SELECT DISTINCT setup_name FROM configurazioni_condizionali")
-        names.update(row['setup_name'] for row in cursor.fetchall())
+        # Raccogli da tutte le liste in cache
+        names.update(row['setup_name'] for row in self._memory_cache['configurazioni'])
+        names.update(row['setup_name'] for row in self._memory_cache['configurazioni_a_orario'])
+        names.update(row['setup_name'] for row in self._memory_cache['configurazioni_a_tempo'])
+        names.update(row['setup_name'] for row in self._memory_cache['configurazioni_condizionali'])
         
         return sorted(list(names))
     
     def get_all_configurations_detailed(self) -> Dict[str, List[Dict[str, Any]]]:
-        """Ottiene tutte le configurazioni con tutti i dettagli, raggruppate per nome."""
-        cursor = self.conn.cursor()
-        cursor.row_factory = sqlite3.Row
+        """Ottiene tutte le configurazioni con tutti i dettagli, raggruppate per nome.
+        
+        OTTIMIZZAZIONE: Usa cache in-memory per evitare query ripetute.
+        """
+        # Se cache disponibile e valida, restituiscila
+        if self._detailed_configs_cache is not None:
+            return self._detailed_configs_cache
+        
+        # Assicurati che la cache sia caricata
+        if not self._memory_cache['loaded']:
+            self._load_all_to_memory()
+        
         result = {}
         
-        # Configurazioni standard (con descrizione)
-        cursor.execute("""
-            SELECT c.*, d.description 
-            FROM configurazioni c
-            LEFT JOIN configurazioni_descrizioni d ON c.setup_name = d.setup_name
-            ORDER BY c.setup_name, c.priority
-        """)
-        for row in cursor.fetchall():
+        # Configurazioni standard da cache
+        for row in self._memory_cache['configurazioni']:
             name = row['setup_name']
             if name not in result:
                 result[name] = []
@@ -979,18 +1011,18 @@ class ConfigDatabase:
                 'priority': row['priority'],
                 'enabled': bool(row['enabled'])
             }
-            # Aggiungi descrizione solo se presente
-            if row['description']:
-                config_dict['description'] = row['description']
+            # Aggiungi descrizione se disponibile
+            description = self._memory_cache['descrizioni'].get(name)
+            if description:
+                config_dict['description'] = description
             result[name].append(config_dict)
         
-        # Configurazioni a orario
-        cursor.execute("SELECT * FROM configurazioni_a_orario ORDER BY setup_name")
-        for row in cursor.fetchall():
+        # Configurazioni a orario da cache
+        for row in self._memory_cache['configurazioni_a_orario']:
             name = row['setup_name']
             if name not in result:
                 result[name] = []
-            days_str = row['days_of_week'] if row['days_of_week'] else '0,1,2,3,4,5,6'  # Default a tutti i giorni se None o vuoto
+            days_str = row['days_of_week'] if row['days_of_week'] else '0,1,2,3,4,5,6'
             result[name].append({
                 'type': 'schedule',
                 'id': row['id'],
@@ -1002,9 +1034,8 @@ class ConfigDatabase:
                 'enabled': bool(row['enabled'])
             })
         
-        # Configurazioni a tempo
-        cursor.execute("SELECT * FROM configurazioni_a_tempo ORDER BY setup_name")
-        for row in cursor.fetchall():
+        # Configurazioni a tempo da cache
+        for row in self._memory_cache['configurazioni_a_tempo']:
             name = row['setup_name']
             if name not in result:
                 result[name] = []
@@ -1027,14 +1058,8 @@ class ConfigDatabase:
             
             result[name].append(config_dict)
         
-        # Configurazioni condizionali
-        cursor.execute("""
-            SELECT id, setup_name, setup_value, conditional_config, conditional_operator, 
-                   conditional_value, valid_from_ora, valid_to_ora, priority, enabled 
-            FROM configurazioni_condizionali 
-            ORDER BY setup_name
-        """)
-        for row in cursor.fetchall():
+        # Configurazioni condizionali da cache
+        for row in self._memory_cache['configurazioni_condizionali']:
             name = row['setup_name']
             if name not in result:
                 result[name] = []
@@ -1053,7 +1078,11 @@ class ConfigDatabase:
                 config_dict['valid_from_ora'] = row['valid_from_ora']
             if row['valid_to_ora'] is not None:
                 config_dict['valid_to_ora'] = row['valid_to_ora']
+            
             result[name].append(config_dict)
+        
+        # Salva in cache prima di restituire
+        self._detailed_configs_cache = result
         return result
     
     def _save_to_history(self, setup_name: str, config_type: str, config_data: Dict[str, Any], operation: str) -> None:
