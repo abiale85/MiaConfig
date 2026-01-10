@@ -1,4 +1,4 @@
-// Version 2.1.0-beta.7 - Restored v2.0.0 working implementation - 20260107
+// Version 2.1.2 - Cache optimization and smart event detection - 20260110
 
 class MiaConfigCard extends HTMLElement {
     constructor() {
