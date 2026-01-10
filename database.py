@@ -21,6 +21,17 @@ class ConfigDatabase:
         # Struttura: {(setup_name, limit_hours, max_results): {'value': str, 'config_version': int, 'result': list, 'timestamp': str}}
         self._next_changes_cache = {}
         self._config_version = 0  # Incrementato ad ogni modifica di configurazione
+        
+        # CACHE IN-MEMORY per tutte le configurazioni (caricata all'avvio, aggiornata solo su modifiche)
+        # Questo elimina ~40 query al minuto, caricando tutto UNA VOLTA e lavorando in memoria
+        self._memory_cache = {
+            'configurazioni': [],  # Lista di dict con tutte le config standard
+            'configurazioni_a_orario': [],  # Lista di dict con tutte le config a orario
+            'configurazioni_a_tempo': [],  # Lista di dict con tutte le config a tempo
+            'configurazioni_condizionali': [],  # Lista di dict con tutte le config condizionali
+            'descrizioni': {},  # Dict {setup_name: description}
+            'loaded': False  # Flag per sapere se la cache è stata caricata
+        }
     
     @staticmethod
     def validate_setup_name(setup_name: str) -> str:
@@ -47,6 +58,44 @@ class ConfigDatabase:
         conn = sqlite3.connect(self.db_path, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         return conn
+    
+    def _load_all_to_memory(self) -> None:
+        """Carica TUTTE le configurazioni in memoria in un'unica operazione batch.
+        
+        Questo elimina la necessità di fare query ripetute ogni scan_interval.
+        Con pochi setup (7) e pochi override (20), tutto può stare in RAM.
+        La cache viene invalidata e ricaricata solo quando ci sono modifiche.
+        """
+        cursor = self.conn.cursor()
+        
+        # Carica configurazioni standard (abilitate e non)
+        cursor.execute("SELECT * FROM configurazioni ORDER BY priority")
+        self._memory_cache['configurazioni'] = [dict(row) for row in cursor.fetchall()]
+        
+        # Carica configurazioni a orario
+        cursor.execute("SELECT * FROM configurazioni_a_orario ORDER BY priority")
+        self._memory_cache['configurazioni_a_orario'] = [dict(row) for row in cursor.fetchall()]
+        
+        # Carica configurazioni a tempo
+        cursor.execute("SELECT * FROM configurazioni_a_tempo ORDER BY priority")
+        self._memory_cache['configurazioni_a_tempo'] = [dict(row) for row in cursor.fetchall()]
+        
+        # Carica configurazioni condizionali
+        cursor.execute("SELECT * FROM configurazioni_condizionali ORDER BY priority")
+        self._memory_cache['configurazioni_condizionali'] = [dict(row) for row in cursor.fetchall()]
+        
+        # Carica descrizioni
+        cursor.execute("SELECT setup_name, description FROM configurazioni_descrizioni")
+        self._memory_cache['descrizioni'] = {row['setup_name']: row['description'] for row in cursor.fetchall()}
+        
+        self._memory_cache['loaded'] = True
+        
+        _LOGGER.debug(
+            f"Cache in-memory caricata: {len(self._memory_cache['configurazioni'])} standard, "
+            f"{len(self._memory_cache['configurazioni_a_orario'])} orario, "
+            f"{len(self._memory_cache['configurazioni_a_tempo'])} tempo, "
+            f"{len(self._memory_cache['configurazioni_condizionali'])} condizionali"
+        )
     
     def initialize(self) -> None:
         """Crea le tabelle se non esistono e applica migrazioni."""
@@ -184,7 +233,10 @@ class ConfigDatabase:
         
         self.conn.commit()
         
-        _LOGGER.info("Database inizializzato con indici ottimizzati: %s", self.db_path)
+        # Carica tutte le configurazioni in memoria per eliminare query ripetute
+        self._load_all_to_memory()
+        
+        _LOGGER.info("Database inizializzato con indici ottimizzati e cache in-memory: %s", self.db_path)
     
     def _get_configurations_at_time(self, target_datetime: datetime) -> Dict[str, Any]:
         """
@@ -192,8 +244,8 @@ class ConfigDatabase:
         Questa funzione è usata sia da get_all_configurations (runtime) che da simulate_configuration_schedule.
         
         OTTIMIZZAZIONI PERFORMANCE:
-        - Query batch con indici per ridurre I/O
-        - Filtraggio in Python per evitare query multiple
+        - USA CACHE IN-MEMORY invece di query ripetute (elimina ~40 query/minuto)
+        - Filtraggio in Python su dati già in RAM
         - Valutazione lazy dei condizionali (solo se attivi)
         
         Args:
@@ -202,23 +254,27 @@ class ConfigDatabase:
         Returns:
             Dict con tutte le configurazioni risolte ricorsivamente per quel momento
         """
-        cursor = self.conn.cursor()
+        # Assicurati che la cache sia caricata
+        if not self._memory_cache['loaded']:
+            self._load_all_to_memory()
+        
         current_day = target_datetime.weekday()
         current_time = target_datetime.hour + target_datetime.minute / 60.0
         
         # Raccogli tutte le configurazioni attive per questo timestamp
         all_active_configs = []
         
-        # Configurazioni a tempo attive
-        cursor.execute("""
-            SELECT setup_name, setup_value, priority, 'time' as source_type, 
-                   valid_from_date, valid_to_date, valid_from_ora, valid_to_ora, days_of_week, id
-            FROM configurazioni_a_tempo
-            WHERE datetime(?) BETWEEN datetime(valid_from_date) AND datetime(valid_to_date)
-            AND enabled = 1
-        """, (target_datetime.strftime('%Y-%m-%d %H:%M:%S'),))
-        
-        for row in cursor.fetchall():
+        # Configurazioni a tempo attive - FILTRA DA CACHE IN-MEMORY
+        for row in self._memory_cache['configurazioni_a_tempo']:
+            if not row['enabled']:
+                continue
+            
+            # Verifica validità temporale
+            valid_from = datetime.fromisoformat(row['valid_from_date'])
+            valid_to = datetime.fromisoformat(row['valid_to_date'])
+            if not (valid_from <= target_datetime <= valid_to):
+                continue
+            
             # Verifica filtri opzionali orari
             if row['valid_from_ora'] is not None and row['valid_to_ora'] is not None:
                 valid_from = row['valid_from_ora']
@@ -251,14 +307,10 @@ class ConfigDatabase:
                 'id': row['id']
             })
         
-        # Configurazioni a orario attive
-        cursor.execute("""
-            SELECT setup_name, setup_value, priority, valid_from_ora, valid_to_ora, 
-                   days_of_week, id
-            FROM configurazioni_a_orario
-            WHERE enabled = 1
-        """)
-        for row in cursor.fetchall():
+        # Configurazioni a orario attive - FILTRA DA CACHE IN-MEMORY
+        for row in self._memory_cache['configurazioni_a_orario']:
+            if not row['enabled']:
+                continue
             days_of_week = row['days_of_week'] if row['days_of_week'] else '0,1,2,3,4,5,6'
             valid_days = [int(d) for d in days_of_week.split(',') if d]
             
@@ -286,13 +338,10 @@ class ConfigDatabase:
                     'id': row['id']
                 })
         
-        # Configurazioni standard (sempre attive)
-        cursor.execute("""
-            SELECT setup_name, setup_value, priority, id
-            FROM configurazioni
-            WHERE enabled = 1
-        """)
-        for row in cursor.fetchall():
+        # Configurazioni standard (sempre attive) - DA CACHE IN-MEMORY
+        for row in self._memory_cache['configurazioni']:
+            if not row['enabled']:
+                continue
             all_active_configs.append({
                 'setup_name': row['setup_name'],
                 'value': row['setup_value'],
@@ -302,15 +351,8 @@ class ConfigDatabase:
                 'id': row['id']
             })
         
-        # Configurazioni condizionali (valutate ricorsivamente)
-        cursor.execute("""
-            SELECT setup_name, setup_value, priority, conditional_config, 
-                   conditional_operator, conditional_value, 
-                   valid_from_ora, valid_to_ora, id
-            FROM configurazioni_condizionali
-            WHERE enabled = 1
-        """)
-        conditional_configs = cursor.fetchall()
+        # Configurazioni condizionali (valutate ricorsivamente) - DA CACHE IN-MEMORY
+        conditional_configs = [row for row in self._memory_cache['configurazioni_condizionali'] if row['enabled']]
         
         # Prima ordina per priorità, poi valuta le condizioni
         all_active_configs.sort(key=lambda x: (x['priority'], x['source_order']))
@@ -458,9 +500,15 @@ class ConfigDatabase:
         Chiamato automaticamente da tutti i metodi che modificano le configurazioni
         (set_config, set_time_config, delete_config, etc.) per garantire che
         get_next_changes ricalcoli i risultati dopo cambiamenti al setup.
+        
+        INOLTRE: Ricarica la cache in-memory per riflettere le modifiche al DB.
         """
         self._next_changes_cache.clear()
         self._config_version += 1
+        
+        # Ricarica la cache in-memory dopo modifiche (mantiene tutto sincronizzato)
+        self._load_all_to_memory()
+        _LOGGER.debug(f"Cache invalidata e ricaricata (config_version: {self._config_version})")
     
     def _check_priority_conflict(self, setup_name: str, priority: int, exclude_id: int = None) -> bool:
         """Verifica se esiste già una configurazione standard con la stessa priorità per questo nome."""

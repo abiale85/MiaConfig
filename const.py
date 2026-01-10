@@ -1,7 +1,7 @@
 """Costanti per Mia Config."""
 
 DOMAIN = "mia_config"
-VERSION = "1.2.0"
+VERSION = "2.1.1"
 DEFAULT_NAME = "Mia Config"
 DEFAULT_SCAN_INTERVAL = 60
 DEFAULT_LOOKAHEAD_HOURS = 24
