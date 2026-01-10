@@ -28,6 +28,7 @@
 ## 🐛 Bug Fix
 
 - **Fix cache stale dopo restore**: risolto problema di desincronizzazione cache dopo ripristino database da interfaccia
+- **Fix campionamento eventi**: `get_next_changes` ora parte da `next_interval` invece di `now` per evitare di rilevare lo stato corrente come cambiamento futuro
 
 ## 📊 Impatto Performance
 
