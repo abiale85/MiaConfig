@@ -1450,7 +1450,8 @@ class ConfigDatabase:
         last_source = current_source
         
         scan_interval = timedelta(seconds=scan_interval_seconds)
-        current_time = now
+        # INIZIA dal prossimo intervallo, non da now (now è già il valore corrente)
+        current_time = now + scan_interval
         
         while current_time <= limit_time:
             # Valuta la configurazione a questo timestamp (solo setup_name)
