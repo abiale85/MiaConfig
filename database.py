@@ -248,6 +248,15 @@ class ConfigDatabase:
         - Filtraggio in Python su dati già in RAM
         - Valutazione lazy dei condizionali (solo se attivi)
         
+        NOTA PERFORMANCE: Questa funzione calcola SEMPRE tutte le configurazioni esistenti,
+        anche quando servirebbe solo il valore di setup_name specifici. Questo è necessario
+        perché le configurazioni condizionali possono creare dipendenze transitive
+        (A dipende da B che dipende da C). Senza conoscere tutti i valori, non si può
+        risolvere correttamente la priorità globale.
+        
+        Tuttavia, in contesti come get_next_changes(), questo porta a calcolare
+        inutilmente centinaia/migliaia di configurazioni per evento futuro.
+        
         Args:
             target_datetime: Il momento per cui calcolare le configurazioni attive
         
@@ -491,6 +500,8 @@ class ConfigDatabase:
     
     def get_configuration(self, setup_name: str) -> Optional[Dict[str, Any]]:
         """Ottiene una specifica configurazione applicando la logica di priorità."""
+        # Nota: attualmente richiede il calcolo di tutte le configurazioni a causa delle dipendenze condizionali
+        # che possono creare catene transitive (A dipende da B che dipende da C, ecc.)
         all_configs = self.get_all_configurations()
         return all_configs.get(setup_name)
     
@@ -903,39 +914,31 @@ class ConfigDatabase:
         self._invalidate_next_changes_cache()
     
     def get_all_setup_names(self) -> List[str]:
-        """Ottiene tutti i nomi delle configurazioni esistenti."""
-        cursor = self.conn.cursor()
+        """Ottiene tutti i nomi delle configurazioni esistenti usando la cache in-memory."""
+        # Assicurati che la cache sia caricata
+        if not self._memory_cache['loaded']:
+            self._load_all_to_memory()
         
         names = set()
         
-        cursor.execute("SELECT DISTINCT setup_name FROM configurazioni")
-        names.update(row['setup_name'] for row in cursor.fetchall())
-        
-        cursor.execute("SELECT DISTINCT setup_name FROM configurazioni_a_orario")
-        names.update(row['setup_name'] for row in cursor.fetchall())
-        
-        cursor.execute("SELECT DISTINCT setup_name FROM configurazioni_a_tempo")
-        names.update(row['setup_name'] for row in cursor.fetchall())
-        
-        cursor.execute("SELECT DISTINCT setup_name FROM configurazioni_condizionali")
-        names.update(row['setup_name'] for row in cursor.fetchall())
+        # Estrai nomi dalla cache invece di fare query dirette
+        names.update(row['setup_name'] for row in self._memory_cache['configurazioni'])
+        names.update(row['setup_name'] for row in self._memory_cache['configurazioni_a_orario'])
+        names.update(row['setup_name'] for row in self._memory_cache['configurazioni_a_tempo'])
+        names.update(row['setup_name'] for row in self._memory_cache['configurazioni_condizionali'])
         
         return sorted(list(names))
     
     def get_all_configurations_detailed(self) -> Dict[str, List[Dict[str, Any]]]:
-        """Ottiene tutte le configurazioni con tutti i dettagli, raggruppate per nome."""
-        cursor = self.conn.cursor()
-        cursor.row_factory = sqlite3.Row
+        """Ottiene tutte le configurazioni con tutti i dettagli, raggruppate per nome usando la cache in-memory."""
+        # Assicurati che la cache sia caricata
+        if not self._memory_cache['loaded']:
+            self._load_all_to_memory()
+        
         result = {}
         
-        # Configurazioni standard (con descrizione)
-        cursor.execute("""
-            SELECT c.*, d.description 
-            FROM configurazioni c
-            LEFT JOIN configurazioni_descrizioni d ON c.setup_name = d.setup_name
-            ORDER BY c.setup_name, c.priority
-        """)
-        for row in cursor.fetchall():
+        # Configurazioni standard (con descrizione dalla cache)
+        for row in self._memory_cache['configurazioni']:
             name = row['setup_name']
             if name not in result:
                 result[name] = []
@@ -946,14 +949,14 @@ class ConfigDatabase:
                 'priority': row['priority'],
                 'enabled': bool(row['enabled'])
             }
-            # Aggiungi descrizione solo se presente
-            if row['description']:
-                config_dict['description'] = row['description']
+            # Aggiungi descrizione dalla cache se presente
+            description = self._memory_cache['descrizioni'].get(name)
+            if description:
+                config_dict['description'] = description
             result[name].append(config_dict)
         
         # Configurazioni a orario
-        cursor.execute("SELECT * FROM configurazioni_a_orario ORDER BY setup_name")
-        for row in cursor.fetchall():
+        for row in self._memory_cache['configurazioni_a_orario']:
             name = row['setup_name']
             if name not in result:
                 result[name] = []
@@ -970,8 +973,7 @@ class ConfigDatabase:
             })
         
         # Configurazioni a tempo
-        cursor.execute("SELECT * FROM configurazioni_a_tempo ORDER BY setup_name")
-        for row in cursor.fetchall():
+        for row in self._memory_cache['configurazioni_a_tempo']:
             name = row['setup_name']
             if name not in result:
                 result[name] = []
@@ -995,13 +997,7 @@ class ConfigDatabase:
             result[name].append(config_dict)
         
         # Configurazioni condizionali
-        cursor.execute("""
-            SELECT id, setup_name, setup_value, conditional_config, conditional_operator, 
-                   conditional_value, valid_from_ora, valid_to_ora, priority, enabled 
-            FROM configurazioni_condizionali 
-            ORDER BY setup_name
-        """)
-        for row in cursor.fetchall():
+        for row in self._memory_cache['configurazioni_condizionali']:
             name = row['setup_name']
             if name not in result:
                 result[name] = []
@@ -1022,28 +1018,6 @@ class ConfigDatabase:
                 config_dict['valid_to_ora'] = row['valid_to_ora']
             result[name].append(config_dict)
         return result
-    
-    def _save_to_history(self, setup_name: str, config_type: str, config_data: Dict[str, Any], operation: str) -> None:
-        """Salva una configurazione nello storico."""
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            INSERT INTO configurazioni_storico 
-            (setup_name, config_type, setup_value, priority, valid_from_ora, valid_to_ora, 
-             days_of_week, valid_from_date, valid_to_date, operation)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            setup_name,
-            config_type,
-            config_data.get('setup_value'),
-            config_data.get('priority'),
-            config_data.get('valid_from_ora'),
-            config_data.get('valid_to_ora'),
-            config_data.get('days_of_week'),
-            config_data.get('valid_from_date'),
-            config_data.get('valid_to_date'),
-            operation
-        ))
-        self.conn.commit()
     
     def get_history(self, setup_name: Optional[str] = None, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
         """Ottiene lo storico delle configurazioni con paginazione."""
@@ -1483,6 +1457,10 @@ class ConfigDatabase:
         
         for event_time in sorted(event_times):
             # Usa la logica unificata per calcolare tutte le configurazioni a questo momento
+            # NOTA PERFORMANCE: Questo calcola TUTTE le configurazioni esistenti, anche se
+            # alla fine interessa solo il valore di 'setup_name'. Tuttavia, le dipendenze
+            # condizionali rendono spesso necessario calcolare tutto.
+            # OTTIMIZZAZIONE FUTURA: Aggiungere parametro target_setup_names per limitare il calcolo
             all_configs_at_time = self._get_configurations_at_time(event_time)
             
             # Estrai il valore per il setup specifico
@@ -1515,87 +1493,6 @@ class ConfigDatabase:
         }
         
         return result
-    
-    def get_current_config_start_time(self, setup_name: str) -> Optional[int]:
-        """
-        Calcola da quanti minuti è attivo il valore corrente per una configurazione.
-        Limita la ricerca alle ultime 24 ore per evitare valori enormi.
-        Restituisce i minuti dall'inizio della configurazione attiva, o None se non determinabile.
-        """
-        cursor = self.conn.cursor()
-        now = datetime.now()
-        current_day = now.weekday()
-        # Conversione corretta: ore + minuti/60
-        current_time = now.hour + now.minute / 60.0
-        
-        # Limita la ricerca a 24 ore nel passato
-        lookback_limit = now - timedelta(hours=24)
-        
-        # Controlla se c'è una configurazione a tempo attiva
-        cursor.execute("""
-            SELECT valid_from_date, valid_to_date
-            FROM configurazioni_a_tempo
-            WHERE setup_name = ?
-            AND datetime('now', 'localtime') BETWEEN valid_from_date AND valid_to_date
-            AND datetime(valid_from_date) >= datetime(?)
-            ORDER BY id DESC
-            LIMIT 1
-        """, (setup_name, lookback_limit.isoformat()))
-        
-        time_config = cursor.fetchone()
-        if time_config:
-            valid_from = datetime.fromisoformat(time_config['valid_from_date'])
-            minutes_active = int((now - valid_from).total_seconds() / 60)
-            return max(0, minutes_active)
-        
-        # Controlla se c'è una configurazione a orario attiva
-        cursor.execute("""
-            SELECT valid_from_ora, valid_to_ora, days_of_week
-            FROM configurazioni_a_orario
-            WHERE setup_name = ?
-            ORDER BY id DESC
-        """, (setup_name,))
-        
-        for row in cursor.fetchall():
-            days_of_week = row['days_of_week'] if row['days_of_week'] else '0,1,2,3,4,5,6'
-            valid_days = [int(d) for d in days_of_week.split(',') if d]
-            
-            valid_from = row['valid_from_ora']
-            valid_to = row['valid_to_ora']
-            
-            # Verifica se è attiva ora
-            is_valid = False
-            # Caso speciale: se from == to significa 24 ore (sempre attivo)
-            if valid_from == valid_to:
-                is_valid = True
-            elif valid_to < valid_from:  # Attraversa la mezzanotte
-                is_valid = (current_time >= valid_from or current_time <= valid_to)
-            else:
-                is_valid = (valid_from <= current_time <= valid_to)
-            
-            if is_valid and current_day in valid_days:
-                # Calcola da quanto è attiva
-                from_hour = int(valid_from)
-                from_min = int((valid_from - from_hour) * 60)
-                
-                # Se attraversa mezzanotte e siamo dopo mezzanotte
-                if valid_to < valid_from and current_time <= valid_to:
-                    # È iniziata ieri
-                    start_time = (now - timedelta(days=1)).replace(hour=from_hour, minute=from_min, second=0, microsecond=0)
-                else:
-                    # È iniziata oggi
-                    start_time = now.replace(hour=from_hour, minute=from_min, second=0, microsecond=0)
-                
-                # Limita a 24 ore
-                if start_time >= lookback_limit:
-                    minutes_active = int((now - start_time).total_seconds() / 60)
-                    return max(0, minutes_active)
-                else:
-                    # Troppo vecchio, ritorna il massimo (24 ore = 1440 minuti)
-                    return 1440
-        
-        # Se è una configurazione standard, restituisce None (sempre attiva)
-        return None
     
     def cleanup_expired_events(self, days: int = 30) -> int:
         """
@@ -1752,6 +1649,8 @@ class ConfigDatabase:
                 timestamp = current_date.replace(hour=hour, minute=min_part, second=0, microsecond=0)
                 
                 # Usa la logica unificata
+                # NOTA PERFORMANCE: Anche qui calcola TUTTE le configurazioni esistenti
+                # per ogni timestamp campionato, necessario per dipendenze condizionali
                 all_configs = self._get_configurations_at_time(timestamp)
                 
                 # Trova la configurazione per questo setup_name

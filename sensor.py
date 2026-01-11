@@ -64,12 +64,6 @@ async def async_setup_entry(
                 # Valore cambiato, ricalcola
                 needs_recalc = True
                 recalc_reason = f"valore cambiato da {last_value} a {current_value}"
-            elif cached.get('next_changes'):
-                # Controlla se il prossimo evento è vicino (< 2 minuti): ricalcola per aggiornare il countdown
-                next_event_minutes = cached['next_changes'][0].get('minutes_until', 999)
-                if next_event_minutes < 2:
-                    needs_recalc = True
-                    recalc_reason = f"prossimo evento tra {next_event_minutes}min"
             else:
                 # Nessun evento nei prossimi lookahead_hours: ricalcola ogni ora per vedere se ne compaiono
                 last_calc = last_recalc_time.get(setup_name, 0)
@@ -84,41 +78,21 @@ async def async_setup_entry(
                     next_changes = await hass.async_add_executor_job(
                         db.get_next_changes, setup_name, lookahead_hours
                     )
-                    minutes_active = await hass.async_add_executor_job(
-                        db.get_current_config_start_time, setup_name
-                    )
                     predictive_data[setup_name] = {
                         'next_changes': next_changes,
-                        'minutes_active': minutes_active,
-                        'start_time_base': minutes_active  # Salva il valore base per calcoli incrementali
+                        'last_recalc': current_time
                     }
                     predictive_cache[setup_name] = {
                         'next_changes': next_changes,
-                        'start_time_base': minutes_active,
-                        'last_update': configs[setup_name].get('value')  # Traccia il valore a cui corrisponde
+                        'last_update': configs[setup_name].get('value'),  # Traccia il valore a cui corrisponde
+                        'last_recalc': current_time
                     }
                     last_recalc_time[setup_name] = current_time  # Aggiorna timestamp ricalcolo
                 except Exception as e:
                     _LOGGER.error(f"Errore calcolo dati predittivi per {setup_name}: {e}")
                     predictive_data[setup_name] = {
                         'next_changes': [],
-                        'minutes_active': None
-                    }
-            else:
-                # Usa la cache: calcola minutes_active incrementalmente senza query
-                # Se il valore non è cambiato, aggiungi semplicemente scan_interval
-                base_minutes = cached.get('start_time_base', 0)
-                if base_minutes is not None:
-                    # Incrementa dal valore base (approssimazione, evita query)
-                    estimated_minutes = base_minutes + scan_interval // 60
-                    predictive_data[setup_name] = {
-                        'next_changes': cached['next_changes'],
-                        'minutes_active': estimated_minutes
-                    }
-                else:
-                    predictive_data[setup_name] = {
-                        'next_changes': cached['next_changes'],
-                        'minutes_active': None
+                        'last_recalc': current_time
                     }
         
         # Salva stato corrente per il prossimo ciclo
@@ -301,7 +275,15 @@ class DynamicConfigSensor(CoordinatorEntity, SensorEntity):
         # Usa i dati predittivi già calcolati dal coordinator
         predictive = self.coordinator.data.get('predictive', {}).get(self._setup_name, {})
         next_changes = predictive.get('next_changes', [])
-        minutes_active = predictive.get('minutes_active')
+        
+        # Aggiungi timestamp ultimo ricalcolo se disponibile
+        last_recalc = predictive.get('last_recalc')
+        if last_recalc:
+            try:
+                recalc_time = datetime.fromtimestamp(last_recalc)
+                attributes['predictive_last_recalc'] = recalc_time.isoformat()
+            except (ValueError, TypeError):
+                attributes['predictive_last_recalc'] = str(last_recalc)
         
         # Importa datetime per la formattazione
         from datetime import datetime

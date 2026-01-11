@@ -866,6 +866,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             # Riapri la connessione
             db.conn = db._open_database()
             
+            # Invalida la cache dopo il ripristino per riflettere i nuovi dati
+            db._invalidate_next_changes_cache()
+            
             _LOGGER.info("Database ripristinato da: %s", backup_file)
             return {
                 "success": True,
