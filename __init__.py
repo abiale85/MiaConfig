@@ -1,6 +1,7 @@
 """
 Mia Config - Gestione configurazioni dinamiche basate su tempo e orario.
 """
+import json
 import logging
 import os
 import shutil
@@ -30,6 +31,13 @@ from .database import ConfigDatabase
 
 _LOGGER = logging.getLogger(__name__)
 
+translations_cache = {}
+
+def _load_json(file_path):
+    """Load JSON file synchronously."""
+    with open(file_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
 
 def validate_time_format(value):
     """Valida il formato orario in formato decimale (0.0 - 23.983333)."""
@@ -47,6 +55,41 @@ def validate_time_format(value):
         raise vol.Invalid(f"I minuti devono essere tra 0 e 59, ricevuto: {minutes}")
     
     return time_value
+
+
+def get_translation(hass: HomeAssistant, key: str, **kwargs) -> str:
+    """Get translated string for the given key with optional formatting.
+    
+    Args:
+        hass: Home Assistant instance
+        key: Translation key (e.g., 'sensor.no_upcoming_events')
+        **kwargs: Formatting arguments for the translation string
+    
+    Returns:
+        Translated and formatted string, or the key if translation not found
+    """
+    language = hass.config.language or "en"
+    translations = translations_cache.get(language, translations_cache.get('en', {}))
+    
+    # Navigate the nested structure (e.g., 'sensor.no_upcoming_events')
+    keys = key.split('.')
+    value = translations
+    for k in keys:
+        if isinstance(value, dict):
+            value = value.get(k)
+        else:
+            value = None
+            break
+    
+    if isinstance(value, str):
+        try:
+            return value.format(**kwargs)
+        except (KeyError, ValueError):
+            _LOGGER.warning("Errore formattazione traduzione per chiave '%s': %s", key, value)
+            return value
+    else:
+        _LOGGER.debug("Traduzione non trovata per chiave '%s' in lingua '%s'", key, language)
+        return key
 
 PLATFORMS = ["sensor"]
 
@@ -102,6 +145,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         
         # Verifica che il database sia accessibile
         await hass.async_add_executor_job(db.get_all_setup_names)
+        
+        # Carica traduzioni
+        for lang in ['en', 'it']:
+            translation_file = os.path.join(os.path.dirname(__file__), "translations", f"{lang}.json")
+            try:
+                translations_cache[lang] = await hass.async_add_executor_job(_load_json, translation_file)
+            except Exception as err:
+                _LOGGER.warning("Errore caricamento traduzioni %s: %s", lang, err)
         
     except Exception as err:
         _LOGGER.error("Errore inizializzazione database %s: %s", db_path, err)
@@ -866,8 +917,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             # Riapri la connessione
             db.conn = db._open_database()
             
-            # Invalida la cache dopo il ripristino per riflettere i nuovi dati
-            db._invalidate_next_changes_cache()
+            # Invalida tutte le cache dopo il ripristino per riflettere i nuovi dati
+            db._invalidate_caches()
             
             _LOGGER.info("Database ripristinato da: %s", backup_file)
             return {

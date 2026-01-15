@@ -1,3 +1,15 @@
+## v2.1.2 - 8 Gennaio 2026 🚀 Stabilità & Fix Predittivi
+
+### 🔧 Fix e miglioramenti
+- Vista settimanale e sensori: i dati predittivi restano disponibili fra i refresh e mostrano un messaggio tradotto se non ci sono eventi nei prossimi 7 giorni (stop ai valori "unknown").
+- Lookahead di default portato a 168 ore (7 giorni) per allineare attributi `next_*` con la card settimanale.
+- Motore database: cache `event_times` con rigenerazione automatica, risoluzione mirata delle dipendenze condizionali e simulazione event-driven per la vista settimanale.
+- Traduzioni caricate all'avvio, invalidazione cache completa dopo ogni modifica e meno rumore nei log della card grazie al toggle `debug` (config o `window.miaConfigDebug`).
+
+### 📦 Versioni
+- integrazione: 2.1.2
+- card: 2.1.0-beta.7.2
+
 ## ✅ All Modal Issues Fixed + Multi-Instance Support + All Syntax Fixes + Layout Improvements
 
 **This version fixes all 3 reported modal problems, adds complete multi-instance support, fixes all JavaScript syntax errors, and improves the add configuration modal layout:**

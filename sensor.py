@@ -1,6 +1,7 @@
 """Sensor platform per Mia Config."""
 import logging
-from datetime import timedelta
+import time
+from datetime import datetime, timedelta
 from typing import Any, Optional
 
 from homeassistant.components.sensor import SensorEntity
@@ -8,6 +9,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
+
+from . import get_translation
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
@@ -39,11 +42,22 @@ async def async_setup_entry(
     predictive_cache = {}
     last_configs = {}
     last_recalc_time = {}  # Traccia ultimo ricalcolo per ogni setup
+    last_config_version = None  # Traccia versione configurazioni per invalidare cache
     
     async def async_update_data():
         """Aggiorna i dati dal database."""
+        nonlocal last_config_version
         configs = await hass.async_add_executor_job(db.get_all_configurations)
-        current_time = hass.loop.time()
+        # Usa timestamp epoch reale, non il clock monotono dell'event loop
+        current_time = time.time()
+        
+        # Controlla se le configurazioni sono cambiate (nuova versione)
+        current_config_version = db._config_version
+        config_changed = last_config_version != current_config_version
+        if config_changed:
+            _LOGGER.debug(f"Configurazione cambiata (versione {current_config_version}), invalido cache predittive")
+            predictive_cache.clear()  # Invalida tutta la cache predittiva
+            last_config_version = current_config_version
         
         # Calcola i dati predittivi SOLO se necessario
         predictive_data = {}
@@ -60,6 +74,10 @@ async def async_setup_entry(
                 # Prima volta, calcola
                 needs_recalc = True
                 recalc_reason = "prima volta"
+            elif config_changed:
+                # Configurazioni cambiate, ricalcola
+                needs_recalc = True
+                recalc_reason = "configurazioni cambiate"
             elif current_value != last_value:
                 # Valore cambiato, ricalcola
                 needs_recalc = True
@@ -93,6 +111,13 @@ async def async_setup_entry(
                     predictive_data[setup_name] = {
                         'next_changes': [],
                         'last_recalc': current_time
+                    }
+            else:
+                # Mantieni i dati predittivi già calcolati, così non spariscono a ogni refresh
+                if cached:
+                    predictive_data[setup_name] = {
+                        'next_changes': cached.get('next_changes', []),
+                        'last_recalc': cached.get('last_recalc')
                     }
         
         # Salva stato corrente per il prossimo ciclo
@@ -285,15 +310,14 @@ class DynamicConfigSensor(CoordinatorEntity, SensorEntity):
             except (ValueError, TypeError):
                 attributes['predictive_last_recalc'] = str(last_recalc)
         
-        # Importa datetime per la formattazione
-        from datetime import datetime
-        
         if next_changes:
             # Prossimo cambiamento
             next_change = next_changes[0]
             
             attributes['next_value'] = next_change['value']
             attributes['next_change_type'] = next_change['type']
+            if 'id' in next_change:
+                attributes['next_value_id'] = next_change['id']
             
             # Timestamp del prossimo evento (se disponibile)
             if 'timestamp' in next_change:
@@ -306,6 +330,8 @@ class DynamicConfigSensor(CoordinatorEntity, SensorEntity):
                     'value': event['value'],
                     'type': event['type']
                 }
+                if 'id' in event:
+                    event_data['id'] = event['id']
                 if 'timestamp' in event:
                     event_data['at'] = event['timestamp']
                 upcoming_events.append(event_data)
@@ -337,7 +363,11 @@ class DynamicConfigSensor(CoordinatorEntity, SensorEntity):
                     attr_name = f"next_{value}_at"
                     attributes[attr_name] = event['at']
         else:
-            attributes['next_value'] = None
+            # Usa la traduzione per il messaggio di nessun evento
+            days = 7  # 168 ore / 24 = 7 giorni
+            message = get_translation(self.hass, "sensor.no_upcoming_events", days=days)
+            
+            attributes['next_value'] = message
             attributes['next_change_at'] = None
             attributes['next_change_type'] = None
         

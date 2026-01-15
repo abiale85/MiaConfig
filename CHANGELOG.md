@@ -1,5 +1,24 @@
 # 📋 Changelog - Mia Config
 
+## v2.1.2 - 8 Gennaio 2026 ✅ Release stabile
+
+### 🐛 Fix predittivi
+- Gli attributi `next_*` non tornano più `unknown`: la cache predittiva viene riutilizzata e mostra un messaggio tradotto quando non ci sono eventi nei prossimi 7 giorni.
+- Lookahead predefinito esteso a 168 ore per sensori e servizi, allineato alla vista settimanale.
+
+### 🧠 Motore database
+- Cache `event_times` rigenerabile e invalidazione completa a ogni modifica di configurazione per evitare risultati stantii.
+- Risoluzione mirata delle dipendenze condizionali e simulazione event-driven per `simulate_configuration_schedule` e `get_next_changes`.
+- Retry automatico quando la cache eventi è vuota allo startup per evitare il blocco "nessun evento".
+
+### 🖥️ UI
+- La card usa il flag `debug` (config o `window.miaConfigDebug`) e riduce il rumore console.
+- Traduzioni caricate all'avvio per messaggi lato sensore/card.
+
+### 📦 Versioni
+- integrazione: 2.1.2
+- card: 2.1.0-beta.7.2
+
 ## v2.1.0-beta.7.2 - 7 Gennaio 2026 🐛 Critical Fixes
 
 ### 🐛 Correzioni Critiche
