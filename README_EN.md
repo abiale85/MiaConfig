@@ -19,6 +19,7 @@ A custom component for Home Assistant that manages dynamic configurations with v
 - **Advanced Priority System**: Each configuration has numerical priority (1 = highest, 99 = lowest)
 - **Dynamic Sensors**: Each configuration is exposed as a sensor in Home Assistant
 - **Event Prediction**: Attributes with ISO timestamps of next value changes
+- **Weekly Lookahead**: Default prediction window set to 7 days (configurable via options)
 - **Complete Services**: API for managing configurations via automations or scripts
 - **Complete UI Interface**: Lovelace card with dashboard, weekly view, management, and history
 - **Isolated Database**: Each instance has its own separate SQLite database

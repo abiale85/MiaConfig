@@ -1,48 +1,88 @@
 # 📋 Changelog - Mia Config
 
-## v2.1.0-beta.7.2 - 7 Gennaio 2026 🐛 Critical Fixes
+## v2.2.0 - January 15, 2026 🚀 Major Release
 
-### 🐛 Correzioni Critiche
-- **Fix Null Reference**: Risolto errore `Cannot set properties of null` in dcEditConfig
-- **Campo Priority Ultra Compatto**: 60px con `!important` e `box-sizing: border-box`
-- **Checkbox Layout Corretto**: Cambiato da grid a flexbox con vincoli corretti (50-80px)
-- **Max-Width Constraints**: Aggiunti limiti per evitare overflow orizzontale
-- **Tooltip CSS Cleanup**: Rimosso prefisso `.mia-config-card` per stili tooltip
+### ✨ New Features
+- **Complete translation system**: Automatic loading of translations at startup for sensor/card messages
+- **Configurable debug toggle**: Ability to enable/disable debug via YAML config (`debug: true`) or global variable (`window.miaConfigDebug`)
+- **Weekly view improvements**: Removed debug logs from weekly view to reduce console noise
 
-### 📦 Versioni
-- Integrazione: 2.1.0-beta.7.2
+### 🐛 Fixes
+- **Predictive attributes fix**: `next_*` attributes no longer return `unknown` - predictive cache reused with translated messages when no events in next 7 days
+- **Regenerable event cache**: Complete invalidation of event cache on every configuration change to avoid stale results
+- **Automatic startup retry**: When event cache is empty at startup, automatic retry to avoid "no events" blockage
+
+### 🧠 Performance Improvements
+- **Extended lookahead**: Default prediction window increased to 168 hours (7 days) to align `next_*` attributes with weekly view
+- **Targeted dependency resolution**: Optimized algorithm that calculates only necessary configurations to resolve conditional dependencies
+- **Event-driven simulation**: Weekly view uses event-based sampling instead of fixed granularity for maximum accuracy
+
+### 📦 Versions
+- integration: 2.2.0
+- card: 2.2.0
+
+## v2.1.2 - January 8, 2026 ✅ Stable Release
+
+### 🐛 Predictive Fixes
+- `next_*` attributes no longer return `unknown`: predictive cache is reused and shows translated message when no events in next 7 days.
+- Default lookahead extended to 168 hours for sensors and services, aligned with weekly view.
+
+### 🧠 Database Engine
+- Regenerable `event_times` cache and complete invalidation on every configuration change to avoid stale results.
+- Targeted resolution of conditional dependencies and event-driven simulation for `simulate_configuration_schedule` and `get_next_changes`.
+- Automatic retry when event cache is empty at startup to avoid "no events" blockage.
+
+### 🖥️ UI
+- Card uses `debug` flag (config or `window.miaConfigDebug`) and reduces console noise.
+- Translations loaded at startup for sensor/card side messages.
+
+### 📦 Versions
+- integration: 2.1.2
+- card: 2.1.0-beta.7.2
+
+## v2.1.0-beta.7.2 - January 7, 2026 🐛 Critical Fixes
+
+### 🐛 Critical Fixes
+- **Fix Null Reference**: Resolved `Cannot set properties of null` error in dcEditConfig
+- **Ultra Compact Priority Field**: 60px with `!important` and `box-sizing: border-box`
+- **Correct Checkbox Layout**: Changed from grid to flexbox with correct constraints (50-80px)
+- **Max-Width Constraints**: Added limits to avoid horizontal overflow
+- **Tooltip CSS Cleanup**: Removed `.mia-config-card` prefix for tooltip styles
+
+### 📦 Versions
+- Integration: 2.1.0-beta.7.2
 - Card: 2.1.0-beta.7.2
 
 ---
 
-## v2.1.0-beta.7.1 - 7 Gennaio 2026 🐛 Layout & Tooltip Fixes
+## v2.1.0-beta.7.1 - January 7, 2026 🐛 Layout & Tooltip Fixes
 
-### 🎨 Miglioramenti Layout Modal
-- **Campo Priority Compatto**: Larghezza limitata a 80px per risparmiare spazio
-- **Time Picker Responsivo**: Aggiunto `flex-wrap` per layout adattivo
-- **Gruppi Checkbox Ottimizzati**: Ridotta dimensione minima a 60px, aggiunta larghezza massima
-- **Indentazione Filtri**: Margine sinistro 24px per i container di filtri orari/giorni
+### 🎨 Modal Layout Improvements
+- **Compact Priority Field**: Width limited to 80px to save space
+- **Responsive Time Picker**: Added `flex-wrap` for adaptive layout
+- **Optimized Checkbox Groups**: Reduced minimum size to 60px, added maximum width
+- **Filter Indentation**: 24px left margin for time/day filter containers
 
-### 🖱️ Tooltip Vista Settimanale Corretto
-- **Setup Immediato**: Eseguito immediatamente invece di aspettare setTimeout
-- **Fallback Sicuro**: Se fallisce, usa setTimeout come backup
-- **Debug Logging**: Aggiunto logging per troubleshooting eventi mouse
+### 🖱️ Corrected Weekly View Tooltip
+- **Immediate Setup**: Executed immediately instead of waiting for setTimeout
+- **Safe Fallback**: If it fails, uses setTimeout as backup
+- **Debug Logging**: Added logging for troubleshooting mouse events
 
-### 📦 Versioni
-- Integrazione: 2.1.0-beta.7.1
+### 📦 Versions
+- Integration: 2.1.0-beta.7.1
 - Card: 2.1.0-beta.7.1
 
 ---
 
-### 🎨 Interfaccia Unificata
-- **Modal Unificato**: Accorpata l'interfaccia di modifica con quella di aggiunta
-  - Rimosso completamente il modal separato `#dc-edit-modal` (~280 righe)
-  - Il modal `#dc-add-config-modal` ora gestisce entrambe le modalità (aggiungi/modifica)
-  - Titolo dinamico: "Aggiungi Nuova Configurazione" o "Modifica Configurazione"
-  - Risparmio di **~334 righe di codice** (da 4699 a 4365 righe)
+### 🎨 Unified Interface
+- **Unified Modal**: Merged edit interface with add interface
+  - Completely removed separate `#dc-edit-modal` (~280 lines)
+  - `#dc-add-config-modal` now handles both modes (add/edit)
+  - Dynamic title: "Add New Configuration" or "Edit Configuration"
+  - **~334 lines of code saved** (from 4699 to 4365 lines)
 
-### 🎯 Modalità Edit Intelligente
-- **Gestione Modalità**: Utilizzo di `data-attributes` per tracciare la modalità corrente
+### 🎯 Smart Edit Mode
+- **Mode Management**: Use of `data-attributes` to track current mode
   - `modal.dataset.mode = 'edit'` per modalità modifica
   - `modal.dataset.editId`, `modal.dataset.editName`, `modal.dataset.editType` per i dati della configurazione
   - Selettore tipo configurazione disabilitato in modalità edit

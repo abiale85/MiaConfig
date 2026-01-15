@@ -59,5 +59,118 @@
         }
       }
     }
+  },
+  "services": {
+    "set_standard_config": {
+      "name": "Imposta configurazione standard",
+      "description": "Imposta o aggiorna una configurazione standard con priorità.",
+      "fields": {
+        "setup_name": {
+          "name": "Nome configurazione",
+          "description": "Nome della configurazione da impostare."
+        },
+        "setup_value": {
+          "name": "Valore",
+          "description": "Valore da assegnare alla configurazione."
+        },
+        "priority": {
+          "name": "Priorità",
+          "description": "Livello di priorità (1 = più alta, 99 = più bassa)."
+        },
+        "description": {
+          "name": "Descrizione",
+          "description": "Descrizione opzionale della configurazione."
+        }
+      }
+    },
+    "set_schedule_config": {
+      "name": "Imposta configurazione a orario",
+      "description": "Imposta un override basato su fasce orarie e giorni della settimana.",
+      "fields": {
+        "setup_name": {
+          "name": "Nome configurazione",
+          "description": "Nome della configurazione da sovrascrivere."
+        },
+        "setup_value": {
+          "name": "Valore",
+          "description": "Valore durante la fascia oraria."
+        },
+        "valid_from_ora": {
+          "name": "Ora inizio",
+          "description": "Ora di inizio in formato decimale (es. 8.5 = 8:30)."
+        },
+        "valid_to_ora": {
+          "name": "Ora fine",
+          "description": "Ora di fine in formato decimale."
+        },
+        "days_of_week": {
+          "name": "Giorni della settimana",
+          "description": "Elenco dei giorni (0=Lunedì, 6=Domenica)."
+        },
+        "priority": {
+          "name": "Priorità",
+          "description": "Livello di priorità (1 = più alta, 99 = più bassa)."
+        }
+      }
+    },
+    "set_time_config": {
+      "name": "Imposta configurazione a tempo",
+      "description": "Imposta un override basato su intervallo di date.",
+      "fields": {
+        "setup_name": {
+          "name": "Nome configurazione",
+          "description": "Nome della configurazione da sovrascrivere."
+        },
+        "setup_value": {
+          "name": "Valore",
+          "description": "Valore durante l'intervallo temporale."
+        },
+        "valid_from_date": {
+          "name": "Dal",
+          "description": "Data e ora di inizio (YYYY-MM-DD HH:MM)."
+        },
+        "valid_to_date": {
+          "name": "Al",
+          "description": "Data e ora di fine (YYYY-MM-DD HH:MM)."
+        },
+        "priority": {
+          "name": "Priorità",
+          "description": "Livello di priorità (1 = più alta, 99 = più bassa)."
+        }
+      }
+    },
+    "set_conditional_config": {
+      "name": "Imposta configurazione condizionale",
+      "description": "Imposta un override basato su condizione.",
+      "fields": {
+        "setup_name": {
+          "name": "Nome configurazione",
+          "description": "Nome della configurazione da sovrascrivere."
+        },
+        "setup_value": {
+          "name": "Valore",
+          "description": "Valore quando la condizione è rispettata."
+        },
+        "conditional_config": {
+          "name": "Configurazione sorgente",
+          "description": "Configurazione da monitorare."
+        },
+        "conditional_operator": {
+          "name": "Operatore",
+          "description": "Operatore di confronto (==, !=, >, <, >=, <=)."
+        },
+        "conditional_value": {
+          "name": "Valore di confronto",
+          "description": "Valore con cui confrontare."
+        },
+        "priority": {
+          "name": "Priorità",
+          "description": "Livello di priorità (1 = più alta, 99 = più bassa)."
+        }
+      }
+    }
+  },
+  "sensor": {
+    "no_upcoming_events": "Nessun evento previsto nei prossimi {days} giorni"
   }
 }

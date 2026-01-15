@@ -578,17 +578,4 @@ delete_all_backups:
       example: "sensor.mia_config_temperatura_target"
       selector:
         entity:
-            integration: mia_config
-
-  reload_cache:
-    name: Ricarica Cache
-    description: Ricarica la cache in-memory dal database. Utile dopo restore manuale del database o modifiche esterne al file .db
-    fields:
-      entity_id:
-        name: Entità
-        description: Entità sensor.mia_config_* dell'istanza da utilizzare (opzionale, usa l'istanza di default se non specificato)
-        required: false
-        example: "sensor.mia_config_temperatura_target"
-        selector:
-          entity:
-            integration: mia_config
+          integration: mia_config

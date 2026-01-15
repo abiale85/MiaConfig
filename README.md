@@ -19,6 +19,7 @@ Un componente custom per Home Assistant che gestisce configurazioni dinamiche co
 - **Sistema Priorità Avanzato**: Ogni configurazione ha priorità numerica (1 = massima, 99 = minima)
 - **Sensori Dinamici**: Ogni configurazione viene esposta come sensore in Home Assistant
 - **Predizione Eventi**: Attributi con timestamp ISO dei prossimi cambiamenti valore
+- **Lookahead Settimanale**: Finestra predittiva di default 7 giorni (configurabile dalle opzioni)
 - **Servizi Completi**: API per gestire le configurazioni tramite automazioni o script
 - **Interfaccia UI Completa**: Card Lovelace con dashboard, vista settimanale, gestione e storico
 - **Database Isolato**: Ogni istanza ha il proprio database SQLite separato

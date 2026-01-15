@@ -1,6 +1,7 @@
 """Sensor platform per Mia Config."""
 import logging
-from datetime import timedelta
+import time
+from datetime import datetime, timedelta
 from typing import Any, Optional
 
 from homeassistant.components.sensor import SensorEntity
@@ -8,6 +9,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
+
+from . import get_translation
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
@@ -39,11 +42,22 @@ async def async_setup_entry(
     predictive_cache = {}
     last_configs = {}
     last_recalc_time = {}  # Traccia ultimo ricalcolo per ogni setup
+    last_config_version = None  # Traccia versione configurazioni per invalidare cache
     
     async def async_update_data():
         """Aggiorna i dati dal database."""
+        nonlocal last_config_version
         configs = await hass.async_add_executor_job(db.get_all_configurations)
-        current_time = hass.loop.time()
+        # Usa timestamp epoch reale, non il clock monotono dell'event loop
+        current_time = time.time()
+        
+        # Controlla se le configurazioni sono cambiate (nuova versione)
+        current_config_version = db._config_version
+        config_changed = last_config_version != current_config_version
+        if config_changed:
+            _LOGGER.debug(f"Configurazione cambiata (versione {current_config_version}), invalido cache predittive")
+            predictive_cache.clear()  # Invalida tutta la cache predittiva
+            last_config_version = current_config_version
         
         # Calcola i dati predittivi SOLO se necessario
         predictive_data = {}
@@ -60,16 +74,14 @@ async def async_setup_entry(
                 # Prima volta, calcola
                 needs_recalc = True
                 recalc_reason = "prima volta"
+            elif config_changed:
+                # Configurazioni cambiate, ricalcola
+                needs_recalc = True
+                recalc_reason = "configurazioni cambiate"
             elif current_value != last_value:
                 # Valore cambiato, ricalcola
                 needs_recalc = True
                 recalc_reason = f"valore cambiato da {last_value} a {current_value}"
-            elif cached.get('upcoming_changes'):
-                # Controlla se il prossimo evento è vicino (< 2 minuti): ricalcola per aggiornare il countdown
-                next_event_minutes = cached['upcoming_changes'][0].get('minutes_until', 999)
-                if next_event_minutes < 2:
-                    needs_recalc = True
-                    recalc_reason = f"prossimo evento tra {next_event_minutes}min"
             else:
                 # Nessun evento nei prossimi lookahead_hours: ricalcola ogni ora per vedere se ne compaiono
                 last_calc = last_recalc_time.get(setup_name, 0)
@@ -81,54 +93,32 @@ async def async_setup_entry(
                 if recalc_reason:
                     _LOGGER.debug(f"{setup_name}: {recalc_reason}, ricalcolo predittivi")
                 try:
-                    # Upcoming changes: prossime 24 ore, campionando ogni scan_interval
-                    next_changes_24h = await hass.async_add_executor_job(
-                        db.get_next_changes, setup_name, 24, 5, scan_interval
+                    next_changes = await hass.async_add_executor_job(
+                        db.get_next_changes, setup_name, lookahead_hours
                     )
-                    # Next event: prossimo evento fino a 7 giorni
-                    next_changes_7d = await hass.async_add_executor_job(
-                        db.get_next_changes, setup_name, 24*7, 1, scan_interval
-                    )
-                    next_event = next_changes_7d[0] if next_changes_7d else None
-                    
-                    minutes_active = await hass.async_add_executor_job(
-                        db.get_current_config_start_time, setup_name
-                    )
-                    
-                    from datetime import datetime
-                    evaluation_time = datetime.now().isoformat()
-                    
                     predictive_data[setup_name] = {
-                        'upcoming_changes': next_changes_24h,  # Prossime 24h
-                        'next_event': next_event,              # Prossimo evento fino a 7gg
-                        'minutes_active': minutes_active,
-                        'last_evaluation': evaluation_time,    # Timestamp valutazione
+                        'next_changes': next_changes,
+                        'last_recalc': current_time
                     }
                     predictive_cache[setup_name] = {
-                        'upcoming_changes': next_changes_24h,
-                        'next_event': next_event,
-                        'minutes_active': minutes_active,
-                        'last_update': configs[setup_name].get('value'),
-                        'last_evaluation': evaluation_time,
+                        'next_changes': next_changes,
+                        'last_update': configs[setup_name].get('value'),  # Traccia il valore a cui corrisponde
+                        'last_recalc': current_time
                     }
-                    last_recalc_time[setup_name] = current_time
+                    last_recalc_time[setup_name] = current_time  # Aggiorna timestamp ricalcolo
                 except Exception as e:
                     _LOGGER.error(f"Errore calcolo dati predittivi per {setup_name}: {e}")
                     predictive_data[setup_name] = {
-                        'upcoming_changes': [],
-                        'next_event': None,
-                        'minutes_active': None,
-                        'last_evaluation': None,
+                        'next_changes': [],
+                        'last_recalc': current_time
                     }
             else:
-                # Usa la cache precedentemente calcolata
-                # Mantieni i dati fino al prossimo refresh
-                predictive_data[setup_name] = {
-                    'upcoming_changes': cached.get('upcoming_changes', []),
-                    'next_event': cached.get('next_event'),
-                    'minutes_active': cached.get('minutes_active'),
-                    'last_evaluation': cached.get('last_evaluation'),
-                }
+                # Mantieni i dati predittivi già calcolati, così non spariscono a ogni refresh
+                if cached:
+                    predictive_data[setup_name] = {
+                        'next_changes': cached.get('next_changes', []),
+                        'last_recalc': cached.get('last_recalc')
+                    }
         
         # Salva stato corrente per il prossimo ciclo
         last_configs.clear()
@@ -309,36 +299,39 @@ class DynamicConfigSensor(CoordinatorEntity, SensorEntity):
         
         # Usa i dati predittivi già calcolati dal coordinator
         predictive = self.coordinator.data.get('predictive', {}).get(self._setup_name, {})
-        upcoming_changes = predictive.get('upcoming_changes', [])  # 24 ore
-        next_event = predictive.get('next_event')                  # fino a 7 giorni
-        minutes_active = predictive.get('minutes_active')
-        last_evaluation = predictive.get('last_evaluation')
+        next_changes = predictive.get('next_changes', [])
         
-        # Aggiungi timestamp ultimo calcolo
-        if last_evaluation:
-            attributes['last_evaluation'] = last_evaluation
+        # Aggiungi timestamp ultimo ricalcolo se disponibile
+        last_recalc = predictive.get('last_recalc')
+        if last_recalc:
+            try:
+                recalc_time = datetime.fromtimestamp(last_recalc)
+                attributes['predictive_last_recalc'] = recalc_time.isoformat()
+            except (ValueError, TypeError):
+                attributes['predictive_last_recalc'] = str(last_recalc)
         
-        # Prossimo evento fino a 7 giorni (per next_value)
-        if next_event:
-            attributes['next_value'] = next_event['value']
-            attributes['next_change_type'] = next_event['type']
+        if next_changes:
+            # Prossimo cambiamento
+            next_change = next_changes[0]
+            
+            attributes['next_value'] = next_change['value']
+            attributes['next_change_type'] = next_change['type']
+            if 'id' in next_change:
+                attributes['next_value_id'] = next_change['id']
             
             # Timestamp del prossimo evento (se disponibile)
-            if 'timestamp' in next_event:
-                attributes['next_change_at'] = next_event['timestamp']
-        else:
-            attributes['next_value'] = "No changes in 7 days"
-            attributes['next_change_at'] = None
-        
-        # Cambiamenti prossimi alle 24 ore (per interfaccia utente)
-        if upcoming_changes:
-            # Lista di tutti i cambiamenti prossimi nelle 24 ore con timestamp
+            if 'timestamp' in next_change:
+                attributes['next_change_at'] = next_change['timestamp']
+            
+            # Lista di tutti i prossimi cambiamenti con timestamp
             upcoming_events = []
-            for event in upcoming_changes:
+            for event in next_changes:
                 event_data = {
                     'value': event['value'],
                     'type': event['type']
                 }
+                if 'id' in event:
+                    event_data['id'] = event['id']
                 if 'timestamp' in event:
                     event_data['at'] = event['timestamp']
                 upcoming_events.append(event_data)
@@ -350,16 +343,13 @@ class DynamicConfigSensor(CoordinatorEntity, SensorEntity):
             for event in upcoming_events:
                 if 'at' in event:
                     try:
-                        event_time = event['at']
-                        if isinstance(event_time, str):
-                            event_time = event_time.split('.')[0]  # Rimuovi millisecondi
-                        upcoming_text.append(f"{event['value']} alle {event_time}")
+                        event_time = datetime.fromisoformat(event['at'])
+                        time_str = event_time.strftime('%d/%m %H:%M')
                     except:
-                        upcoming_text.append(f"{event['value']}")
+                        time_str = event['at']
+                    upcoming_text.append(f"{event['value']} il {time_str}")
                 else:
                     upcoming_text.append(f"{event['value']}")
-            
-            attributes['next_upcoming_text'] = " → ".join(upcoming_text) if upcoming_text else "Nessun cambiamento previsto"
             
             # Attributi dinamici per ogni valore futuro (per automazioni) - con timestamp
             value_first_occurrence = {}
@@ -373,12 +363,13 @@ class DynamicConfigSensor(CoordinatorEntity, SensorEntity):
                     attr_name = f"next_{value}_at"
                     attributes[attr_name] = event['at']
         else:
-            attributes['upcoming_changes'] = []
-            attributes['next_upcoming_text'] = "Nessun cambiamento previsto nelle prossime 24 ore"
-        
-        # Attributi per minutes_active (se disponibile)
-        if minutes_active is not None:
-            attributes['minutes_active'] = minutes_active
+            # Usa la traduzione per il messaggio di nessun evento
+            days = 7  # 168 ore / 24 = 7 giorni
+            message = get_translation(self.hass, "sensor.no_upcoming_events", days=days)
+            
+            attributes['next_value'] = message
+            attributes['next_change_at'] = None
+            attributes['next_change_type'] = None
         
         return attributes
     

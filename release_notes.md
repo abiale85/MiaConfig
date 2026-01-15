@@ -1,3 +1,34 @@
+## v2.2.0 - 15 Gennaio 2026 🚀 Major Release
+
+### ✨ Nuove funzionalità
+- **Sistema di traduzione completo**: Caricamento automatico delle traduzioni all'avvio per messaggi sensore/card
+- **Toggle debug configurabile**: Possibilità di abilitare/disabilitare debug via config YAML (`debug: true`) o variabile globale (`window.miaConfigDebug`)
+- **Miglioramenti vista settimanale**: Rimossi log di debug dalla vista settimanale per ridurre rumore console
+
+### 🔧 Fix e miglioramenti
+- **Fix attributi predittivi**: Gli attributi `next_*` non tornano più `unknown` - cache predittiva riutilizzata con messaggi tradotti quando non ci sono eventi nei prossimi 7 giorni
+- **Cache eventi rigenerabile**: Invalidazione completa della cache eventi ad ogni modifica configurazione per evitare risultati stantii
+- **Retry automatico startup**: Quando la cache eventi è vuota allo startup, retry automatico per evitare blocco "nessun evento"
+- **Lookahead esteso**: Finestra predittiva di default aumentata a 168 ore (7 giorni) per allineare attributi `next_*` con vista settimanale
+- **Risoluzione mirata dipendenze**: Algoritmo ottimizzato che calcola solo le configurazioni necessarie per risolvere dipendenze condizionali
+- **Simulazione event-driven**: Vista settimanale usa campionamento basato su eventi invece di granularità fissa per massima accuratezza
+
+### 📦 Versioni
+- integrazione: 2.2.0
+- card: 2.2.0
+
+## v2.1.2 - 8 Gennaio 2026 🚀 Stabilità & Fix Predittivi
+
+### 🔧 Fix e miglioramenti
+- Vista settimanale e sensori: i dati predittivi restano disponibili fra i refresh e mostrano un messaggio tradotto se non ci sono eventi nei prossimi 7 giorni (stop ai valori "unknown").
+- Lookahead di default portato a 168 ore (7 giorni) per allineare attributi `next_*` con la card settimanale.
+- Motore database: cache `event_times` con rigenerazione automatica, risoluzione mirata delle dipendenze condizionali e simulazione event-driven per la vista settimanale.
+- Traduzioni caricate all'avvio, invalidazione cache completa dopo ogni modifica e meno rumore nei log della card grazie al toggle `debug` (config o `window.miaConfigDebug`).
+
+### 📦 Versioni
+- integrazione: 2.1.2
+- card: 2.1.0-beta.7.2
+
 ## ✅ All Modal Issues Fixed + Multi-Instance Support + All Syntax Fixes + Layout Improvements
 
 **This version fixes all 3 reported modal problems, adds complete multi-instance support, fixes all JavaScript syntax errors, and improves the add configuration modal layout:**

@@ -1,6 +1,7 @@
 """
 Mia Config - Gestione configurazioni dinamiche basate su tempo e orario.
 """
+import json
 import logging
 import os
 import shutil
@@ -30,6 +31,13 @@ from .database import ConfigDatabase
 
 _LOGGER = logging.getLogger(__name__)
 
+translations_cache = {}
+
+def _load_json(file_path):
+    """Load JSON file synchronously."""
+    with open(file_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
 
 def validate_time_format(value):
     """Valida il formato orario in formato decimale (0.0 - 23.983333)."""
@@ -47,6 +55,41 @@ def validate_time_format(value):
         raise vol.Invalid(f"I minuti devono essere tra 0 e 59, ricevuto: {minutes}")
     
     return time_value
+
+
+def get_translation(hass: HomeAssistant, key: str, **kwargs) -> str:
+    """Get translated string for the given key with optional formatting.
+    
+    Args:
+        hass: Home Assistant instance
+        key: Translation key (e.g., 'sensor.no_upcoming_events')
+        **kwargs: Formatting arguments for the translation string
+    
+    Returns:
+        Translated and formatted string, or the key if translation not found
+    """
+    language = hass.config.language or "en"
+    translations = translations_cache.get(language, translations_cache.get('en', {}))
+    
+    # Navigate the nested structure (e.g., 'sensor.no_upcoming_events')
+    keys = key.split('.')
+    value = translations
+    for k in keys:
+        if isinstance(value, dict):
+            value = value.get(k)
+        else:
+            value = None
+            break
+    
+    if isinstance(value, str):
+        try:
+            return value.format(**kwargs)
+        except (KeyError, ValueError):
+            _LOGGER.warning("Errore formattazione traduzione per chiave '%s': %s", key, value)
+            return value
+    else:
+        _LOGGER.debug("Traduzione non trovata per chiave '%s' in lingua '%s'", key, language)
+        return key
 
 PLATFORMS = ["sensor"]
 
@@ -102,6 +145,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         
         # Verifica che il database sia accessibile
         await hass.async_add_executor_job(db.get_all_setup_names)
+        
+        # Carica traduzioni
+        for lang in ['en', 'it']:
+            translation_file = os.path.join(os.path.dirname(__file__), "translations", f"{lang}.json")
+            try:
+                translations_cache[lang] = await hass.async_add_executor_job(_load_json, translation_file)
+            except Exception as err:
+                _LOGGER.warning("Errore caricamento traduzioni %s: %s", lang, err)
         
     except Exception as err:
         _LOGGER.error("Errore inizializzazione database %s: %s", db_path, err)
@@ -581,26 +632,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 )
             _LOGGER.info(f"Cleanup storico globale completato per {len(all_names)} configurazioni")
     
-    async def handle_reload_cache(call: ServiceCall) -> None:
-        """Gestisce il servizio per ricaricare la cache in-memory dal database.
-        
-        Utile dopo:
-        - Restore manuale del database
-        - Modifiche dirette al file .db
-        - Backup/ripristino del database
-        """
-        entity_id = call.data.get("entity_id")
-        db = get_db_from_entity_id(hass, entity_id)
-        
-        await hass.async_add_executor_job(db.reload_cache)
-        
-        # Forza aggiornamento di tutti i sensori
-        for entry_id, data in hass.data.get(DOMAIN, {}).items():
-            if isinstance(data, dict) and 'coordinator' in data:
-                await data['coordinator'].async_request_refresh()
-        
-        _LOGGER.info("Cache ricaricata e sensori aggiornati")
-    
     # Schema dei servizi
     set_config_schema = vol.Schema({
         vol.Required("setup_name"): cv.string,
@@ -724,10 +755,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     
     hass.services.async_register(
         DOMAIN, "cleanup_history", handle_cleanup_history, schema=cleanup_history_schema
-    )
-    
-    hass.services.async_register(
-        DOMAIN, "reload_cache", handle_reload_cache
     )
     
     hass.services.async_register(
@@ -890,8 +917,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             # Riapri la connessione
             db.conn = db._open_database()
             
-            # Ricarica la cache in-memory per sincronizzarla con il DB ripristinato
-            await hass.async_add_executor_job(db.reload_cache)
+            # Invalida tutte le cache dopo il ripristino per riflettere i nuovi dati
+            db._invalidate_caches()
             
             _LOGGER.info("Database ripristinato da: %s", backup_file)
             return {

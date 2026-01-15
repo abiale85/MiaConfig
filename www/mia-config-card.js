@@ -1,10 +1,12 @@
-// Version 2.1.2 - Cache optimization and smart event detection - 20260110
+// Version 2.1.0-beta.7 - Restored v2.0.0 working implementation - 20260107
 
 class MiaConfigCard extends HTMLElement {
     constructor() {
         super();
         // Salva riferimento all'istanza nell'elemento stesso per multi-instance support
         this._instance = this;
+        // Toggle debug globale (può essere settato via config.debug o window.miaConfigDebug)
+        this._debug = window.miaConfigDebug === true;
         // Mantiene anche variabile globale per compatibilità con funzioni esistenti
         window._miaConfigCardInstance = this;
         // Definisci subito le funzioni window che potrebbero essere chiamate dalla dashboard
@@ -80,6 +82,8 @@ class MiaConfigCard extends HTMLElement {
 
     setConfig(config) {
         this._config = config;
+        // Abilita debug se indicato nel config YAML o tramite variabile globale
+        this._debug = !!config.debug || window.miaConfigDebug === true;
         // Leggi entity_id dalla configurazione YAML della card
         if (config.entity_id) {
             this.configuredEntityId = config.entity_id;
@@ -1725,11 +1729,8 @@ class MiaConfigCard extends HTMLElement {
                 service_data: serviceData,
                 return_response: true
             });
-            console.log('Risultato per select:', result);
-            
             // I dati sono direttamente in result.response
             const configs = result.response || result.configurations || {};
-            console.log('Configurazioni estratte per select:', configs);
             
             // Ora configs è un oggetto dove ogni valore è un array di configurazioni
             // Trova solo le configurazioni che hanno un valore standard (type: 'standard')
@@ -1744,7 +1745,6 @@ class MiaConfigCard extends HTMLElement {
                     }
                 }
             }
-            console.log('Configurazioni standard trovate:', standardConfigs);
             
             const scheduleSelect = window._miaConfigCardInstance.content.querySelector('#modal-schedule-config-select');
             const timeSelect = window._miaConfigCardInstance.content.querySelector('#modal-time-config-select');
@@ -1796,7 +1796,6 @@ class MiaConfigCard extends HTMLElement {
                     entity: this._hass.states[id],
                     name: id.replace('sensor.mia_config_', '').replace(/_/g, ' ')
                 }));
-            console.debug('MIA-CONFIG dashboard sensors trovati:', sensors.map(s => s.id));
             
             if (sensors.length === 0) {
                 container.innerHTML = '<p style="text-align: center; color: var(--secondary-text-color);">Nessun sensore disponibile</p>';
@@ -1835,7 +1834,7 @@ class MiaConfigCard extends HTMLElement {
                     }
                 }
             } catch (err) {
-                console.log('Info: nessun valore valido disponibile o errore caricamento');
+                // Nessun valore valido disponibile o errore nel caricamento, ignora silenziosamente
             }
             
             for (const sensor of sensors) {
@@ -1897,11 +1896,7 @@ class MiaConfigCard extends HTMLElement {
                 return_response: true
             });
             
-            console.log('Service response:', result);
-            console.log('Response keys:', Object.keys(result || {}));
-            
             const configs = result.response || result.configurations || {};
-            console.log('Extracted configs:', configs);
             
             // Filtra configurazioni vuote o sensori principali
             const validConfigs = Object.entries(configs).filter(([name, configsList]) => {
@@ -2152,7 +2147,6 @@ class MiaConfigCard extends HTMLElement {
         };
         
         window.dcEditConfig = async (cardElement, name, type, id, cfgDataEncoded) => {
-            console.log('dcEditConfig called with:', {cardElement, name, type, id, cfgDataEncoded});
             const instance = cardElement._instance;
             const content = instance.content;
             
@@ -2673,7 +2667,6 @@ class MiaConfigCard extends HTMLElement {
                 
                 const history = result.response?.history || result.response || [];
                 const total = result.response?.total || history.length;
-                console.log('Storico caricato:', history, 'Totale:', total);
                 
                 if (!Array.isArray(history) || history.length === 0) {
                     container.innerHTML = '<p style="text-align: center; color: var(--secondary-text-color);">Nessuna voce nello storico</p>';
@@ -3674,9 +3667,7 @@ class MiaConfigCard extends HTMLElement {
             
             // Crea tooltip flottante che segue il mouse - esegui immediatamente
             const setupTooltips = () => {
-                const weeklyDebug = false;
                 if (!container.isConnected) {
-                    if (weeklyDebug) console.log('Container not connected, skipping tooltip setup');
                     return;
                 }
                 
@@ -3710,22 +3701,18 @@ class MiaConfigCard extends HTMLElement {
                 });
                 // Aggiungi al body invece che al componente per position: fixed
                 document.body.appendChild(floatingTooltip);
-                if (weeklyDebug) console.log('Tooltip created and added to body:', floatingTooltip);
                 
                 const bars = container.querySelectorAll('.dc-weekly-tooltip');
                 const weeklyContainer = container.querySelector('.dc-weekly-container');
                 
-                if (weeklyDebug) console.log('Setting up tooltip for', bars.length, 'bars');
+                
                 
                 bars.forEach((bar, index) => {
                     // Gestione mouseenter: mostra tooltip
                     bar.addEventListener('mouseenter', function(e) {
-                        if (weeklyDebug) console.log('Mouse enter on bar', index, 'isConnected:', this.isConnected);
                         const tooltipContent = this.getAttribute('data-tooltip');
-                        if (weeklyDebug) console.log('Tooltip content for bar', index, ':', tooltipContent);
                         if (!this.isConnected) return;
                         if (!tooltipContent) {
-                            if (weeklyDebug) console.log('No tooltip content for bar', index);
                             return;
                         }
                         
@@ -3748,7 +3735,6 @@ class MiaConfigCard extends HTMLElement {
                     
                     // Gestione mouseleave: nascondi tooltip
                     bar.addEventListener('mouseleave', function() {
-                        if (weeklyDebug) console.log('Mouse leave on bar', index);
                         floatingTooltip.classList.remove('active');
                         floatingTooltip.style.display = 'none';
                         floatingTooltip.style.visibility = 'hidden';
@@ -3815,7 +3801,6 @@ class MiaConfigCard extends HTMLElement {
                 try {
                     setupTooltips();
                 } catch (e) {
-                    if (weeklyDebug) console.error('Tooltip setup failed:', e);
                     // Riprova dopo altro tempo
                     setTimeout(setupTooltips, 100);
                 }
