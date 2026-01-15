@@ -1,5 +1,20 @@
 # 📋 Changelog - Mia Config
 
+## v2.2.0 - 15 Gennaio 2026 🚀 Major Release
+
+### ✨ Nuove funzionalità
+- [Da definire]
+
+### 🐛 Correzioni
+- [Da definire]
+
+### 🧠 Miglioramenti performance
+- [Da definire]
+
+### 📦 Versioni
+- integrazione: 2.2.0
+- card: 2.2.0
+
 ## v2.1.2 - 8 Gennaio 2026 ✅ Release stabile
 
 ### 🐛 Fix predittivi

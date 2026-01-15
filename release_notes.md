@@ -1,3 +1,15 @@
+## v2.2.0 - 15 Gennaio 2026 🚀 Major Release
+
+### ✨ Nuove funzionalità
+- [Da definire]
+
+### 🔧 Fix e miglioramenti
+- [Da definire]
+
+### 📦 Versioni
+- integrazione: 2.2.0
+- card: 2.2.0
+
 ## v2.1.2 - 8 Gennaio 2026 🚀 Stabilità & Fix Predittivi
 
 ### 🔧 Fix e miglioramenti
