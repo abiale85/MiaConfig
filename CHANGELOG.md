@@ -1,5 +1,23 @@
 # 📋 Changelog - Mia Config
 
+## v2.2.1 - January 16, 2026 🐛 Critical Bugfix
+
+### 🐛 Critical Fix
+- **All-day schedules with day filters**: Fixed critical bug where time-based overrides with `valid_from == valid_to` (00:00 - 00:00) were incorrectly applied to all days instead of respecting `days_of_week` filter
+  - **Example bug**: Override for Saturday & Sunday (5,6) was being applied on all days
+  - **Cause**: The code set `is_valid = True` for all-day schedules without checking `days_of_week`
+  - **Solution**: Changed logic to evaluate `is_valid = current_day in valid_days` for all-day schedules
+  - **Impact**: Sensor values now correctly respect day-of-week filters (weekly view was already working correctly)
+  - **Affected scenarios**: Any time-based override with 00:00-00:00 hours and specific days selected
+  
+  **Code Changes**:
+  - `_get_all_active_configs()`: Fixed all-day schedule evaluation (line ~374)
+  - Now consistent with `_get_relevant_configs_for_target()` which had correct v2.1 logic
+
+### 📦 Versions
+- integration: 2.2.1
+- card: 2.2.0 (no changes)
+
 ## v2.2.0 - January 15, 2026 🚀 Major Release
 
 ### ✨ New Features

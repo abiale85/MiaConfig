@@ -368,17 +368,17 @@ class ConfigDatabase:
             
             # Verifica validità oraria
             is_valid = False
-            # Caso speciale: se from == to significa 24 ore (sempre attivo)
+            # Caso speciale: se from == to significa 24 ore (sempre attivo, ma filtrare per giorni)
             if valid_from == valid_to:
-                is_valid = True
+                # All-day schedule (0.0-0.0): match only on specified days
+                is_valid = current_day in valid_days
             elif valid_to < valid_from:  # Attraversa la mezzanotte
-                is_valid = (current_time >= valid_from or current_time <= valid_to)
+                is_valid = (current_time >= valid_from or current_time <= valid_to) and current_day in valid_days
             else:
                 # Usa intervallo semi-aperto [from, to) per evitare overlap al minuto di confine
-                is_valid = (valid_from <= current_time < valid_to)
+                is_valid = (valid_from <= current_time < valid_to) and current_day in valid_days
             
-            # Verifica giorno valido
-            if is_valid and current_day in valid_days:
+            if is_valid:
                 all_active_configs.append({
                     'setup_name': row['setup_name'],
                     'value': row['setup_value'],
