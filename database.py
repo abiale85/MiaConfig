@@ -801,6 +801,7 @@ class ConfigDatabase:
                 days_list = [0, 1, 2, 3, 4, 5, 6]
 
             events_generated = 0
+            last_was_matching = False
             for day_offset in range(MAX_DAYS):
                 check_date = now + timedelta(days=day_offset)
                 weekday = check_date.weekday()
@@ -824,6 +825,14 @@ class ConfigDatabase:
                     event_times.add(event_from)
                     event_times.add(event_to)
                     events_generated += 2
+                    last_was_matching = True
+                else:
+                    # Se il giorno precedente era abilitato ma questo no, aggiungi evento a mezzanotte
+                    if last_was_matching:
+                        boundary_event = check_date.replace(hour=0, minute=0, second=0, microsecond=0)
+                        event_times.add(boundary_event)
+                        events_generated += 1
+                        last_was_matching = False
 
         conditional_config_count = 0
         for row in self._memory_cache['configurazioni_condizionali']:
