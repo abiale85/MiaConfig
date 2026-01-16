@@ -6,7 +6,6 @@
         "description": "Configura l'integrazione Mia Config per gestire configurazioni dinamiche basate su tempo e orario.",
         "data": {
           "db_name": "Nome Database",
-          "scan_interval": "Intervallo scansione (secondi)",
           "lookahead_hours": "Ore previsione futura",
           "lookback_hours": "Ore storico passato",
           "cleanup_days": "Giorni eliminazione config scadute",
@@ -16,7 +15,6 @@
         },
         "data_description": {
           "db_name": "Nome del file database (es. 'mia_config' o 'casa_vacanze')",
-          "scan_interval": "Frequenza aggiornamento sensori in secondi",
           "lookahead_hours": "Quante ore guardare avanti per prevedere prossimi cambiamenti",
           "lookback_hours": "Quante ore guardare indietro per lo storico",
           "cleanup_days": "Dopo quanti giorni eliminare le configurazioni temporali scadute",
@@ -40,7 +38,6 @@
         "title": "Opzioni Mia Config",
         "description": "Configura le opzioni avanzate",
         "data": {
-          "scan_interval": "Intervallo scansione (secondi)",
           "lookahead_hours": "Ore previsione futura",
           "lookback_hours": "Ore storico passato",
           "cleanup_days": "Giorni eliminazione config scadute",
@@ -49,7 +46,6 @@
           "min_history_per_name": "Min entry storico"
         },
         "data_description": {
-          "scan_interval": "Frequenza aggiornamento sensori in secondi",
           "lookahead_hours": "Quante ore guardare avanti per prevedere prossimi cambiamenti",
           "lookback_hours": "Quante ore guardare indietro per lo storico",
           "cleanup_days": "Dopo quanti giorni eliminare le configurazioni temporali scadute",

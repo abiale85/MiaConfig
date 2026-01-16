@@ -294,12 +294,8 @@ class ConfigDatabase:
         current_day = target_datetime.weekday()
         current_time = target_datetime.hour + target_datetime.minute / 60.0
         
-        # Se target_setup_name è specificato, raccogli solo le configurazioni rilevanti
-        if target_setup_name:
-            relevant_configs = self._get_relevant_configs_for_target(target_setup_name, target_datetime, current_day, current_time)
-        else:
-            # Comportamento legacy: raccogli tutte le configurazioni
-            relevant_configs = self._get_all_active_configs(target_datetime, current_day, current_time)
+        # Raccogli le configurazioni rilevanti (filtrate per target se specificato)
+        relevant_configs = self._get_relevant_configs_for_target(target_setup_name, target_datetime, current_day, current_time)
         
         all_active_configs = relevant_configs
         
@@ -483,20 +479,27 @@ class ConfigDatabase:
         
         return result
 
-    def _get_relevant_configs_for_target(self, target_setup_name: str, target_datetime: datetime, current_day: int, current_time: float) -> List[Dict[str, Any]]:
-        """Raccoglie solo le configurazioni rilevanti per un target specifico.
+    def _get_relevant_configs_for_target(self, target_setup_name: Optional[str], target_datetime: datetime, current_day: int, current_time: float) -> List[Dict[str, Any]]:
+        """Raccoglie le configurazioni rilevanti.
+        
+        Args:
+            target_setup_name: Se specificato, filtra solo per questo setup.
+                             Se None, raccoglie tutte le configurazioni attive (comportamento legacy).
         
         Include:
-        - Configurazioni standard per il target
-        - Configurazioni a orario per il target
-        - Configurazioni a tempo per il target
+        - Configurazioni standard (per il target o tutte)
+        - Configurazioni a orario (per il target o tutte)
+        - Configurazioni a tempo (per il target o tutte)
         - NON include condizionali (gestiti separatamente con logica ricorsiva)
         """
         relevant_configs = []
         
-        # Configurazioni a tempo attive per il target - FILTRA DA CACHE IN-MEMORY
+        # Configurazioni a tempo attive - FILTRA DA CACHE IN-MEMORY
         for row in self._memory_cache['configurazioni_a_tempo']:
-            if row['setup_name'] != target_setup_name or not row['enabled']:
+            if not row['enabled']:
+                continue
+            # Se target_setup_name è specificato, filtra solo quel setup
+            if target_setup_name and row['setup_name'] != target_setup_name:
                 continue
             
             # Verifica validità temporale
@@ -540,9 +543,12 @@ class ConfigDatabase:
                 'id': row['id']
             })
         
-        # Configurazioni a orario attive per il target - FILTRA DA CACHE IN-MEMORY
+        # Configurazioni a orario attive - FILTRA DA CACHE IN-MEMORY
         for row in self._memory_cache['configurazioni_a_orario']:
-            if row['setup_name'] != target_setup_name or not row['enabled']:
+            if not row['enabled']:
+                continue
+            # Se target_setup_name è specificato, filtra solo quel setup
+            if target_setup_name and row['setup_name'] != target_setup_name:
                 continue
             
             # Forza parsing days_of_week
@@ -585,9 +591,12 @@ class ConfigDatabase:
                     'id': row['id']
                 })
         
-        # Configurazioni standard per il target (sempre attive) - DA CACHE IN-MEMORY
+        # Configurazioni standard (sempre attive) - DA CACHE IN-MEMORY
         for row in self._memory_cache['configurazioni']:
-            if row['setup_name'] != target_setup_name or not row['enabled']:
+            if not row['enabled']:
+                continue
+            # Se target_setup_name è specificato, filtra solo quel setup
+            if target_setup_name and row['setup_name'] != target_setup_name:
                 continue
                 
             relevant_configs.append({
@@ -600,119 +609,6 @@ class ConfigDatabase:
             })
         
         return relevant_configs
-
-    def _get_all_active_configs(self, target_datetime: datetime, current_day: int, current_time: float) -> List[Dict[str, Any]]:
-        """Raccoglie tutte le configurazioni attive (comportamento legacy)."""
-        all_active_configs = []
-        
-        # Configurazioni a tempo attive - FILTRA DA CACHE IN-MEMORY
-        for row in self._memory_cache['configurazioni_a_tempo']:
-            if not row['enabled']:
-                continue
-            
-            # Verifica validità temporale
-            valid_from = datetime.fromisoformat(row['valid_from_date'])
-            valid_to = datetime.fromisoformat(row['valid_to_date'])
-            if not (valid_from <= target_datetime <= valid_to):
-                continue
-            
-            # Verifica filtri opzionali orari
-            if row['valid_from_ora'] is not None and row['valid_to_ora'] is not None:
-                valid_from = row['valid_from_ora']
-                valid_to = row['valid_to_ora']
-                
-                is_valid_time = False
-                # Caso speciale: se from == to significa 24 ore (sempre attivo)
-                if valid_from == valid_to:
-                    is_valid_time = True
-                elif valid_to < valid_from:  # Attraversa la mezzanotte
-                    is_valid_time = (current_time >= valid_from or current_time <= valid_to)
-                else:
-                    is_valid_time = (valid_from <= current_time <= valid_to)
-                
-                if not is_valid_time:
-                    continue
-            
-            # Verifica filtri opzionali giorni
-            if row['days_of_week'] is not None:
-                valid_days = [int(d) for d in row['days_of_week'].split(',') if d]
-                if current_day not in valid_days:
-                    continue
-            
-            all_active_configs.append({
-                'setup_name': row['setup_name'],
-                'value': row['setup_value'],
-                'priority': row['priority'],
-                'source': 'time',
-                'source_order': 1,
-                'id': row['id']
-            })
-        
-        # Configurazioni a orario attive - FILTRA DA CACHE IN-MEMORY
-        for row in self._memory_cache['configurazioni_a_orario']:
-            if not row['enabled']:
-                continue
-            
-            # Parsing robusto days_of_week
-            days_raw = row['days_of_week']
-            if days_raw is not None:
-                if isinstance(days_raw, list):
-                    valid_days = [int(d) for d in days_raw]
-                else:
-                    valid_days = [int(d) for d in str(days_raw).split(',') if d.strip()]
-            else:
-                valid_days = [0, 1, 2, 3, 4, 5, 6]
-            
-            # Parsing robusto orari
-            try:
-                valid_from = float(row['valid_from_ora'])
-                valid_to = float(row['valid_to_ora'])
-            except (ValueError, TypeError):
-                continue
-            
-            # LOGICA v2.1: gestione fasce che attraversano la mezzanotte
-            is_valid = False
-            if valid_from == valid_to:
-                is_valid = True
-            elif valid_to < valid_from:  # Attraversa la mezzanotte
-                if current_time >= valid_from and current_day in valid_days:
-                    is_valid = True
-                elif current_time < valid_to and ((current_day - 1) % 7) in valid_days:
-                    is_valid = True
-            else:
-                is_valid = (current_time >= valid_from and current_time < valid_to and current_day in valid_days)
-            
-            if is_valid:
-                all_active_configs.append({
-                    'setup_name': row['setup_name'],
-                    'value': row['setup_value'],
-                    'priority': row['priority'],
-                    'source': 'schedule',
-                    'source_order': 2,
-                    'id': row['id']
-                })
-        
-        # Configurazioni standard (sempre attive) - DA CACHE IN-MEMORY
-        for row in self._memory_cache['configurazioni']:
-            if not row['enabled']:
-                continue
-            all_active_configs.append({
-                'setup_name': row['setup_name'],
-                'value': row['setup_value'],
-                'priority': row['priority'],
-                'source': 'standard',
-                'source_order': 3,
-                'id': row['id']
-            })
-        
-        return all_active_configs
-    
-    def get_configuration(self, setup_name: str) -> Optional[Dict[str, Any]]:
-        """Ottiene una specifica configurazione applicando la logica di priorità."""
-        # Nota: attualmente richiede il calcolo di tutte le configurazioni a causa delle dipendenze condizionali
-        # che possono creare catene transitive (A dipende da B che dipende da C, ecc.)
-        all_configs = self.get_all_configurations()
-        return all_configs.get(setup_name)
     
     def _invalidate_caches(self):
         """Invalida tutte le cache dopo modifiche alle configurazioni.
@@ -1662,10 +1558,11 @@ class ConfigDatabase:
             - timestamp: Timestamp ISO del cambiamento
             - type: Tipo di evento che causa il cambiamento (time, schedule, conditional, etc.)
         """
-        # Ottieni il valore attuale usando la logica unificata
-        current_config = self.get_all_configurations()
-        current_value = current_config.get(setup_name, {}).get('value')
-        current_source = current_config.get(setup_name, {}).get('source', 'unknown')
+        # Ottieni il valore attuale solo per questo setup (ottimizzazione: non calcolare tutti i setup)
+        now = datetime.now()
+        current_configs = self._get_configurations_at_time(now, target_setup_name=setup_name)
+        current_value = current_configs.get(setup_name, {}).get('value')
+        current_source = current_configs.get(setup_name, {}).get('source', 'unknown')
         
         # Controlla cache: ricalcola solo se valore corrente cambiato O configurazioni modificate
         # Cache key include parametri per evitare collisioni tra chiamate con parametri diversi

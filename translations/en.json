@@ -6,7 +6,6 @@
         "description": "Configure the Mia Config integration to manage dynamic configurations based on time and schedule.",
         "data": {
           "db_name": "Database Name",
-          "scan_interval": "Scan interval (seconds)",
           "lookahead_hours": "Future prediction hours",
           "lookback_hours": "Past history hours",
           "cleanup_days": "Expired config cleanup days",
@@ -16,7 +15,6 @@
         },
         "data_description": {
           "db_name": "Database file name (e.g., 'mia_config' or 'vacation_home')",
-          "scan_interval": "Sensor update frequency in seconds",
           "lookahead_hours": "How many hours to look ahead for predicting next changes",
           "lookback_hours": "How many hours to look back for history",
           "cleanup_days": "After how many days to delete expired temporal configurations",
@@ -40,7 +38,6 @@
         "title": "Mia Config Options",
         "description": "Configure advanced options",
         "data": {
-          "scan_interval": "Scan interval (seconds)",
           "lookahead_hours": "Future prediction hours",
           "lookback_hours": "Past history hours",
           "cleanup_days": "Expired config cleanup days",
@@ -49,7 +46,6 @@
           "min_history_per_name": "Min history entries"
         },
         "data_description": {
-          "scan_interval": "Update frequency in seconds",
           "lookahead_hours": "Prediction window in hours",
           "lookback_hours": "History window in hours",
           "cleanup_days": "Auto-cleanup threshold",

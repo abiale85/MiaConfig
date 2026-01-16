@@ -14,7 +14,6 @@ import homeassistant.helpers.config_validation as cv
 from .const import (
     DOMAIN,
     DEFAULT_NAME,
-    DEFAULT_SCAN_INTERVAL,
     DEFAULT_LOOKAHEAD_HOURS,
     DEFAULT_LOOKBACK_HOURS,
     DEFAULT_CLEANUP_DAYS,
@@ -27,7 +26,6 @@ _LOGGER = logging.getLogger(__name__)
 
 STEP_USER_DATA_SCHEMA = vol.Schema({
     vol.Optional("db_name", default="mia_config"): cv.string,
-    vol.Optional("scan_interval", default=DEFAULT_SCAN_INTERVAL): cv.positive_int,
     vol.Optional("lookahead_hours", default=DEFAULT_LOOKAHEAD_HOURS): cv.positive_int,
     vol.Optional("lookback_hours", default=DEFAULT_LOOKBACK_HOURS): cv.positive_int,
     vol.Optional("cleanup_days", default=DEFAULT_CLEANUP_DAYS): cv.positive_int,
@@ -91,12 +89,6 @@ class MiaConfigOptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
-                vol.Optional(
-                    "scan_interval",
-                    default=self.config_entry.options.get(
-                        "scan_interval", DEFAULT_SCAN_INTERVAL
-                    ),
-                ): cv.positive_int,
                 vol.Optional(
                     "lookahead_hours",
                     default=self.config_entry.options.get(

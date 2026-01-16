@@ -19,7 +19,6 @@ from homeassistant.components.http import HomeAssistantView
 
 from .const import (
     DOMAIN,
-    DEFAULT_SCAN_INTERVAL,
     DEFAULT_LOOKAHEAD_HOURS,
     DEFAULT_LOOKBACK_HOURS,
     DEFAULT_CLEANUP_DAYS,
@@ -98,7 +97,6 @@ CONFIG_SCHEMA = vol.Schema(
     {
         DOMAIN: vol.Schema({
             vol.Optional("db_path", default="config/mia_config.db"): cv.string,
-            vol.Optional("scan_interval", default=DEFAULT_SCAN_INTERVAL): cv.positive_int,
         })
     },
     extra=vol.ALLOW_EXTRA,
@@ -113,10 +111,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     if DOMAIN in config:
         conf = config[DOMAIN]
         db_path = hass.config.path(conf.get("db_path", "mia_config.db"))
-        scan_interval = conf.get("scan_interval", DEFAULT_SCAN_INTERVAL)
         
         hass.data[DOMAIN]["db_path"] = db_path
-        hass.data[DOMAIN]["scan_interval"] = scan_interval
         
         _LOGGER.info("Mia Config configurato tramite YAML (legacy)")
     
@@ -129,7 +125,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     # Ottieni opzioni da config entry
     db_name = entry.data.get("db_name", "mia_config")
-    scan_interval = entry.options.get("scan_interval", DEFAULT_SCAN_INTERVAL)
     lookahead_hours = entry.options.get("lookahead_hours", DEFAULT_LOOKAHEAD_HOURS)
     lookback_hours = entry.options.get("lookback_hours", DEFAULT_LOOKBACK_HOURS)
     cleanup_days = entry.options.get("cleanup_days", DEFAULT_CLEANUP_DAYS)
@@ -168,7 +163,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Salva i dati per questo entry
     entry_data = {
         "db": db,
-        "scan_interval": scan_interval,
         "lookahead_hours": lookahead_hours,
         "lookback_hours": lookback_hours,
         "cleanup_days": cleanup_days,
@@ -181,7 +175,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     # Mantieni anche riferimenti globali per retrocompatibilità
     hass.data[DOMAIN]["db"] = db
-    hass.data[DOMAIN]["scan_interval"] = scan_interval
     hass.data[DOMAIN]["lookahead_hours"] = lookahead_hours
     hass.data[DOMAIN]["lookback_hours"] = lookback_hours
     hass.data[DOMAIN]["cleanup_days"] = cleanup_days
@@ -477,9 +470,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         start_date = call.data.get("start_date")
         days = call.data.get("days", 14)
         
-        # Usa lo scan_interval del componente come granularità (già in secondi, converti in minuti)
-        scan_interval_seconds = hass.data[DOMAIN].get("scan_interval", DEFAULT_SCAN_INTERVAL)
-        granularity_minutes = max(1, scan_interval_seconds // 60)  # Converti in minuti, minimo 1
+        # Usa granularità event-driven (parametro deprecato, mantenuto per compatibilità)
+        granularity_minutes = 1
         
         # Se non specificata, usa data/ora corrente
         if start_date is None:

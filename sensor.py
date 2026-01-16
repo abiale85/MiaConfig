@@ -31,7 +31,6 @@ async def async_setup_entry(
 ) -> None:
     """Set up del platform sensor da config entry."""
     db: ConfigDatabase = hass.data[DOMAIN]["db"]
-    scan_interval = hass.data[DOMAIN]["scan_interval"]
     lookahead_hours = hass.data[DOMAIN].get("lookahead_hours", 24)
     lookback_hours = hass.data[DOMAIN].get("lookback_hours", 24)
     
@@ -124,6 +123,45 @@ async def async_setup_entry(
         last_configs.clear()
         last_configs.update(configs)
         
+        # Calcola scheduling dinamico basato su next_change_at più vicino
+        next_update_seconds = None
+        earliest_change = None
+        
+        for setup_name, pred_data in predictive_data.items():
+            next_changes = pred_data.get('next_changes', [])
+            if next_changes and len(next_changes) > 0:
+                # Prendi il primo cambio (il più vicino)
+                minutes_until = next_changes[0].get('minutes_until', None)
+                if minutes_until is not None and minutes_until > 0:
+                    seconds_until = minutes_until * 60
+                    if earliest_change is None or seconds_until < earliest_change:
+                        earliest_change = seconds_until
+        
+        if earliest_change is not None:
+            # Applica limiti: min 30s, max 24h
+            MIN_INTERVAL = 30
+            MAX_INTERVAL = 86400  # 24 ore
+            
+            if earliest_change < MIN_INTERVAL:
+                next_update_seconds = MIN_INTERVAL
+                _LOGGER.debug(f"Next change in {earliest_change}s, scheduling update in {MIN_INTERVAL}s (minimum)")
+            elif earliest_change > MAX_INTERVAL:
+                next_update_seconds = MAX_INTERVAL
+                _LOGGER.debug(f"Next change in {earliest_change}s, scheduling update in {MAX_INTERVAL}s (maximum)")
+            else:
+                # Schedula qualche secondo prima del cambio effettivo per assicurarsi di catturarlo
+                next_update_seconds = max(MIN_INTERVAL, earliest_change - 10)
+                _LOGGER.debug(f"Next change in {earliest_change}s, scheduling update in {next_update_seconds}s")
+        else:
+            # Nessun cambio previsto: usa intervallo lungo di default (1 ora)
+            next_update_seconds = 3600
+            _LOGGER.debug(f"No changes predicted, using fallback interval: {next_update_seconds}s")
+        
+        # Aggiorna dinamicamente l'intervallo del coordinator
+        if next_update_seconds and next_update_seconds != coordinator.update_interval.total_seconds():
+            coordinator.update_interval = timedelta(seconds=next_update_seconds)
+            _LOGGER.info(f"Update interval dynamically adjusted to {next_update_seconds}s")
+        
         return {
             'configs': configs,
             'predictive': predictive_data
@@ -134,7 +172,7 @@ async def async_setup_entry(
         _LOGGER,
         name="mia_config",
         update_method=async_update_data,
-        update_interval=timedelta(seconds=scan_interval),
+        update_interval=timedelta(seconds=3600),  # Verrà aggiornato dinamicamente
     )
     
     # Esegui il primo aggiornamento
