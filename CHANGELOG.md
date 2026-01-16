@@ -1,9 +1,9 @@
 # 📋 Changelog - Mia Config
 
-## v2.2.1 - January 16, 2026 🐛 Critical Bugfix
+## v2.2.1 - January 16, 2026 🐛 Critical Bugfixes (2 fixes)
 
-### 🐛 Critical Fix
-- **All-day schedules with day filters**: Fixed critical bug where time-based overrides with `valid_from == valid_to` (00:00 - 00:00) were incorrectly applied to all days instead of respecting `days_of_week` filter
+### 🐛 Critical Fix #1: All-day schedules with day filters
+- **Issue**: Time-based overrides with `valid_from == valid_to` (00:00 - 00:00) were incorrectly applied to all days instead of respecting `days_of_week` filter
   - **Example bug**: Override for Saturday & Sunday (5,6) was being applied on all days
   - **Cause**: The code set `is_valid = True` for all-day schedules without checking `days_of_week`
   - **Solution**: Changed logic to evaluate `is_valid = current_day in valid_days` for all-day schedules
@@ -13,6 +13,18 @@
   **Code Changes**:
   - `_get_all_active_configs()`: Fixed all-day schedule evaluation (line ~374)
   - Now consistent with `_get_relevant_configs_for_target()` which had correct v2.1 logic
+
+### 🐛 Critical Fix #2: Next change detection at day-of-week boundaries
+- **Issue**: `next_change_at` attribute was not detecting value transitions at day-of-week boundaries
+  - **Example bug**: Weekend-only override (sat/sun) didn't show "next change: Monday 00:00" when the override expired
+  - **Cause**: `_get_all_event_times()` was only generating event timestamps on days matching the `days_of_week` filter, missing the boundary where the filter stops applying
+  - **Solution**: Added logic to track day transitions and generate event timestamps at midnight when transitioning from a matching day to a non-matching day
+  - **Impact**: `next_change_at` now correctly predicts value changes when day-of-week filters expire
+  - **Affected scenarios**: Any time-based override with specific `days_of_week` selected
+  
+  **Code Changes**:
+  - `_get_all_event_times()`: Added boundary event generation for day-of-week transitions (lines ~803-837)
+  - Now generates events at midnight when exiting a day-of-week window
 
 ### 📦 Versions
 - integration: 2.2.1
