@@ -703,6 +703,13 @@ class ConfigDatabase:
                 weekday = check_date.weekday()
 
                 if weekday in days_list:
+                    # Se il giorno precedente NON era abilitato ma questo sì, aggiungi evento a mezzanotte
+                    # (quando ENTRIAMO in un periodo abilitato)
+                    if day_offset > 0 and not last_was_matching:
+                        boundary_event = check_date.replace(hour=0, minute=0, second=0, microsecond=0)
+                        event_times.add(boundary_event)
+                        events_generated += 1
+                    
                     from_decimal = row['valid_from_ora']
                     to_decimal = row['valid_to_ora']
 
