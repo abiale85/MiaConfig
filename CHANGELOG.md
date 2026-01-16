@@ -1,5 +1,65 @@
 # 📋 Changelog - Mia Config
 
+## v2.3.0 - January 17, 2026 🚀 Dynamic Event-Driven Scheduling
+
+### 🚀 Major Performance Enhancement: Fully Event-Driven Architecture
+**Dynamic Coordinator Scheduling**:
+- Sensors now update based on `next_change_at` predictions instead of fixed polling
+- Coordinator dynamically adjusts update interval (min 30s, max 24h) to next change time
+- Schedules update 10 seconds before predicted change to ensure accurate capture
+- Falls back to 1-hour interval when no changes predicted
+- **Impact**: Eliminates unnecessary polling, dramatically reduces CPU/battery usage
+
+### ⚡ Performance Optimizations
+**get_next_changes optimization**:
+- Now calls `_get_configurations_at_time(now, target_setup_name=setup_name)` for current value
+- Resolves only the specific setup + dependencies instead of all setups
+- Significant performance improvement for cache validation
+- **Impact**: Faster cache validation, reduced database overhead
+
+**Code unification**:
+- Removed legacy `_get_all_active_configs()` function (106 duplicate lines)
+- Removed unused `get_configuration()` method
+- Unified `_get_relevant_configs_for_target()` to handle both targeted and legacy behaviors
+- Changed `target_setup_name` parameter to `Optional[str]` to support None (legacy mode)
+- **Impact**: Single source of truth, easier maintenance, reduced code complexity
+
+### 🗑️ Breaking Changes
+**Removed scan_interval configuration option**:
+- `scan_interval` removed from UI configuration (config_flow.py)
+- Removed from const.py, __init__.py, sensor.py, translations
+- Weekly view now uses fixed event-driven granularity (granularity_minutes parameter was already deprecated)
+- **Migration**: Automatic - existing options ignored, no user action required
+- **Rationale**: Obsolete with dynamic scheduling, eliminates configuration confusion
+
+### 🐛 Bug Fixes (from v2.2.1)
+**Critical Fix #1: All-day schedules with day filters**:
+- Fixed override orario (00:00-00:00) being applied to ALL days instead of respecting `days_of_week` filter
+- Modified `_get_all_active_configs()` to evaluate `is_valid = current_day in valid_days`
+- Now consistent with `_get_relevant_configs_for_target()` logic
+
+**Critical Fix #2: Next change detection at day-of-week boundaries**:
+- Fixed `next_change_at` not detecting value transitions at day-of-week boundaries
+- `_get_all_event_times()` now generates boundary events when transitioning from matching to non-matching days
+- Example: Weekend-only override now correctly generates event at Monday 00:00 when expiring
+- **Impact**: Accurate predictions for day-of-week filtered schedules
+
+### 📊 Performance Impact
+**Before v2.3.0**:
+- Fixed 60-second polling regardless of actual change schedule
+- get_next_changes calculated all 7 setups to validate cache
+- Duplicate code in two similar functions
+
+**After v2.3.0**:
+- Updates only when needed (typically 10s before actual change)
+- get_next_changes calculates only requested setup + dependencies
+- Unified codebase, 106 fewer lines of duplicate code
+- Estimated 80-95% reduction in unnecessary updates
+
+### 📦 Versions
+- integration: 2.3.0
+- card: 2.2.0 (no changes)
+
 ## v2.2.1 - January 16, 2026 🐛 Critical Bugfixes (2 fixes)
 
 ### 🐛 Critical Fix #1: All-day schedules with day filters

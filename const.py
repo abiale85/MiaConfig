@@ -1,7 +1,7 @@
 """Costanti per Mia Config."""
 
 DOMAIN = "mia_config"
-VERSION = "2.2.0"
+VERSION = "2.3.0"
 DEFAULT_NAME = "Mia Config"
 DEFAULT_LOOKAHEAD_HOURS = 168
 DEFAULT_LOOKBACK_HOURS = 24
