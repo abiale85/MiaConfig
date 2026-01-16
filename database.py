@@ -764,6 +764,12 @@ class ConfigDatabase:
                 event_times.add(event_to)
                 events_generated += 2
 
+        # Aggiungi checkpoint a mezzanotte per ogni giorno nel periodo (allinea next_change_at alla vista settimanale)
+        # Questo garantisce che i cambi di giorno (es. Fri->Sat o Sun->Mon) vengano sempre valutati
+        for day_offset in range(MAX_DAYS):
+            day_start = (now + timedelta(days=day_offset)).replace(hour=0, minute=0, second=0, microsecond=0)
+            event_times.add(day_start)
+
         # Salva in cache
         self._event_times_cache = event_times
         self._event_times_config_version = self._config_version
