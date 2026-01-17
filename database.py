@@ -1629,6 +1629,14 @@ class ConfigDatabase:
         # Filtra solo gli eventi nel periodo richiesto
         all_event_times = self._get_all_event_times(limit_time)
         event_times = {t for t in all_event_times if t > now and t <= limit_time}
+
+        # Fallback: aggiungi sempre la mezzanotte di ogni giorno nel periodo
+        # per garantire la valutazione dei cambi di giorno (allinea con vista settimanale)
+        total_days = (limit_time.date() - now.date()).days + 1
+        for day_offset in range(total_days):
+            day_start = (now + timedelta(days=day_offset)).replace(hour=0, minute=0, second=0, microsecond=0)
+            if now < day_start <= limit_time:
+                event_times.add(day_start)
         
         # FASE 2: Calcolo cambiamenti di valore
         # Per ogni timestamp potenziale, calcoliamo se il setup_name target cambia valore
