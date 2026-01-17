@@ -1,3 +1,25 @@
+## v2.3.3 - 17 Gennaio 2026 🐛 Fix Buchi Vista Settimanale
+
+### 🔧 Fix e miglioramenti
+- **Fix buchi vista settimanale**: Risolti i buchi nella timeline quando finiscono le configurazioni a tempo con filtri orari
+- **Generazione eventi orari**: Il metodo `_get_all_event_times()` ora genera eventi anche per gli orari di inizio/fine delle configurazioni a tempo
+- **Timeline continua**: La vista settimanale ora mostra una timeline continua senza interruzioni
+
+### 📦 Versioni
+- integrazione: 2.3.3
+- card: 2.2.0
+
+## v2.3.2 - 17 Gennaio 2026 🐛 Fix Fuso Orario Critico
+
+### 🔧 Fix e miglioramenti
+- **Fix fuso orario critico**: Sostituiti tutti gli usi di `datetime.now()` con `dt_util.now()` per rispettare il timezone configurato in Home Assistant
+- **Impatto**: Le configurazioni a orario ora funzionano correttamente anche se HA ha un timezone diverso da quello del sistema operativo
+- **Aree coinvolte**: Calcoli schedulazioni, timestamp backup, aggiornamenti sensori, simulazioni
+
+### 📦 Versioni
+- integrazione: 2.3.2
+- card: 2.2.0
+
 ## v2.3.1 - 17 Gennaio 2026 🐛 Fix Modal Condizionale
 
 ### 🔧 Fix e miglioramenti

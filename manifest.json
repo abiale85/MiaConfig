@@ -1,7 +1,7 @@
 {
   "domain": "mia_config",
   "name": "Mia Config",
-  "version": "2.3.1",
+  "version": "2.3.3",
   "documentation": "https://github.com/abiale85/MiaConfig",
   "issue_tracker": "https://github.com/abiale85/MiaConfig/issues",
   "dependencies": [],

@@ -684,6 +684,49 @@ class ConfigDatabase:
             event_times.add(valid_from)
             if valid_to:
                 event_times.add(valid_to)
+            
+            # Se ha anche filtri orari, genera eventi orari durante il periodo di validità
+            if row['valid_from_ora'] is not None and row['valid_to_ora'] is not None:
+                # Determina il periodo per cui generare eventi orari
+                time_period_start = valid_from
+                time_period_end = valid_to if valid_to else horizon_end
+                
+                # Per ogni giorno nel periodo di validità della configurazione a tempo
+                current_day = time_period_start.replace(hour=0, minute=0, second=0, microsecond=0)
+                while current_day <= time_period_end:
+                    # Verifica filtri giorni se presenti
+                    should_generate = True
+                    if row['days_of_week'] is not None:
+                        if isinstance(row['days_of_week'], list):
+                            valid_days = row['days_of_week']
+                        else:
+                            valid_days = [int(d) for d in str(row['days_of_week']).split(',') if d.strip()]
+                        if current_day.weekday() not in valid_days:
+                            should_generate = False
+                    
+                    if should_generate:
+                        from_decimal = row['valid_from_ora']
+                        to_decimal = row['valid_to_ora']
+                        
+                        from_hour = int(from_decimal)
+                        from_min = int((from_decimal - from_hour) * 60)
+                        event_from = current_day.replace(hour=from_hour, minute=from_min, second=0, microsecond=0)
+                        
+                        to_hour = int(to_decimal)
+                        to_min = int((to_decimal - to_hour) * 60)
+                        
+                        if to_decimal < from_decimal:  # Attraversa la mezzanotte
+                            event_to = (current_day + timedelta(days=1)).replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
+                        else:
+                            event_to = current_day.replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
+                        
+                        # Aggiungi eventi solo se sono nel periodo di validità della configurazione
+                        if time_period_start <= event_from <= time_period_end:
+                            event_times.add(event_from)
+                        if time_period_start <= event_to <= time_period_end:
+                            event_times.add(event_to)
+                    
+                    current_day += timedelta(days=1)
 
         # Eventi da configurazioni a orario (calcola per i prossimi 30 giorni)
         for row in self._memory_cache['configurazioni_a_orario']:

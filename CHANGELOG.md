@@ -1,5 +1,32 @@
 # 📋 Changelog - Mia Config
 
+## v2.3.3 - January 17, 2026 🐛 Weekly View Time Config Gap Fix
+
+### 🐛 Bug Fixes
+**Weekly view time configuration gaps**:
+- Fixed gaps in weekly view timeline when time-based configurations end
+- **Issue**: Time configurations with hour filters left gaps instead of returning to previous configuration
+- **Root cause**: `_get_all_event_times()` only generated events for date boundaries, missing hour boundaries for time configs
+- **Solution**: Enhanced event generation to include hour-based events for time configurations during their validity period
+- **Impact**: Weekly view now shows continuous timeline without gaps when time configurations expire
+
+### 📦 Versions
+- integration: 2.3.3
+- card: 2.2.0 (no changes)
+
+## v2.3.2 - January 17, 2026 🐛 Critical Timezone Fix
+
+### 🐛 Critical Bug Fixes
+**Timezone handling fix**:
+- Fixed timezone inconsistencies using `datetime.now()` instead of HA's `dt_util.now()`
+- Replaced all `datetime.now()` calls with `dt_util.now()` in `__init__.py` and `sensor.py`
+- **Impact**: Configurations now respect Home Assistant's configured timezone instead of system timezone
+- **Affected areas**: Schedule calculations, backup timestamps, sensor updates, simulation timestamps
+
+### 📦 Versions
+- integration: 2.3.2
+- card: 2.2.0 (no changes)
+
 ## v2.3.1 - January 17, 2026 🐛 Modal Fixes
 
 ### 🐛 Bug Fixes
