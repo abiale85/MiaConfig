@@ -1,5 +1,18 @@
 # 📋 Changelog - Mia Config
 
+## v2.3.1 - January 17, 2026 🐛 Modal Fixes
+
+### 🐛 Bug Fixes
+**Modal conditional form fixes**:
+- Fixed edit mode not loading valid values dropdown for conditional configurations
+- Fixed checkbox width in modal forms causing layout overflow (label text cut off)
+- Added proper CSS overrides for checkbox width to prevent full-width behavior
+- **Impact**: Edit modal now properly shows valid values menu and checkbox labels are fully visible
+
+### 📦 Versions
+- integration: 2.3.1
+- card: 2.2.0 (no changes)
+
 ## v2.3.0 - January 17, 2026 🚀 Dynamic Event-Driven Scheduling
 
 ### 🚀 Major Performance Enhancement: Fully Event-Driven Architecture
