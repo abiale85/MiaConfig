@@ -130,6 +130,7 @@ class MiaConfigCard extends HTMLElement {
                 .mia-config-card .dc-form-group { margin-bottom: 16px; }
                 .mia-config-card .dc-form-group label { display: block; margin-bottom: 4px; font-weight: 500; font-size: 14px; }
                 .mia-config-card .dc-form-group input, .mia-config-card .dc-form-group select { width: 100%; padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); color: var(--primary-text-color); font-size: 14px; box-sizing: border-box; }
+                .mia-config-card .dc-form-group input[type="checkbox"] { width: auto !important; min-width: 0; padding: 0; border: none; background: transparent; flex: 0 0 auto; }
                 .mia-config-card .dc-checkbox-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 6px 8px; align-items: flex-start; }
                 .mia-config-card .dc-checkbox-label { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: 12px; min-width: 0; max-width: 100%; white-space: normal; line-height: 1.25; }
                 .mia-config-card .dc-time-picker { display: flex; gap: 15px; align-items: center; }
@@ -246,6 +247,14 @@ class MiaConfigCard extends HTMLElement {
                     font-size: 14px;
                     box-sizing: border-box;
                     font-family: inherit;
+                }
+                .dc-form-group input[type="checkbox"] {
+                    width: auto !important;
+                    min-width: 0;
+                    padding: 0;
+                    border: none;
+                    background: transparent;
+                    flex: 0 0 auto;
                 }
                 .dc-form-group input:focus,
                 .dc-form-group select:focus,
@@ -2239,8 +2248,11 @@ class MiaConfigCard extends HTMLElement {
                     const configSelect = form.querySelector('select[name="setup_name"]');
                     ensureSelectValue(configSelect, name);
                     if (configSelect) configSelect.disabled = true;
-                    const valueInput = form.querySelector('input[name="setup_value"]');
-                    if (valueInput) valueInput.value = cfg.value;
+                    if (typeof window.dcLoadValidValuesForForm === 'function') {
+                        await window.dcLoadValidValuesForForm('time');
+                    }
+                    const valueField = form.querySelector('#modal-time-setup-value');
+                    if (valueField) valueField.value = cfg.value;
                     
                     // Converti il formato datetime per datetime-local
                     const formatForInput = (dt) => dt.replace(' ', 'T').substring(0, 16);
@@ -2295,8 +2307,11 @@ class MiaConfigCard extends HTMLElement {
                     const configSelect = form.querySelector('select[name="setup_name"]');
                     ensureSelectValue(configSelect, name);
                     if (configSelect) configSelect.disabled = true;
-                    const valueInput = form.querySelector('input[name="setup_value"]');
-                    if (valueInput) valueInput.value = cfg.value;
+                    if (typeof window.dcLoadValidValuesForForm === 'function') {
+                        await window.dcLoadValidValuesForForm('schedule');
+                    }
+                    const valueField = form.querySelector('#modal-schedule-setup-value');
+                    if (valueField) valueField.value = cfg.value;
                     
                     // Converti ore decimali a ore e minuti per i selettori
                     const fromHour = Math.floor(cfg.valid_from_ora);
@@ -2328,8 +2343,11 @@ class MiaConfigCard extends HTMLElement {
                     const configSelect = form.querySelector('select[name="setup_name"]');
                     ensureSelectValue(configSelect, name);
                     if (configSelect) configSelect.disabled = true;
-                    const valueInput = form.querySelector('input[name="setup_value"]');
-                    if (valueInput) valueInput.value = cfg.value;
+                    if (typeof window.dcLoadValidValuesForForm === 'function') {
+                        await window.dcLoadValidValuesForForm('conditional');
+                    }
+                    const valueField = form.querySelector('#modal-conditional-setup-value');
+                    if (valueField) valueField.value = cfg.value;
                     
                     const conditionalConfigSelect = form.querySelector('select[name="conditional_config"]');
                     ensureSelectValue(conditionalConfigSelect, cfg.conditional_config);
