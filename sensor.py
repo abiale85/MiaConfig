@@ -20,6 +20,7 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN
 from .database import ConfigDatabase
+from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -365,7 +366,7 @@ class DynamicConfigSensor(CoordinatorEntity, SensorEntity):
             
             # Lista dei prossimi cambiamenti entro 24 ore (max 6 eventi)
             upcoming_events = []
-            now_dt = datetime.now()
+            now_dt = dt_util.now()
             cutoff_dt = now_dt + timedelta(hours=24)
             for event in next_changes:
                 if len(upcoming_events) >= 6:

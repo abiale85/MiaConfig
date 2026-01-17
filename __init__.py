@@ -16,6 +16,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 from homeassistant.components.http import HomeAssistantView
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
@@ -475,7 +476,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         
         # Se non specificata, usa data/ora corrente
         if start_date is None:
-            start_date = datetime.now()
+            start_date = dt_util.now()
         
         segments = await hass.async_add_executor_job(
             db.simulate_configuration_schedule, setup_name, start_date, days, granularity_minutes
@@ -852,7 +853,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         backup_dir.mkdir(parents=True, exist_ok=True)
         
         # Crea il nome del file di backup con timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = dt_util.now().strftime("%Y%m%d_%H%M%S")
         backup_file = backup_dir / f"mia_config_backup_{timestamp}.db"
         
         try:
@@ -894,7 +895,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             # Crea un backup del database corrente prima di ripristinare
             current_backup = os.path.join(
                 hass.config.path(), "backups", "mia_config",
-                f"mia_config_pre_restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+                f"mia_config_pre_restore_{dt_util.now().strftime('%Y%m%d_%H%M%S')}.db"
             )
             os.makedirs(os.path.dirname(current_backup), exist_ok=True)
             await hass.async_add_executor_job(
