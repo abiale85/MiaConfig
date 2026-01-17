@@ -32,6 +32,8 @@ async def async_setup_entry(
     """Set up del platform sensor da config entry."""
     db: ConfigDatabase = hass.data[DOMAIN]["db"]
     lookahead_hours = hass.data[DOMAIN].get("lookahead_hours", 24)
+    # next_change deve guardare sempre 7 giorni
+    next_change_lookahead_hours = max(lookahead_hours, 168)
     lookback_hours = hass.data[DOMAIN].get("lookback_hours", 24)
     
     # Track existing sensors
@@ -93,7 +95,7 @@ async def async_setup_entry(
                     _LOGGER.debug(f"{setup_name}: {recalc_reason}, ricalcolo predittivi")
                 try:
                     next_changes = await hass.async_add_executor_job(
-                        db.get_next_changes, setup_name, lookahead_hours
+                        db.get_next_changes, setup_name, next_change_lookahead_hours
                     )
                     predictive_data[setup_name] = {
                         'next_changes': next_changes,
@@ -361,17 +363,29 @@ class DynamicConfigSensor(CoordinatorEntity, SensorEntity):
             if 'timestamp' in next_change:
                 attributes['next_change_at'] = next_change['timestamp']
             
-            # Lista di tutti i prossimi cambiamenti con timestamp
+            # Lista dei prossimi cambiamenti entro 24 ore (max 6 eventi)
             upcoming_events = []
+            now_dt = datetime.now()
+            cutoff_dt = now_dt + timedelta(hours=24)
             for event in next_changes:
+                if len(upcoming_events) >= 6:
+                    break
+                if 'timestamp' not in event:
+                    continue
+                try:
+                    event_time = datetime.fromisoformat(event['timestamp'])
+                except (ValueError, TypeError):
+                    continue
+                if not (now_dt < event_time <= cutoff_dt):
+                    continue
+
                 event_data = {
                     'value': event['value'],
-                    'type': event['type']
+                    'type': event['type'],
+                    'at': event['timestamp']
                 }
                 if 'id' in event:
                     event_data['id'] = event['id']
-                if 'timestamp' in event:
-                    event_data['at'] = event['timestamp']
                 upcoming_events.append(event_data)
             
             attributes['upcoming_changes'] = upcoming_events
