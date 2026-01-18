@@ -1,8 +1,10 @@
 """Database manager per Dynamic Config."""
 import sqlite3
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from typing import Optional, List, Dict, Any
+
+from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,6 +39,17 @@ class ConfigDatabase:
             'descrizioni': {},  # Dict {setup_name: description}
             'loaded': False  # Flag per sapere se la cache è stata caricata
         }
+
+    def _ensure_local_dt(self, value: datetime) -> datetime:
+        """Assicura un datetime locale senza shiftare orari locali."""
+        if value.tzinfo is None:
+            return value.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
+        return value.astimezone(dt_util.DEFAULT_TIME_ZONE)
+
+    def _to_local_datetime(self, value: str) -> datetime:
+        """Converte una stringa ISO in datetime locale senza shiftare orari locali."""
+        parsed = datetime.fromisoformat(value)
+        return self._ensure_local_dt(parsed)
     
     @staticmethod
     def validate_setup_name(setup_name: str) -> str:
@@ -312,8 +325,8 @@ class ConfigDatabase:
                 continue
             
             # Verifica validità temporale
-            valid_from = datetime.fromisoformat(row['valid_from_date'])
-            valid_to = datetime.fromisoformat(row['valid_to_date'])
+            valid_from = self._to_local_datetime(row['valid_from_date'])
+            valid_to = self._to_local_datetime(row['valid_to_date'])
             if not (valid_from <= target_datetime <= valid_to):
                 continue
             
@@ -327,9 +340,9 @@ class ConfigDatabase:
                 if valid_from == valid_to:
                     is_valid_time = True
                 elif valid_to < valid_from:  # Attraversa la mezzanotte
-                    is_valid_time = (current_time >= valid_from or current_time <= valid_to)
+                    is_valid_time = (current_time >= valid_from or current_time < valid_to)
                 else:
-                    is_valid_time = (valid_from <= current_time <= valid_to)
+                    is_valid_time = (valid_from <= current_time < valid_to)
                 
                 if not is_valid_time:
                     continue
@@ -503,9 +516,10 @@ class ConfigDatabase:
                 continue
             
             # Verifica validità temporale
-            valid_from = datetime.fromisoformat(row['valid_from_date'])
-            valid_to = datetime.fromisoformat(row['valid_to_date'])
-            if not (valid_from <= target_datetime <= valid_to):
+            valid_from = self._to_local_datetime(row['valid_from_date'])
+            valid_to = self._to_local_datetime(row['valid_to_date'])
+            # Usa < valid_to per rendere l'orario di fine esclusivo (scheduling standard)
+            if not (valid_from <= target_datetime < valid_to):
                 continue
             
             # Verifica filtri opzionali orari
@@ -518,9 +532,9 @@ class ConfigDatabase:
                 if valid_from == valid_to:
                     is_valid_time = True
                 elif valid_to < valid_from:  # Attraversa la mezzanotte
-                    is_valid_time = (current_time >= valid_from or current_time <= valid_to)
+                    is_valid_time = (current_time >= valid_from or current_time < valid_to)
                 else:
-                    is_valid_time = (valid_from <= current_time <= valid_to)
+                    is_valid_time = (valid_from <= current_time < valid_to)
                 
                 if not is_valid_time:
                     continue
@@ -654,7 +668,7 @@ class ConfigDatabase:
             self._load_all_to_memory()
 
         MAX_DAYS = 30
-        now = datetime.now()
+        now = dt_util.now()
         horizon_end = now + timedelta(days=MAX_DAYS)
 
         def cache_valid() -> bool:
@@ -678,55 +692,53 @@ class ConfigDatabase:
         for row in self._memory_cache['configurazioni_a_tempo']:
             if not row['enabled']: continue
             time_config_count += 1
-            valid_from = datetime.fromisoformat(row['valid_from_date'])
-            valid_to = datetime.fromisoformat(row['valid_to_date']) if row['valid_to_date'] else None
+            valid_from = self._to_local_datetime(row['valid_from_date'])
+            valid_to = self._to_local_datetime(row['valid_to_date']) if row['valid_to_date'] else None
 
             event_times.add(valid_from)
             if valid_to:
                 event_times.add(valid_to)
             
-            # Se ha anche filtri orari, genera eventi orari durante il periodo di validità
+            # Se ha filtri orari, genera eventi giornalieri di inizio e fine durante il periodo di validità
             if row['valid_from_ora'] is not None and row['valid_to_ora'] is not None:
-                # Determina il periodo per cui generare eventi orari
-                time_period_start = valid_from
-                time_period_end = valid_to if valid_to else horizon_end
-                
-                # Per ogni giorno nel periodo di validità della configurazione a tempo
-                current_day = time_period_start.replace(hour=0, minute=0, second=0, microsecond=0)
-                while current_day <= time_period_end:
-                    # Verifica filtri giorni se presenti
-                    should_generate = True
-                    if row['days_of_week'] is not None:
-                        if isinstance(row['days_of_week'], list):
-                            valid_days = row['days_of_week']
-                        else:
-                            valid_days = [int(d) for d in str(row['days_of_week']).split(',') if d.strip()]
-                        if current_day.weekday() not in valid_days:
-                            should_generate = False
+                try:
+                    # valid_from_ora e valid_to_ora sono float (es. 18.5 per 18:30)
+                    from_decimal = row['valid_from_ora']
+                    to_decimal = row['valid_to_ora']
                     
-                    if should_generate:
-                        from_decimal = row['valid_from_ora']
-                        to_decimal = row['valid_to_ora']
-                        
-                        from_hour = int(from_decimal)
-                        from_min = int((from_decimal - from_hour) * 60)
-                        event_from = current_day.replace(hour=from_hour, minute=from_min, second=0, microsecond=0)
-                        
-                        to_hour = int(to_decimal)
-                        to_min = int((to_decimal - to_hour) * 60)
-                        
-                        if to_decimal < from_decimal:  # Attraversa la mezzanotte
-                            event_to = (current_day + timedelta(days=1)).replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
-                        else:
-                            event_to = current_day.replace(hour=to_hour, minute=to_min, second=0, microsecond=0)
-                        
-                        # Aggiungi eventi solo se sono nel periodo di validità della configurazione
-                        if time_period_start <= event_from <= time_period_end:
-                            event_times.add(event_from)
-                        if time_period_start <= event_to <= time_period_end:
-                            event_times.add(event_to)
+                    from_hour = int(from_decimal)
+                    from_min = int((from_decimal - from_hour) * 60)
+                    start_time = time(from_hour, from_min)
                     
-                    current_day += timedelta(days=1)
+                    to_hour = int(to_decimal)
+                    to_min = int((to_decimal - to_hour) * 60)
+                    end_time = time(to_hour, to_min)
+                    
+                    current_day = valid_from
+                    end_day = valid_to or (now + timedelta(days=MAX_DAYS))
+                    while current_day <= end_day:
+                        # Verifica filtri giorni se presenti
+                        should_generate = True
+                        if row['days_of_week'] is not None:
+                            if isinstance(row['days_of_week'], list):
+                                valid_days = row['days_of_week']
+                            else:
+                                valid_days = [int(d) for d in str(row['days_of_week']).split(',') if d.strip()]
+                            if current_day.weekday() not in valid_days:
+                                should_generate = False
+                        
+                        if should_generate:
+                            start_dt = dt_util.as_local(datetime.combine(current_day.date(), start_time))
+                            if to_decimal < from_decimal:  # Attraversa la mezzanotte
+                                end_dt = dt_util.as_local(datetime.combine(current_day.date() + timedelta(days=1), end_time))
+                            else:
+                                end_dt = dt_util.as_local(datetime.combine(current_day.date(), end_time))
+                            event_times.add(start_dt)
+                            event_times.add(end_dt)
+                        current_day += timedelta(days=1)
+                except (ValueError, TypeError):
+                    # Se il formato ora non è valido, ignora
+                    pass
 
         # Eventi da configurazioni a orario (calcola per i prossimi 30 giorni)
         for row in self._memory_cache['configurazioni_a_orario']:
@@ -919,6 +931,14 @@ class ConfigDatabase:
     ) -> None:
         """Imposta una configurazione a tempo con filtri opzionali per orario e giorni."""
         setup_name = self.validate_setup_name(setup_name)
+        if isinstance(valid_from_date, datetime):
+            valid_from_date = self._ensure_local_dt(valid_from_date).isoformat()
+        else:
+            valid_from_date = self._to_local_datetime(str(valid_from_date)).isoformat()
+        if isinstance(valid_to_date, datetime):
+            valid_to_date = self._ensure_local_dt(valid_to_date).isoformat()
+        else:
+            valid_to_date = self._to_local_datetime(str(valid_to_date)).isoformat()
         cursor = self.conn.cursor()
         cursor.execute("""
             INSERT INTO configurazioni_a_tempo 
@@ -1602,7 +1622,7 @@ class ConfigDatabase:
             - type: Tipo di evento che causa il cambiamento (time, schedule, conditional, etc.)
         """
         # Ottieni il valore attuale solo per questo setup (ottimizzazione: non calcolare tutti i setup)
-        now = datetime.now()
+        now = dt_util.now()
         current_configs = self._get_configurations_at_time(now, target_setup_name=setup_name)
         current_value = current_configs.get(setup_name, {}).get('value')
         current_source = current_configs.get(setup_name, {}).get('source', 'unknown')
@@ -1617,8 +1637,8 @@ class ConfigDatabase:
             if (cached['value'] == current_value and 
                 cached['config_version'] == self._config_version):
                 # Cache valida: aggiorna solo minutes_until basandosi sul tempo trascorso
-                now = datetime.now()
-                cached_timestamp = datetime.fromisoformat(cached['timestamp'])
+                now = dt_util.now()
+                cached_timestamp = dt_util.parse_datetime(cached['timestamp'])
                 # Usa round invece di int per evitare drift nei calcoli temporali
                 elapsed_minutes = round((now - cached_timestamp).total_seconds() / 60)
                 
@@ -1643,7 +1663,7 @@ class ConfigDatabase:
                     return updated_changes[:max_results]
         
         # Cache miss o invalidata: ricalcola
-        now = datetime.now()
+        now = dt_util.now()
         limit_time = now + timedelta(hours=limit_hours)
         
         # Costanti per la gestione degli eventi
@@ -1724,7 +1744,7 @@ class ConfigDatabase:
         Returns: numero di righe eliminate.
         """
         cursor = self.conn.cursor()
-        cutoff_date = datetime.now() - timedelta(days=days)
+        cutoff_date = dt_util.now() - timedelta(days=days)
         
         cursor.execute("""
             DELETE FROM configurazioni_a_tempo
@@ -1991,7 +2011,7 @@ class ConfigDatabase:
         Returns:
             Dict[setup_name -> {'value': str, 'source': str, 'priority': int, ...}]
         """
-        now = datetime.now()
+        now = dt_util.now()
         result = self._get_configurations_at_time(now)
         
         # Cache delle descrizioni per 60 secondi (raramente cambiano)

@@ -2255,10 +2255,15 @@ class MiaConfigCard extends HTMLElement {
                     if (valueField) valueField.value = cfg.value;
                     
                     // Converti il formato datetime per datetime-local
-                    const formatForInput = (dt) => dt.replace(' ', 'T').substring(0, 16);
-                    const fromInput = form.querySelector('input[name="valid_from_date"]');
+                    const formatForInput = (dt) => {
+                        if (!dt) return '';
+                        // Gestisci formati vari: ISO string, stringa intera con spazio, ecc.
+                        // Prendi solo i primi 16 caratteri YYYY-MM-DDTHH:mm
+                        return String(dt).replace(' ', 'T').substring(0, 16);
+                    };
+                    const fromInput = form.querySelector('input[name="valid_from"]');
                     if (fromInput) fromInput.value = formatForInput(cfg.valid_from_date);
-                    const toInput = form.querySelector('input[name="valid_to_date"]');
+                    const toInput = form.querySelector('input[name="valid_to"]');
                     if (toInput) toInput.value = formatForInput(cfg.valid_to_date);
                     
                     // Verifica se ci sono filtri opzionali
@@ -3535,8 +3540,17 @@ class MiaConfigCard extends HTMLElement {
                 const hasFrom = fromDate && !Number.isNaN(fromDate.getTime());
                 const hasTo = toDate && !Number.isNaN(toDate.getTime());
                 if (isValidDate) {
-                    if (hasFrom && parsedDate < fromDate) return;
-                    if (hasTo && parsedDate > toDate) return;
+                    // Confronta solo le date (ignora l'ora) per evitare esclusioni errate
+                    if (hasFrom) {
+                        const fromDateOnly = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate());
+                        const parsedDateOnly = new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate());
+                        if (parsedDateOnly < fromDateOnly) return;
+                    }
+                    if (hasTo) {
+                        const toDateOnly = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate());
+                        const parsedDateOnly = new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate());
+                        if (parsedDateOnly > toDateOnly) return;
+                    }
                 }
                 
                 if (!segmentsByDate[dateKey]) {
