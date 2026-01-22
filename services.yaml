@@ -313,6 +313,19 @@ get_configurations:
       selector:
         text:
 
+force_refresh:
+  name: Forza Refresh
+  description: Forza il refresh dei valori e invalida le cache predittive
+  fields:
+    entity_id:
+      name: Entità
+      description: Entità sensor.mia_config_* dell'istanza da aggiornare (opzionale, se omesso aggiorna tutte)
+      required: false
+      example: "sensor.mia_config_temperatura_target"
+      selector:
+        entity:
+          integration: mia_config
+
 get_history:
   name: Ottieni Storico
   description: Recupera lo storico delle modifiche alle configurazioni

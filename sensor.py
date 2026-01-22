@@ -134,15 +134,19 @@ async def async_setup_entry(
             next_changes = pred_data.get('next_changes', [])
             if next_changes and len(next_changes) > 0:
                 # Prendi il primo cambio (il più vicino)
-                minutes_until = next_changes[0].get('minutes_until', None)
-                if minutes_until is not None and minutes_until > 0:
-                    seconds_until = minutes_until * 60
+                seconds_until = next_changes[0].get('seconds_until', None)
+                if seconds_until is None:
+                    minutes_until = next_changes[0].get('minutes_until', None)
+                    if minutes_until is not None:
+                        seconds_until = minutes_until * 60
+
+                if seconds_until is not None and seconds_until > 0:
                     if earliest_change is None or seconds_until < earliest_change:
                         earliest_change = seconds_until
         
         if earliest_change is not None:
-            # Applica limiti: min 30s, max 24h
-            MIN_INTERVAL = 30
+            # Applica limiti: min 5s, max 24h
+            MIN_INTERVAL = 5
             MAX_INTERVAL = 86400  # 24 ore
             
             if earliest_change < MIN_INTERVAL:
@@ -152,9 +156,10 @@ async def async_setup_entry(
                 next_update_seconds = MAX_INTERVAL
                 _LOGGER.debug(f"Next change in {earliest_change}s, scheduling update in {MAX_INTERVAL}s (maximum)")
             else:
-                # Schedula qualche secondo prima del cambio effettivo per assicurarsi di catturarlo
-                next_update_seconds = max(MIN_INTERVAL, earliest_change - 10)
-                _LOGGER.debug(f"Next change in {earliest_change}s, scheduling update in {next_update_seconds}s")
+                # CRITICO: Schedula DOPO l'evento (+ 2s buffer) per garantire che sia attivo
+                # Se scheduliamo PRIMA, potremmo leggere ancora il valore vecchio
+                next_update_seconds = max(MIN_INTERVAL, earliest_change + 2)
+                _LOGGER.info(f"[REFRESH TIMING] Next change in {earliest_change}s, scheduling update AFTER event at {next_update_seconds}s")
         else:
             # Nessun cambio previsto: usa intervallo lungo di default (1 ora)
             next_update_seconds = 3600
@@ -163,7 +168,14 @@ async def async_setup_entry(
         # Aggiorna dinamicamente l'intervallo del coordinator
         if next_update_seconds and next_update_seconds != coordinator.update_interval.total_seconds():
             coordinator.update_interval = timedelta(seconds=next_update_seconds)
-            _LOGGER.info(f"Update interval dynamically adjusted to {next_update_seconds}s")
+            _LOGGER.info(f"[COORDINATOR] Update interval dynamically adjusted to {next_update_seconds}s")
+        
+        # Log stato per debugging (ogni 10 minuti o se interval < 60s)
+        log_state = (next_update_seconds and next_update_seconds < 60) or (int(time.time()) % 600 == 0)
+        if log_state:
+            _LOGGER.info(f"[COORDINATOR] State: {len(configs)} configs, next_update={next_update_seconds}s, earliest_change={earliest_change}s")
+        if log_state:
+            _LOGGER.info(f"[COORDINATOR] State: {len(configs)} configs, next_update={next_update_seconds}s, earliest_change={earliest_change}s")
         
         return {
             'configs': configs,

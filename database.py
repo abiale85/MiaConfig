@@ -1,6 +1,7 @@
 """Database manager per Dynamic Config."""
 import sqlite3
 import logging
+import math
 from datetime import datetime, timedelta, time
 from typing import Optional, List, Dict, Any
 
@@ -672,7 +673,7 @@ class ConfigDatabase:
         horizon_end = now + timedelta(days=MAX_DAYS)
 
         def cache_valid() -> bool:
-            return (
+            valid = (
                 self._event_times_config_version == self._config_version
                 and self._event_times_cache
                 and self._event_times_generation_start is not None
@@ -680,6 +681,15 @@ class ConfigDatabase:
                 and now < self._event_times_generation_end
                 and (min_end_time is None or self._event_times_generation_end >= min_end_time)
             )
+            if not valid and self._event_times_cache:
+                # Log motivo invalidazione cache per debugging
+                if self._event_times_config_version != self._config_version:
+                    _LOGGER.debug(f"[EVENT_TIMES] Cache stale: config_version changed {self._event_times_config_version} -> {self._config_version}")
+                elif now >= self._event_times_generation_end:
+                    _LOGGER.info(f"[EVENT_TIMES] Cache expired: now={now} >= horizon_end={self._event_times_generation_end}")
+                elif min_end_time and self._event_times_generation_end < min_end_time:
+                    _LOGGER.debug(f"[EVENT_TIMES] Cache insufficient: horizon_end={self._event_times_generation_end} < required={min_end_time}")
+            return valid
 
         if cache_valid():
             return self._event_times_cache
@@ -817,6 +827,7 @@ class ConfigDatabase:
         self._event_times_config_version = self._config_version
         self._event_times_generation_start = now
         self._event_times_generation_end = horizon_end
+        _LOGGER.info(f"[EVENT_TIMES] Regenerated cache: {len(event_times)} events from {now} to {horizon_end} (time_configs={time_config_count}, conditional_configs={conditional_config_count})")
         return self._event_times_cache
 
     
@@ -1636,19 +1647,26 @@ class ConfigDatabase:
             # Cache hit: verifica se è ancora valida
             if (cached['value'] == current_value and 
                 cached['config_version'] == self._config_version):
-                # Cache valida: aggiorna solo minutes_until basandosi sul tempo trascorso
+                # Cache valida: aggiorna seconds_until/minutes_until basandosi sul tempo trascorso
                 now = dt_util.now()
                 cached_timestamp = dt_util.parse_datetime(cached['timestamp'])
-                # Usa round invece di int per evitare drift nei calcoli temporali
-                elapsed_minutes = round((now - cached_timestamp).total_seconds() / 60)
+                # Usa round per evitare drift nei calcoli temporali
+                elapsed_seconds = round((now - cached_timestamp).total_seconds())
                 
-                # Aggiorna minutes_until per ogni evento e filtra eventi passati
+                # Aggiorna seconds_until/minutes_until per ogni evento e filtra eventi passati
                 updated_changes = []
                 for change in cached['result']:
-                    new_minutes_until = change['minutes_until'] - elapsed_minutes
-                    if new_minutes_until > 0:  # Solo eventi futuri
+                    if 'seconds_until' in change:
+                        new_seconds_until = change['seconds_until'] - elapsed_seconds
+                    else:
+                        # Fallback: ricava i secondi dai minuti
+                        new_seconds_until = (change['minutes_until'] * 60) - elapsed_seconds
+
+                    if new_seconds_until > 0:  # Solo eventi futuri
                         updated_change = change.copy()
-                        updated_change['minutes_until'] = new_minutes_until
+                        updated_change['seconds_until'] = new_seconds_until
+                        # Mantieni minutes_until coerente (ceil per evitare 0 quando l'evento è imminente)
+                        updated_change['minutes_until'] = max(1, int(math.ceil(new_seconds_until / 60)))
                         updated_changes.append(updated_change)
                 
                 # Se la cache era vuota, ricalcola periodicamente (evita stallo “nessun evento”)
@@ -1680,6 +1698,17 @@ class ConfigDatabase:
         all_event_times = self._get_all_event_times(limit_time)
         event_times = {t for t in all_event_times if t > now and t <= limit_time}
         
+        # SAFETY CHECK: Se non ci sono eventi ma ci sono configurazioni a orario/tempo, è un errore critico
+        if not event_times:
+            schedule_count = len([r for r in self._memory_cache['configurazioni_a_orario'] if r['enabled'] and r['setup_name'] == setup_name])
+            time_count = len([r for r in self._memory_cache['configurazioni_a_tempo'] if r['enabled'] and r['setup_name'] == setup_name])
+            if schedule_count > 0 or time_count > 0:
+                _LOGGER.error(f"[CRITICAL] {setup_name}: No events found but {schedule_count} schedule + {time_count} time configs exist! Forcing event_times regeneration")
+                self._event_times_cache.clear()
+                self._event_times_config_version = None
+                all_event_times = self._get_all_event_times(limit_time)
+                event_times = {t for t in all_event_times if t > now and t <= limit_time}
+        
         # FASE 2: Calcolo cambiamenti di valore
         # Per ogni timestamp potenziale, calcoliamo se il setup_name target cambia valore
         # Usiamo la logica ottimizzata che calcola solo le configurazioni rilevanti
@@ -1688,6 +1717,10 @@ class ConfigDatabase:
         last_source = current_source
         
         for event_time in sorted(event_times):
+            # CRITICO: Verifica che l'evento sia futuro (può essere passato durante il processing)
+            if event_time <= now:
+                continue
+                
             # Verifica se a questo timestamp il valore del setup_name cambia
             # _get_configurations_at_time con target_setup_name calcola solo ciò che serve
             all_configs_at_time = self._get_configurations_at_time(event_time, target_setup_name=setup_name)
@@ -1701,11 +1734,17 @@ class ConfigDatabase:
                 
                 # Aggiungi solo se il valore cambia effettivamente
                 if new_value != last_value:
-                    minutes_until = int((event_time - now).total_seconds() / 60)
+                    seconds_until = (event_time - now).total_seconds()
+                    if seconds_until <= 0:
+                        _LOGGER.warning(f"[NEXT_CHANGES] Skipping past event: {event_time} (now={now})")
+                        continue
+                    seconds_until = int(math.ceil(seconds_until))
+                    minutes_until = max(1, int(math.ceil(seconds_until / 60)))
                     
                     change_entry = {
                         'value': new_value,
                         'minutes_until': minutes_until,
+                        'seconds_until': seconds_until,
                         'timestamp': event_time.isoformat(),
                         'type': new_source  # Il tipo è la sorgente che ha vinto (time, schedule, conditional, standard)
                     }
@@ -1725,6 +1764,9 @@ class ConfigDatabase:
             'result': result,
             'timestamp': now.isoformat()
         }
+        _LOGGER.debug(f"[NEXT_CHANGES] {setup_name}: found {len(changes)} changes (returning {len(result)}), current_value={current_value}")
+        if result:
+            _LOGGER.info(f"[NEXT_CHANGES] {setup_name}: Next change to '{result[0]['value']}' in {result[0]['seconds_until']}s at {result[0]['timestamp']}")
 
         # Salvaguardia startup: se il risultato è vuoto al primo calcolo, forza una rigenerazione
         # degli event_times e riprova una sola volta. Questo evita lo stato bloccato "nessun evento"

@@ -483,6 +483,30 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         )
         
         return {"segments": segments}
+
+    async def handle_force_refresh(call: ServiceCall) -> None:
+        """Forza il refresh dei valori e invalida la cache predittiva."""
+        entity_id = call.data.get("entity_id")
+
+        async def _refresh_entry(entry_id: str, data: dict) -> None:
+            if isinstance(data, dict):
+                if 'clear_cache' in data:
+                    data['clear_cache']()
+                if 'coordinator' in data:
+                    await data['coordinator'].async_request_refresh()
+
+        if entity_id:
+            state = hass.states.get(entity_id)
+            entry_id = state.attributes.get("entry_id") if state else None
+            if entry_id and entry_id in hass.data.get(DOMAIN, {}):
+                await _refresh_entry(entry_id, hass.data[DOMAIN][entry_id])
+                _LOGGER.info(f"Refresh forzato per entry_id {entry_id}")
+                return
+            _LOGGER.warning(f"Impossibile trovare entry_id per {entity_id}, eseguo refresh globale")
+
+        for entry_id, data in hass.data.get(DOMAIN, {}).items():
+            await _refresh_entry(entry_id, data)
+        _LOGGER.info("Refresh forzato globale completato")
     
     async def handle_delete_single_config(call: ServiceCall) -> None:
         """Gestisce il servizio per eliminare una singola configurazione tramite ID."""
@@ -704,6 +728,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         vol.Optional("start_date"): cv.datetime,
         vol.Optional("days", default=14): cv.positive_int,
     })
+
+    force_refresh_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
+    })
     
     # Registra i servizi
     hass.services.async_register(
@@ -752,6 +780,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     
     hass.services.async_register(
         DOMAIN, "get_configurations", handle_get_configurations, schema=get_configurations_schema, supports_response=SupportsResponse.OPTIONAL
+    )
+
+    hass.services.async_register(
+        DOMAIN, "force_refresh", handle_force_refresh, schema=force_refresh_schema
     )
     
     # Servizi per gestione valori validi
