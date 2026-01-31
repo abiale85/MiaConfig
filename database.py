@@ -48,9 +48,10 @@ class ConfigDatabase:
         return value.astimezone(dt_util.DEFAULT_TIME_ZONE)
 
     def _to_local_datetime(self, value: str) -> datetime:
-        """Converte una stringa ISO in datetime locale senza shiftare orari locali."""
+        """Converte una stringa ISO naive (nel fuso locale) in datetime aware locale."""
         parsed = datetime.fromisoformat(value)
-        return self._ensure_local_dt(parsed)
+        # Assume che la stringa sia naive nel fuso locale
+        return parsed.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
     
     @staticmethod
     def validate_setup_name(setup_name: str) -> str:
@@ -328,7 +329,7 @@ class ConfigDatabase:
             # Verifica validità temporale
             valid_from = self._to_local_datetime(row['valid_from_date'])
             valid_to = self._to_local_datetime(row['valid_to_date'])
-            if not (valid_from <= target_datetime <= valid_to):
+            if not (valid_from <= target_datetime < valid_to):
                 continue
             
             # Verifica filtri opzionali orari
@@ -353,6 +354,8 @@ class ConfigDatabase:
                 valid_days = [int(d) for d in row['days_of_week'].split(',') if d]
                 if current_day not in valid_days:
                     continue
+            
+            _LOGGER.debug(f"[TIME_CONFIG] Adding time config {row['setup_name']} (id={row['id']}) at {target_datetime} with valid_from_ora={row['valid_from_ora']}, valid_to_ora={row['valid_to_ora']}")
             
             all_active_configs.append({
                 'setup_name': row['setup_name'],
@@ -943,13 +946,13 @@ class ConfigDatabase:
         """Imposta una configurazione a tempo con filtri opzionali per orario e giorni."""
         setup_name = self.validate_setup_name(setup_name)
         if isinstance(valid_from_date, datetime):
-            valid_from_date = self._ensure_local_dt(valid_from_date).isoformat()
+            valid_from_date = self._ensure_local_dt(valid_from_date).replace(tzinfo=None).isoformat()
         else:
-            valid_from_date = self._to_local_datetime(str(valid_from_date)).isoformat()
+            valid_from_date = self._to_local_datetime(str(valid_from_date)).replace(tzinfo=None).isoformat()
         if isinstance(valid_to_date, datetime):
-            valid_to_date = self._ensure_local_dt(valid_to_date).isoformat()
+            valid_to_date = self._ensure_local_dt(valid_to_date).replace(tzinfo=None).isoformat()
         else:
-            valid_to_date = self._to_local_datetime(str(valid_to_date)).isoformat()
+            valid_to_date = self._to_local_datetime(str(valid_to_date)).replace(tzinfo=None).isoformat()
         cursor = self.conn.cursor()
         cursor.execute("""
             INSERT INTO configurazioni_a_tempo 
@@ -2004,6 +2007,8 @@ class ConfigDatabase:
                         'priority': config['priority'],
                         'id': config['id']
                     }
+                    
+                    _LOGGER.debug(f"[SIMULATE] New segment for {setup_name}: {current_segment['start_minute']}-{current_segment['end_minute']} value={current_segment['value']} type={current_segment['type']}")
                     
                     # Aggiungi metadata specifici per tipo (necessari per tooltip frontend)
                     config_id = config['id']
