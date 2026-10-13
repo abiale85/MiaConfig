@@ -8,13 +8,11 @@ from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from . import get_translation
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
-    UpdateFailed,
 )
 from homeassistant.helpers import entity_registry as er
 
@@ -35,7 +33,6 @@ async def async_setup_entry(
     lookahead_hours = hass.data[DOMAIN].get("lookahead_hours", 24)
     # next_change deve guardare sempre 7 giorni
     next_change_lookahead_hours = max(lookahead_hours, 168)
-    lookback_hours = hass.data[DOMAIN].get("lookback_hours", 24)
     
     # Track existing sensors
     existing_sensors = {}
@@ -410,7 +407,7 @@ class DynamicConfigSensor(CoordinatorEntity, SensorEntity):
                     try:
                         event_time = datetime.fromisoformat(event['at'])
                         time_str = event_time.strftime('%d/%m %H:%M')
-                    except:
+                    except (ValueError, TypeError):
                         time_str = event['at']
                     upcoming_text.append(f"{event['value']} il {time_str}")
                 else:

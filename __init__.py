@@ -875,15 +875,61 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         """Cartella di lavoro per i backup."""
         return Path(hass.config.path()) / "backups" / "mia_config"
 
+    def ensure_backup_dir() -> Path:
+        """Crea (se serve) la cartella dei backup. Bloccante: eseguire nell'executor."""
+        backup_dir = get_backup_dir()
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        return backup_dir
+
+    def resolve_backup_file(file_name: str) -> Path | None:
+        """Risolve un file dentro la cartella backup, None se fuori dalla cartella. Bloccante."""
+        backup_dir = ensure_backup_dir()
+        target = (backup_dir / os.path.basename(file_name)).resolve()
+        backup_dir_resolved = backup_dir.resolve()
+        if not target.is_relative_to(backup_dir_resolved):
+            return None
+        return target
+
+    def list_backups_sync() -> list[dict]:
+        """Elenca i backup con metadati. Bloccante: eseguire nell'executor."""
+        backup_dir = ensure_backup_dir()
+        backups = []
+        for file_path in sorted(backup_dir.glob("*.db"), reverse=True):
+            try:
+                stat_info = file_path.stat()
+                backups.append({
+                    "file_name": file_path.name,
+                    "path": str(file_path),
+                    "size": stat_info.st_size,
+                    "modified": datetime.fromtimestamp(stat_info.st_mtime).isoformat(),
+                    "download_url": f"/api/mia_config/backups/{file_path.name}"
+                })
+            except OSError as err:
+                _LOGGER.warning("Impossibile leggere metadati per %s: %s", file_path, err)
+        return backups
+
+    def delete_all_backups_sync() -> tuple[int, int]:
+        """Elimina tutti i backup. Restituisce (eliminati, errori). Bloccante."""
+        backup_dir = ensure_backup_dir()
+        deleted = 0
+        errors = 0
+        for file_path in backup_dir.glob("*.db"):
+            try:
+                file_path.unlink()
+                deleted += 1
+            except Exception as err:
+                errors += 1
+                _LOGGER.error("Errore durante l'eliminazione di %s: %s", file_path, err)
+        return deleted, errors
+
     # Servizi per backup e restore
     async def handle_backup_database(call: ServiceCall) -> ServiceResponse:
         """Effettua il backup del database."""
         entity_id = call.data.get("entity_id")
         db = get_db_from_entity_id(hass, entity_id)
         
-        backup_dir = get_backup_dir()
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        
+        backup_dir = await hass.async_add_executor_job(ensure_backup_dir)
+
         # Crea il nome del file di backup con timestamp
         timestamp = dt_util.now().strftime("%Y%m%d_%H%M%S")
         backup_file = backup_dir / f"mia_config_backup_{timestamp}.db"
@@ -914,7 +960,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         
         backup_file = call.data.get("backup_file")
         
-        if not os.path.exists(backup_file):
+        if not await hass.async_add_executor_job(os.path.exists, backup_file):
             return {
                 "success": False,
                 "message": f"File di backup non trovato: {backup_file}"
@@ -925,11 +971,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             db.conn.close()
             
             # Crea un backup del database corrente prima di ripristinare
-            current_backup = os.path.join(
-                hass.config.path(), "backups", "mia_config",
-                f"mia_config_pre_restore_{dt_util.now().strftime('%Y%m%d_%H%M%S')}.db"
+            backup_dir = await hass.async_add_executor_job(ensure_backup_dir)
+            current_backup = str(
+                backup_dir / f"mia_config_pre_restore_{dt_util.now().strftime('%Y%m%d_%H%M%S')}.db"
             )
-            os.makedirs(os.path.dirname(current_backup), exist_ok=True)
             await hass.async_add_executor_job(
                 shutil.copy2, db.db_path, current_backup
             )
@@ -948,7 +993,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             _LOGGER.info("Database ripristinato da: %s", backup_file)
             return {
                 "success": True,
-                "message": f"Database ripristinato con successo",
+                "message": "Database ripristinato con successo",
                 "pre_restore_backup": current_backup
             }
         except Exception as e:
@@ -956,7 +1001,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             # Prova a riaprire la connessione comunque
             try:
                 db.conn = db._open_database()
-            except:
+            except Exception:
                 pass
             return {
                 "success": False,
@@ -965,22 +1010,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def handle_list_backups(call: ServiceCall) -> ServiceResponse:
         """Restituisce l'elenco dei backup disponibili."""
-        backup_dir = get_backup_dir()
-        backup_dir.mkdir(parents=True, exist_ok=True)
         try:
-            backups = []
-            for file_path in sorted(backup_dir.glob("*.db"), reverse=True):
-                try:
-                    stat_info = file_path.stat()
-                    backups.append({
-                        "file_name": file_path.name,
-                        "path": str(file_path),
-                        "size": stat_info.st_size,
-                        "modified": datetime.fromtimestamp(stat_info.st_mtime).isoformat(),
-                        "download_url": f"/api/mia_config/backups/{file_path.name}"
-                    })
-                except OSError as err:
-                    _LOGGER.warning("Impossibile leggere metadati per %s: %s", file_path, err)
+            backups = await hass.async_add_executor_job(list_backups_sync)
             return {"success": True, "backups": backups}
         except Exception as err:
             _LOGGER.error("Errore durante la lettura dei backup: %s", err)
@@ -989,18 +1020,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def handle_delete_backup(call: ServiceCall) -> ServiceResponse:
         """Elimina un singolo file di backup."""
         file_name = call.data.get("file_name")
-        backup_dir = get_backup_dir()
-        backup_dir.mkdir(parents=True, exist_ok=True)
         try:
-            target = (backup_dir / os.path.basename(file_name)).resolve()
-            backup_dir_resolved = backup_dir.resolve()
-            try:
-                if not target.is_relative_to(backup_dir_resolved):
-                    return {"success": False, "message": "Percorso non valido"}
-            except Exception:
-                if backup_dir_resolved not in target.parents:
-                    return {"success": False, "message": "Percorso non valido"}
-            if not target.exists():
+            target = await hass.async_add_executor_job(resolve_backup_file, file_name)
+            if target is None:
+                return {"success": False, "message": "Percorso non valido"}
+            if not await hass.async_add_executor_job(target.exists):
                 return {"success": False, "message": "Backup non trovato"}
             await hass.async_add_executor_job(target.unlink)
             return {"success": True, "message": f"Backup rimosso: {target.name}"}
@@ -1010,17 +1034,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def handle_delete_all_backups(call: ServiceCall) -> ServiceResponse:
         """Elimina tutti i backup locali."""
-        backup_dir = get_backup_dir()
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        deleted = 0
-        errors = 0
-        for file_path in backup_dir.glob("*.db"):
-            try:
-                await hass.async_add_executor_job(file_path.unlink)
-                deleted += 1
-            except Exception as err:
-                errors += 1
-                _LOGGER.error("Errore durante l'eliminazione di %s: %s", file_path, err)
+        deleted, errors = await hass.async_add_executor_job(delete_all_backups_sync)
         message = f"Eliminati {deleted} backup"
         if errors:
             message += f"; errori: {errors}"
@@ -1037,23 +1051,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             self.hass = hass
 
         async def get(self, request, file_name):
-            backup_dir = get_backup_dir()
-            backup_dir.mkdir(parents=True, exist_ok=True)
+            target = await self.hass.async_add_executor_job(resolve_backup_file, file_name)
+            if target is None:
+                return web.Response(status=400, text="Percorso non valido")
 
-            safe_name = os.path.basename(file_name)
-            target = (backup_dir / safe_name).resolve()
-            try:
-                backup_dir_resolved = backup_dir.resolve()
-                try:
-                    if not target.is_relative_to(backup_dir_resolved):
-                        return web.Response(status=400, text="Percorso non valido")
-                except Exception:
-                    if backup_dir_resolved not in target.parents:
-                        return web.Response(status=400, text="Percorso non valido")
-            except Exception:
-                pass
-
-            if not target.exists():
+            if not await self.hass.async_add_executor_job(target.exists):
                 return web.Response(status=404, text="Backup non trovato")
 
             return web.FileResponse(path=str(target))
@@ -1069,9 +1071,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             self.hass = hass
 
         async def post(self, request):
-            backup_dir = get_backup_dir()
-            backup_dir.mkdir(parents=True, exist_ok=True)
-
             data = await request.post()
             upload = data.get("file")
 
@@ -1079,20 +1078,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 return web.json_response({"success": False, "message": "Nessun file di backup ricevuto"}, status=400)
 
             filename = os.path.basename(upload.filename or "uploaded_backup.db")
-            target = (backup_dir / filename).resolve()
+            target = await self.hass.async_add_executor_job(resolve_backup_file, filename)
+            if target is None:
+                return web.json_response({"success": False, "message": "Nome file non valido"}, status=400)
 
-            try:
-                backup_dir_resolved = backup_dir.resolve()
-                try:
-                    if not target.is_relative_to(backup_dir_resolved):
-                        return web.json_response({"success": False, "message": "Nome file non valido"}, status=400)
-                except Exception:
-                    if backup_dir_resolved not in target.parents:
-                        return web.json_response({"success": False, "message": "Nome file non valido"}, status=400)
-            except Exception:
-                pass
-
-            file_bytes = upload.file.read()
+            file_bytes = await self.hass.async_add_executor_job(upload.file.read)
             try:
                 await self.hass.async_add_executor_job(target.write_bytes, file_bytes)
             except Exception as err:

@@ -54,6 +54,9 @@ env/
 *.sqlite
 *.sqlite3
 
+# Sample and test files
+sample/
+
 # Testing
 .pytest_cache/
 .coverage

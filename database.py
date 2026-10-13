@@ -1031,7 +1031,7 @@ class ConfigDatabase:
         
         # Verifica loop diretto
         if setup_name == conditional_config:
-            raise ValueError(f"Una configurazione non può dipendere da se stessa")
+            raise ValueError("Una configurazione non può dipendere da se stessa")
         
         # Verifica loop ciclici
         if self._check_circular_dependency(setup_name, conditional_config):
@@ -1639,7 +1639,6 @@ class ConfigDatabase:
         now = dt_util.now()
         current_configs = self._get_configurations_at_time(now, target_setup_name=setup_name)
         current_value = current_configs.get(setup_name, {}).get('value')
-        current_source = current_configs.get(setup_name, {}).get('source', 'unknown')
         
         # Controlla cache: ricalcola solo se valore corrente cambiato O configurazioni modificate
         # Cache key include parametri per evitare collisioni tra chiamate con parametri diversi
@@ -1656,32 +1655,41 @@ class ConfigDatabase:
                 # Usa round per evitare drift nei calcoli temporali
                 elapsed_seconds = round((now - cached_timestamp).total_seconds())
                 
-                # Aggiorna seconds_until/minutes_until per ogni evento e filtra eventi passati
-                updated_changes = []
-                for change in cached['result']:
-                    if 'seconds_until' in change:
-                        new_seconds_until = change['seconds_until'] - elapsed_seconds
-                    else:
-                        # Fallback: ricava i secondi dai minuti
-                        new_seconds_until = (change['minutes_until'] * 60) - elapsed_seconds
-
-                    if new_seconds_until > 0:  # Solo eventi futuri
-                        updated_change = change.copy()
-                        updated_change['seconds_until'] = new_seconds_until
-                        # Mantieni minutes_until coerente (ceil per evitare 0 quando l'evento è imminente)
-                        updated_change['minutes_until'] = max(1, int(math.ceil(new_seconds_until / 60)))
-                        updated_changes.append(updated_change)
-                
-                # Se la cache era vuota, ricalcola periodicamente (evita stallo “nessun evento”)
-                cache_age_minutes = (now - cached_timestamp).total_seconds() / 60
-                if not cached['result'] and cache_age_minutes > 5:
-                    pass  # forza ricalcolo
-                # Se troppi eventi sono diventati passati e abbiamo meno di max_results,
-                # potremmo perdere eventi futuri -> invalida cache e ricalcola
-                elif len(cached['result']) > 0 and len(updated_changes) < max_results // 2:
-                    pass  # forza ricalcolo
+                # Clock skew: se il timestamp cached è nel futuro, invalida cache
+                if elapsed_seconds < 0:
+                    _LOGGER.warning(f"[CACHE] {setup_name}: Cache timestamp in future (elapsed={elapsed_seconds}s), forcing recalc")
+                    # Invalida e forza ricalcolo (continua oltre questo blocco)
                 else:
-                    return updated_changes[:max_results]
+                    # Aggiorna seconds_until/minutes_until per ogni evento e filtra eventi passati
+                    updated_changes = []
+                    for change in cached['result']:
+                        if 'seconds_until' in change:
+                            new_seconds_until = change['seconds_until'] - elapsed_seconds
+                        else:
+                            # Fallback: ricava i secondi dai minuti
+                            new_seconds_until = (change['minutes_until'] * 60) - elapsed_seconds
+
+                        if new_seconds_until > 0:  # Solo eventi futuri
+                            updated_change = change.copy()
+                            updated_change['seconds_until'] = new_seconds_until
+                            # Mantieni minutes_until coerente (ceil per evitare 0 quando l'evento è imminente)
+                            updated_change['minutes_until'] = max(1, int(math.ceil(new_seconds_until / 60)))
+                            updated_changes.append(updated_change)
+
+                    # Se la cache era vuota, ricalcola periodicamente (evita stallo “nessun evento”)
+                    cache_age_minutes = elapsed_seconds / 60
+                    if not cached['result'] and cache_age_minutes > 5:
+                        pass  # forza ricalcolo
+                    # CRITICAL: Se tutti gli eventi cached sono passati (updated_changes vuoto) ma la cache aveva eventi,
+                    # significa che il coordinator non si è aggiornato in tempo -> forza ricalcolo immediato
+                    elif cached['result'] and not updated_changes:
+                        _LOGGER.warning(f"[CACHE] {setup_name}: All {len(cached['result'])} cached events are now past, forcing recalc")
+                    # Se troppi eventi sono diventati passati e abbiamo meno di max_results,
+                    # potremmo perdere eventi futuri -> invalida cache e ricalcola
+                    elif cached['result'] and len(updated_changes) < max_results // 2:
+                        pass  # forza ricalcolo
+                    else:
+                        return updated_changes[:max_results]
         
         # Cache miss o invalidata: ricalcola
         now = dt_util.now()
@@ -1717,11 +1725,12 @@ class ConfigDatabase:
         # Usiamo la logica ottimizzata che calcola solo le configurazioni rilevanti
         changes = []
         last_value = current_value
-        last_source = current_source
         
         for event_time in sorted(event_times):
             # CRITICO: Verifica che l'evento sia futuro (può essere passato durante il processing)
-            if event_time <= now:
+            # Buffer di 5 secondi: sufficiente per gestire piccoli ritardi del scheduler
+            # senza "mangiare" configurazioni brevi (es. valide solo 1 minuto)
+            if event_time < now - timedelta(seconds=5):
                 continue
                 
             # Verifica se a questo timestamp il valore del setup_name cambia
@@ -1756,7 +1765,6 @@ class ConfigDatabase:
                     changes.append(change_entry)
                     
                     last_value = new_value
-                    last_source = new_source
 
         
         # Salva in cache prima di restituire
@@ -1933,7 +1941,6 @@ class ConfigDatabase:
             
             # Filtra eventi per questo giorno specifico
             day_start = current_date
-            day_end = current_date + timedelta(days=1)
             day_events = sorted([t for t in event_times if t.date() == current_date.date()])
             
             # Aggiungi sempre l'inizio del giorno per garantire campionamento a mezzanotte
