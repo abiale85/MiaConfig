@@ -29,7 +29,7 @@ mia_config:
 
 #### A. Risorse
 Non serve registrare nulla: l'integrazione carica automaticamente card e widget in tutte le dashboard.
-Se in passato hai aggiunto a mano la risorsa `/mia_config_local/mia-config-card.js` puoi rimuoverla.
+Se in passato hai aggiunto a mano la risorsa `/mia_config_local/mia-config-card.js` (anche con `?v=...`) **rimuovila** e ricarica con Ctrl+F5, altrimenti in console può comparire l'errore `the name "mia-config-card" has already been used`.
 
 #### B. Aggiungi la Card
 1. Vai su un dashboard

@@ -65,7 +65,7 @@ Ogni istanza:
 ### Installazione Card Lovelace
 
 1. **Nessuna risorsa da registrare**: dalla versione 2.3.9 l'integrazione carica automaticamente la card principale e il widget in tutte le dashboard.
-   - Se in passato hai aggiunto a mano la risorsa `/mia_config_local/mia-config-card.js` puoi rimuoverla da **Impostazioni** → **Dashboard** → **Risorse** (non è un errore lasciarla).
+   - Se in passato hai aggiunto a mano la risorsa `/mia_config_local/mia-config-card.js` (anche con `?v=...`) **rimuovila** da **Impostazioni** → **Dashboard** → **Risorse** e ricarica con Ctrl+F5: il browser potrebbe eseguirne una vecchia copia in cache, causando l'errore `the name "mia-config-card" has already been used`.
 
 2. **Aggiungi la card** al tuo dashboard:
 ```yaml
