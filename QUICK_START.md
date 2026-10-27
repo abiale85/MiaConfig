@@ -57,6 +57,45 @@ entity_id: sensor.miahomeconfig_main  # Opzionale
 ```
 6. Salva!
 
+### Widget Auto/Manuale in altre dashboard
+
+Registra una sola risorsa per rendere disponibili tutti i widget:
+
+```yaml
+lovelace:
+  resources:
+    - url: /mia_config_local/mia-config-binary-card.js
+      type: module
+```
+
+Ogni widget ha le modalità **Auto** e **Manuale**. In Auto il valore inserito non viene applicato; in Manuale prevale sulle regole automatiche. Quando imposti un valore manuale puoi compilare anche **Fine manuale** per tornare automaticamente in Auto.
+
+#### Booleano
+
+```yaml
+type: custom:mia-config-binary-card
+entity: sensor.mia_config_abilitazione_clima
+name: Abilitazione clima
+```
+
+#### Valori validi
+
+```yaml
+type: custom:mia-config-select-card
+entity: sensor.mia_config_modalita_clima
+name: Modalita clima
+```
+
+#### Numero libero
+
+```yaml
+type: custom:mia-config-number-card
+entity: sensor.mia_config_temperatura_clima
+name: Temperatura
+min: 5
+max: 35
+```
+
 ## Primo Utilizzo
 
 ### Esempio: Temperatura Climatizzatore

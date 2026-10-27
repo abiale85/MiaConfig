@@ -7,6 +7,8 @@ from typing import Optional, List, Dict, Any
 
 from homeassistant.util import dt as dt_util
 
+from .const import MANUAL_OVERRIDE_PRIORITY
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -163,7 +165,7 @@ class ConfigDatabase:
                 enabled INTEGER NOT NULL DEFAULT 1
             )
         """)
-        
+
         # Tabella configurazioni condizionali
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS configurazioni_condizionali (
@@ -362,12 +364,12 @@ class ConfigDatabase:
                 'value': row['setup_value'],
                 'priority': row['priority'],
                 'source': 'time',
-                'source_order': 1,
-                'id': row['id']
+                'source_order': 0 if row['priority'] == MANUAL_OVERRIDE_PRIORITY else 1,
+                'id': row['id'],
+                'is_manual': row['priority'] == MANUAL_OVERRIDE_PRIORITY
             })
-        
+
         # Configurazioni a orario attive - FILTRA DA CACHE IN-MEMORY
-        for row in self._memory_cache['configurazioni_a_orario']:
             if not row['enabled']:
                 continue
             days_of_week = row['days_of_week'] if row['days_of_week'] else '0,1,2,3,4,5,6'
@@ -490,6 +492,7 @@ class ConfigDatabase:
                 result[name] = {
                     'value': config['value'],
                     'source': config['source'],
+                    'is_manual': bool(config.get('is_manual', False)),
                     'priority': config['priority'],
                     'id': config['id']
                 }
@@ -557,8 +560,9 @@ class ConfigDatabase:
                 'value': row['setup_value'],
                 'priority': row['priority'],
                 'source': 'time',
-                'source_order': 0,
-                'id': row['id']
+                'source_order': 0 if row['priority'] == MANUAL_OVERRIDE_PRIORITY else 1,
+                'id': row['id'],
+                'is_manual': row['priority'] == MANUAL_OVERRIDE_PRIORITY
             })
         
         # Configurazioni a orario attive - FILTRA DA CACHE IN-MEMORY
@@ -976,6 +980,54 @@ class ConfigDatabase:
         _LOGGER.debug(f"Set time config: {setup_name} = {setup_value} ({valid_from_date} - {valid_to_date})")
         
         # Invalida tutte le cache dopo modifica configurazione
+        self._invalidate_caches()
+
+    def set_manual_config(
+        self,
+        setup_name: str,
+        setup_value: str,
+        valid_to: Optional[str] = None,
+    ) -> None:
+        """Attiva un override manuale isolato dalle configurazioni automatiche."""
+        setup_name = self.validate_setup_name(setup_name)
+        valid_from = dt_util.as_local(dt_util.now()).replace(tzinfo=None).isoformat()
+        if valid_to:
+            if isinstance(valid_to, datetime):
+                valid_to_value = self._ensure_local_dt(valid_to).replace(tzinfo=None).isoformat()
+            else:
+                valid_to_value = self._to_local_datetime(str(valid_to)).replace(tzinfo=None).isoformat()
+        else:
+            valid_to_value = '9999-12-31T23:59:59'
+
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "DELETE FROM configurazioni_a_tempo WHERE setup_name = ? AND priority = ?",
+            (setup_name, MANUAL_OVERRIDE_PRIORITY)
+        )
+        cursor.execute("""
+            INSERT INTO configurazioni_a_tempo
+            (setup_name, setup_value, valid_from_date, valid_to_date, priority, enabled)
+            VALUES (?, ?, ?, ?, ?, 1)
+        """, (setup_name, setup_value, valid_from, valid_to_value, MANUAL_OVERRIDE_PRIORITY))
+        self._save_to_history(
+            setup_name,
+            'manual',
+            {'setup_value': setup_value, 'valid_to_date': valid_to_value, 'priority': MANUAL_OVERRIDE_PRIORITY},
+            'ENABLE'
+        )
+        self.conn.commit()
+        self._invalidate_caches()
+
+    def clear_manual_config(self, setup_name: str) -> None:
+        """Disattiva l'override manuale e ripristina la risoluzione automatica."""
+        setup_name = self.validate_setup_name(setup_name)
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "DELETE FROM configurazioni_a_tempo WHERE setup_name = ? AND priority = ?",
+            (setup_name, MANUAL_OVERRIDE_PRIORITY)
+        )
+        self._save_to_history(setup_name, 'manual', {}, 'DISABLE')
+        self.conn.commit()
         self._invalidate_caches()
     
     def set_schedule_config(

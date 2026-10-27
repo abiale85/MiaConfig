@@ -346,6 +346,35 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     await data['coordinator'].async_request_refresh()
         
         _LOGGER.info(f"Configurazione a tempo '{setup_name}' impostata")
+
+    async def handle_set_manual_config(call: ServiceCall) -> None:
+        """Attiva un override manuale con scadenza opzionale."""
+        entity_id = call.data.get("entity_id")
+        db = get_db_from_entity_id(hass, entity_id)
+        await hass.async_add_executor_job(
+            db.set_manual_config,
+            call.data.get("setup_name"),
+            call.data.get("setup_value"),
+            call.data.get("valid_to"),
+        )
+        for entry_id, data in hass.data.get(DOMAIN, {}).items():
+            if isinstance(data, dict):
+                if 'clear_cache' in data:
+                    data['clear_cache']()
+                if 'coordinator' in data:
+                    await data['coordinator'].async_request_refresh()
+
+    async def handle_clear_manual_config(call: ServiceCall) -> None:
+        """Disattiva l'override manuale e torna alla risoluzione automatica."""
+        entity_id = call.data.get("entity_id")
+        db = get_db_from_entity_id(hass, entity_id)
+        await hass.async_add_executor_job(db.clear_manual_config, call.data.get("setup_name"))
+        for entry_id, data in hass.data.get(DOMAIN, {}).items():
+            if isinstance(data, dict):
+                if 'clear_cache' in data:
+                    data['clear_cache']()
+                if 'coordinator' in data:
+                    await data['coordinator'].async_request_refresh()
     
     async def handle_set_schedule_config(call: ServiceCall) -> None:
         """Gestisce il servizio per impostare una configurazione a orario."""
@@ -674,6 +703,16 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         vol.Optional("valid_to_ora"): vol.All(vol.Coerce(float), validate_time_format),
         vol.Optional("days_of_week"): vol.Any(cv.string, [vol.In([0, 1, 2, 3, 4, 5, 6])]),
     })
+
+    set_manual_config_schema = vol.Schema({
+        vol.Required("setup_name"): cv.string,
+        vol.Required("setup_value"): cv.string,
+        vol.Optional("valid_to"): cv.datetime,
+    })
+
+    clear_manual_config_schema = vol.Schema({
+        vol.Required("setup_name"): cv.string,
+    })
     
     set_schedule_config_schema = vol.Schema({
         vol.Required("setup_name"): cv.string,
@@ -744,6 +783,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     
     hass.services.async_register(
         DOMAIN, "set_time_config", handle_set_time_config, schema=set_time_config_schema
+    )
+
+    hass.services.async_register(
+        DOMAIN, "set_manual_config", handle_set_manual_config, schema=set_manual_config_schema
+    )
+
+    hass.services.async_register(
+        DOMAIN, "clear_manual_config", handle_clear_manual_config, schema=clear_manual_config_schema
     )
     
     hass.services.async_register(

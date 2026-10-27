@@ -1,5 +1,13 @@
 # 📋 Changelog - Mia Config
 
+## v2.3.8 - October 27, 2026 🚀 Widget Auto/Manuale
+
+### ✨ Nuove funzionalità
+- Aggiunti i widget Lovelace indipendenti Boolean, Select e Number.
+- Aggiunte le modalità Auto e Manuale con scadenza opzionale dell'override.
+- L'override manuale usa la priorità riservata `MANUAL_OVERRIDE_PRIORITY = 0` senza modificare lo schema SQLite.
+- Aggiornata la documentazione italiana con esempi di configurazione.
+
 ## v2.3.3 - January 17, 2026 🐛 Weekly View Time Config Gap Fix
 
 ### 🐛 Bug Fixes

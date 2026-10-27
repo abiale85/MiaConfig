@@ -331,6 +331,7 @@ class DynamicConfigSensor(CoordinatorEntity, SensorEntity):
         attributes = {
             "setup_name": self._setup_name,
             "source": config_data.get('source', 'unknown'),
+            "is_manual": bool(config_data.get('is_manual', False)),
             "integration": DOMAIN,
             "entry_id": self._entry.entry_id,
             "db_name": self._entry.data.get("db_name", "mia_config"),

@@ -538,7 +538,7 @@ class MiaConfigCard extends HTMLElement {
                             </select>
                         </div>
                         <div style="flex: 0 0 90px;">
-                            <label style="font-weight: 500; font-size: 16px;">Priorità:</label>
+                            <label style="font-weight: 500; font-size: 16px;">Priorità <small style="font-weight: normal; color: var(--secondary-text-color);">(MANUAL = 0)</small>:</label>
                             <input type="number" id="modal-global-priority" min="1" max="999" value="99" style="width: 72px; padding: 8px; margin-top: 8px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); color: var(--primary-text-color); box-sizing: border-box;">
                         </div>
                     </div>

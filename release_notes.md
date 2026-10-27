@@ -1,3 +1,11 @@
+## v2.3.8 - 27 Ottobre 2026 🚀 Widget Auto/Manuale
+
+### ✨ Nuove funzionalità
+- Aggiunti i widget Lovelace indipendenti Boolean, Select e Number.
+- Aggiunte le modalità Auto e Manuale con scadenza opzionale dell'override.
+- L'override manuale usa la priorità riservata `MANUAL_OVERRIDE_PRIORITY = 0` senza modificare lo schema SQLite.
+- Aggiornata la documentazione italiana con esempi di configurazione.
+
 ## v2.3.3 - 17 Gennaio 2026 🐛 Fix Buchi Vista Settimanale
 
 ### 🔧 Fix e miglioramenti
