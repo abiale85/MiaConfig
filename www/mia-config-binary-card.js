@@ -1,13 +1,22 @@
+// Widget Auto/Manuale indipendenti dalla card principale.
+// La forzatura manuale usa i servizi set_manual_override / clear_manual_override,
+// che salvano una configurazione a tempo con priorità riservata 0 (la più alta in assoluto).
+const MANUAL_OVERRIDE_PRIORITY = 0;
+
 class MiaConfigControlCard extends HTMLElement {
+    static cardType = 'binary';
+
     setConfig(config) {
         if (!config || !config.entity) {
             throw new Error('Devi specificare entity nella configurazione della card');
         }
         this._config = config;
-        this._type = config.card_type || 'binary';
+        this._type = this.constructor.cardType;
         this._values = Array.isArray(config.options) ? config.options : [];
+        this._valuesLoaded = false;
+        this._editing = false;
         this._error = null;
-        this._manualMode = false;
+        this._entityState = undefined;
         this.render();
     }
 
@@ -16,7 +25,11 @@ class MiaConfigControlCard extends HTMLElement {
         if (this._type === 'select' && !this._valuesLoaded) {
             this.loadValidValues();
         }
-        this.render();
+        // Ridisegna solo se cambia l'entità controllata e l'utente non sta modificando il valore
+        const entityState = hass.states[this._config.entity];
+        if (entityState === this._entityState) return;
+        this._entityState = entityState;
+        if (!this._editing) this.render();
     }
 
     getCardSize() {
@@ -35,37 +48,38 @@ class MiaConfigControlCard extends HTMLElement {
         return this.getEntity()?.state ?? 'unknown';
     }
 
-    isManual() {
-        return this._manualMode || this.getEntity()?.attributes?.is_manual === true;
+    isManualActive() {
+        const attrs = this.getEntity()?.attributes || {};
+        return attrs.source === 'time' && Number(attrs.priority) === MANUAL_OVERRIDE_PRIORITY;
     }
 
     async loadValidValues() {
         this._valuesLoaded = true;
+        const setupName = this.getSetupName();
+        if (!setupName) return;
         try {
             const response = await this._hass.callWS({
                 type: 'call_service',
                 domain: 'mia_config',
                 service: 'get_valid_values',
-                service_data: { entity_id: this._config.entity },
+                service_data: { entity_id: this._config.entity, setup_name: setupName },
                 return_response: true
             });
-            const values = response.response?.valid_values || {};
-            const setupName = this.getSetupName();
-            if (Array.isArray(values[setupName])) {
-                this._values = values[setupName].map(item => ({
+            const values = response.response?.valid_values || [];
+            if (Array.isArray(values) && values.length > 0) {
+                this._values = values.map(item => ({
                     value: item.value,
                     label: item.description ? `${item.value} - ${item.description}` : item.value
                 }));
-                this.render();
+                if (!this._editing) this.render();
             }
         } catch (error) {
-            this._error = error.message || 'Impossibile caricare i valori validi';
-            this.render();
+            this.showError(error.message || 'Impossibile caricare i valori validi');
         }
     }
 
     renderManualInput(disabled) {
-        const current = this._config.manual_value ?? this.getCurrentValue();
+        const current = this.getCurrentValue();
         if (this._type === 'binary') {
             const checked = ['true', '1', 'on', 'yes', 'enabled'].includes(String(current).toLowerCase());
             return `<input data-manual-value type="checkbox" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}>`;
@@ -83,7 +97,8 @@ class MiaConfigControlCard extends HTMLElement {
     render() {
         if (!this._hass || !this._config) return;
         const entity = this.getEntity();
-        const manual = this.isManual();
+        const active = this.isManualActive();
+        const manual = active || this._editing;
         const current = this.getCurrentValue();
         const name = this._config.name || entity?.attributes?.friendly_name || this._config.entity;
         const typeLabel = this._type === 'binary' ? 'Boolean' : this._type === 'select' ? 'Valori validi' : 'Numero';
@@ -91,7 +106,7 @@ class MiaConfigControlCard extends HTMLElement {
             <ha-card>
                 <div class="control-card">
                     <div class="header"><strong>${this.escape(name)}</strong><span>${typeLabel}</span></div>
-                    <div class="current">Valore attivo: <b>${this.escape(current)}</b></div>
+                    <div class="current">Valore attivo: <b>${this.escape(current)}</b>${active ? ' (forzato)' : ''}</div>
                     <div class="modes">
                         <button data-mode="auto" class="${manual ? '' : 'active'}">Auto</button>
                         <button data-mode="manual" class="${manual ? 'active' : ''}">Manuale</button>
@@ -126,15 +141,10 @@ class MiaConfigControlCard extends HTMLElement {
     bindEvents() {
         this.querySelector('[data-mode="auto"]')?.addEventListener('click', () => this.clearManual());
         this.querySelector('[data-mode="manual"]')?.addEventListener('click', () => {
-            this._config.manual_value = this._config.manual_value ?? this.getCurrentValue();
-            this._manualMode = true;
-            this.renderManualMode();
+            this._editing = true;
+            this.render();
         });
         this.querySelector('[data-apply]')?.addEventListener('click', () => this.applyManual());
-    }
-
-    renderManualMode() {
-        this.render();
     }
 
     async applyManual() {
@@ -143,31 +153,39 @@ class MiaConfigControlCard extends HTMLElement {
         const input = this.querySelector('[data-manual-value]');
         let value = input?.value;
         if (this._type === 'binary') value = input?.checked ? 'true' : 'false';
-        const expiry = this.querySelector('[data-valid-to]')?.value;
+        if (value === undefined || value === '') return this.showError('Inserisci un valore da forzare');
+        // datetime-local restituisce un orario locale senza fuso: il backend lo interpreta come locale
+        const validTo = this.querySelector('[data-valid-to]')?.value;
         try {
-            await this._hass.callService('mia_config', 'set_manual_config', {
+            await this._hass.callService('mia_config', 'set_manual_override', {
                 entity_id: this._config.entity,
                 setup_name: setupName,
                 setup_value: String(value),
-                ...(expiry ? { valid_to: new Date(expiry).toISOString() } : {})
+                ...(validTo ? { valid_to: validTo } : {})
             });
-            this._manualMode = true;
+            this._editing = false;
             this._error = null;
+            this.render();
         } catch (error) {
             this.showError(error.message || 'Impossibile applicare il valore manuale');
         }
     }
 
     async clearManual() {
+        this._editing = false;
+        if (!this.isManualActive()) {
+            this._error = null;
+            return this.render();
+        }
         const setupName = this.getSetupName();
         if (!setupName) return this.showError("L'entità non espone setup_name: specificarlo nella configurazione");
         try {
-            await this._hass.callService('mia_config', 'clear_manual_config', {
+            await this._hass.callService('mia_config', 'clear_manual_override', {
                 entity_id: this._config.entity,
                 setup_name: setupName
             });
-            this._manualMode = false;
             this._error = null;
+            this.render();
         } catch (error) {
             this.showError(error.message || 'Impossibile tornare in automatico');
         }
@@ -183,9 +201,15 @@ class MiaConfigControlCard extends HTMLElement {
     }
 }
 
-class MiaConfigBinaryCard extends MiaConfigControlCard {}
-class MiaConfigSelectCard extends MiaConfigControlCard {}
-class MiaConfigNumberCard extends MiaConfigControlCard {}
+class MiaConfigBinaryCard extends MiaConfigControlCard {
+    static cardType = 'binary';
+}
+class MiaConfigSelectCard extends MiaConfigControlCard {
+    static cardType = 'select';
+}
+class MiaConfigNumberCard extends MiaConfigControlCard {
+    static cardType = 'number';
+}
 
 customElements.define('mia-config-binary-card', MiaConfigBinaryCard);
 customElements.define('mia-config-select-card', MiaConfigSelectCard);

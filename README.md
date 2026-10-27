@@ -94,7 +94,7 @@ La card ti permette di:
 
 ### Widget Auto/Manuale indipendenti
 
-I tre widget sono disponibili in un'unica risorsa, utilizzabile in qualunque dashboard:
+Tre widget per forzare manualmente un valore da qualunque dashboard, indipendenti dalla card principale. Registra una sola risorsa:
 
 ```yaml
 lovelace:
@@ -103,39 +103,29 @@ lovelace:
       type: module
 ```
 
-  Ogni widget usa lo stesso comportamento: in **Auto** il valore manuale viene ignorato; in **Manuale** il valore impostato prevale sulle configurazioni automatiche. La data/ora di fine è opzionale: quando viene raggiunta, il widget torna automaticamente in Auto.
-
-  #### Booleano
+In **Auto** vale la normale risoluzione delle configurazioni; in **Manuale** il valore applicato vince su qualunque configurazione. La forzatura usa una priorità riservata (`0`), più alta di qualsiasi priorità selezionabile (che parte da 1). La **Fine manuale** è opzionale: alla scadenza si torna automaticamente in Auto.
 
 ```yaml
-type: custom:mia-config-binary-card
-  entity: sensor.mia_config_abilitazione_clima
-  name: Abilitazione climatizzatore
+type: custom:mia-config-binary-card   # true/false
+entity: sensor.mia_config_abilitazione_clima
+name: Abilitazione climatizzatore
 ```
 
-  Interpreta `true/1/on` come attivo e `false/0/off` come disattivo.
+```yaml
+type: custom:mia-config-select-card   # valori dal tab Valori Validi
+entity: sensor.mia_config_modalita_clima
+name: Modalità clima
+```
 
-  #### Valori validi
+```yaml
+type: custom:mia-config-number-card   # numero libero
+entity: sensor.mia_config_temperatura_clima
+name: Temperatura
+min: 5
+max: 35
+```
 
-  ```yaml
-  type: custom:mia-config-select-card
-  entity: sensor.mia_config_modalita_clima
-  name: Modalita clima
-  ```
-
-  Carica i valori definiti nel tab **Valori Validi** della card principale.
-
-  #### Numero libero
-
-  ```yaml
-  type: custom:mia-config-number-card
-  entity: sensor.mia_config_temperatura_clima
-  name: Temperatura manuale
-  min: 5
-  max: 35
-  ```
-
-  Per tutti i widget si può aggiungere `setup_name` se l'entità non espone l'attributo automaticamente.
+Opzionale per tutti: `setup_name`, se l'entità non espone l'attributo.
 
 Per maggiori dettagli vedi [UI_GUIDE.md](UI_GUIDE.md)
 
@@ -417,20 +407,20 @@ response_variable: valid_values
 
 #### `mia_config.set_manual_override`
 
-Forza manualmente un valore per una configurazione tramite una configurazione a tempo con priorità dedicata (una sola forzatura per setup), ignorando la logica automatica fino a rimozione o scadenza.
+Forza un valore con la priorità riservata più alta (una sola forzatura per configurazione) fino a rimozione o scadenza.
 
 ```yaml
 service: mia_config.set_manual_override
 data:
   setup_name: "riscaldamento"
   setup_value: "1"
-  valid_to_date: "2026-10-27 20:00:00"  # Opzionale, ritorno automatico in modalità AUTO
+  valid_to: "2026-10-27 20:00:00"  # Opzionale, poi torna in automatico
   entity_id: sensor.miahomeconfig_main  # Opzionale
 ```
 
 #### `mia_config.clear_manual_override`
 
-Rimuove la forzatura manuale e riporta la configurazione in modalità AUTO.
+Rimuove la forzatura manuale e torna in automatico.
 
 ```yaml
 service: mia_config.clear_manual_override

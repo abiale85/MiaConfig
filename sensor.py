@@ -331,7 +331,6 @@ class DynamicConfigSensor(CoordinatorEntity, SensorEntity):
         attributes = {
             "setup_name": self._setup_name,
             "source": config_data.get('source', 'unknown'),
-            "is_manual": bool(config_data.get('is_manual', False)),
             "integration": DOMAIN,
             "entry_id": self._entry.entry_id,
             "db_name": self._entry.data.get("db_name", "mia_config"),
@@ -347,12 +346,6 @@ class DynamicConfigSensor(CoordinatorEntity, SensorEntity):
         
         if 'valid_to' in config_data:
             attributes['valid_to'] = config_data['valid_to']
-        if 'manual_override_active' in config_data:
-            attributes['manual_override_active'] = config_data['manual_override_active']
-        if 'manual_override_last_value' in config_data:
-            attributes['manual_override_last_value'] = config_data['manual_override_last_value']
-        if 'manual_override_valid_to' in config_data:
-            attributes['manual_override_valid_to'] = config_data['manual_override_valid_to']
         
         # Usa i dati predittivi già calcolati dal coordinator
         predictive = self.coordinator.data.get('predictive', {}).get(self._setup_name, {})

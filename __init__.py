@@ -26,6 +26,7 @@ from .const import (
     DEFAULT_HISTORY_RETENTION_DAYS,
     DEFAULT_MAX_HISTORY_PER_NAME,
     DEFAULT_MIN_HISTORY_PER_NAME,
+    MANUAL_OVERRIDE_PRIORITY,
 )
 from .database import ConfigDatabase
 
@@ -347,16 +348,20 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         
         _LOGGER.info(f"Configurazione a tempo '{setup_name}' impostata")
 
-    async def handle_set_manual_config(call: ServiceCall) -> None:
-        """Attiva un override manuale con scadenza opzionale."""
+    async def handle_set_manual_override(call: ServiceCall) -> None:
+        """Gestisce il servizio per impostare una forzatura manuale (priorità riservata)."""
         entity_id = call.data.get("entity_id")
         db = get_db_from_entity_id(hass, entity_id)
+
+        setup_name = call.data.get("setup_name")
+        setup_value = call.data.get("setup_value")
+        valid_to = call.data.get("valid_to")
+
         await hass.async_add_executor_job(
-            db.set_manual_config,
-            call.data.get("setup_name"),
-            call.data.get("setup_value"),
-            call.data.get("valid_to"),
+            db.set_manual_override, setup_name, setup_value, valid_to
         )
+
+        # Forza aggiornamento e invalida cache
         for entry_id, data in hass.data.get(DOMAIN, {}).items():
             if isinstance(data, dict):
                 if 'clear_cache' in data:
@@ -364,17 +369,26 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 if 'coordinator' in data:
                     await data['coordinator'].async_request_refresh()
 
-    async def handle_clear_manual_config(call: ServiceCall) -> None:
-        """Disattiva l'override manuale e torna alla risoluzione automatica."""
+        _LOGGER.info(f"Forzatura manuale '{setup_name}' = '{setup_value}' impostata")
+
+    async def handle_clear_manual_override(call: ServiceCall) -> None:
+        """Gestisce il servizio per rimuovere una forzatura manuale (ritorno in automatico)."""
         entity_id = call.data.get("entity_id")
         db = get_db_from_entity_id(hass, entity_id)
-        await hass.async_add_executor_job(db.clear_manual_config, call.data.get("setup_name"))
+
+        setup_name = call.data.get("setup_name")
+
+        removed = await hass.async_add_executor_job(db.clear_manual_override, setup_name)
+
+        # Forza aggiornamento e invalida cache
         for entry_id, data in hass.data.get(DOMAIN, {}).items():
             if isinstance(data, dict):
                 if 'clear_cache' in data:
                     data['clear_cache']()
                 if 'coordinator' in data:
                     await data['coordinator'].async_request_refresh()
+
+        _LOGGER.info(f"Forzatura manuale '{setup_name}' {'rimossa' if removed else 'non presente'}")
     
     async def handle_set_schedule_config(call: ServiceCall) -> None:
         """Gestisce il servizio per impostare una configurazione a orario."""
@@ -439,51 +453,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         except ValueError as err:
             _LOGGER.error(f"Errore nella configurazione condizionale: {err}")
             raise
-
-    async def handle_set_manual_override(call: ServiceCall) -> None:
-        """Gestisce il servizio per impostare una forzatura manuale."""
-        entity_id = call.data.get("entity_id")
-        db = get_db_from_entity_id(hass, entity_id)
-
-        setup_name = call.data.get("setup_name")
-        setup_value = call.data.get("setup_value")
-        valid_to = call.data.get("valid_to_date")
-
-        await hass.async_add_executor_job(
-            db.set_manual_override, setup_name, setup_value, valid_to
-        )
-
-        for entry_id, data in hass.data.get(DOMAIN, {}).items():
-            if isinstance(data, dict):
-                if 'clear_cache' in data:
-                    data['clear_cache']()
-                if 'coordinator' in data:
-                    await data['coordinator'].async_request_refresh()
-
-        _LOGGER.info(f"Forzatura manuale impostata per '{setup_name}'")
-
-    async def handle_clear_manual_override(call: ServiceCall) -> None:
-        """Gestisce il servizio per rimuovere una forzatura manuale."""
-        entity_id = call.data.get("entity_id")
-        db = get_db_from_entity_id(hass, entity_id)
-
-        setup_name = call.data.get("setup_name")
-
-        removed = await hass.async_add_executor_job(
-            db.clear_manual_override, setup_name
-        )
-
-        for entry_id, data in hass.data.get(DOMAIN, {}).items():
-            if isinstance(data, dict):
-                if 'clear_cache' in data:
-                    data['clear_cache']()
-                if 'coordinator' in data:
-                    await data['coordinator'].async_request_refresh()
-
-        if removed:
-            _LOGGER.info(f"Forzatura manuale rimossa per '{setup_name}'")
-        else:
-            _LOGGER.info(f"Nessuna forzatura manuale presente per '{setup_name}'")
     
     async def handle_update_standard_config(call: ServiceCall) -> None:
         """Gestisce il servizio per aggiornare una configurazione standard esistente."""
@@ -724,17 +693,20 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             _LOGGER.info(f"Cleanup storico globale completato per {len(all_names)} configurazioni")
     
     # Schema dei servizi
+    # Le priorità utente partono da 1: la priorità 0 è riservata alla forzatura manuale
+    user_priority = vol.All(vol.Coerce(int), vol.Range(min=MANUAL_OVERRIDE_PRIORITY + 1))
+
     set_config_schema = vol.Schema({
         vol.Required("setup_name"): cv.string,
         vol.Required("setup_value"): cv.string,
-        vol.Optional("priority", default=99): cv.positive_int,
+        vol.Optional("priority", default=99): user_priority,
         vol.Optional("description"): cv.string,
     })
     
     update_standard_config_schema = vol.Schema({
         vol.Required("config_id"): cv.positive_int,
         vol.Required("setup_value"): cv.string,
-        vol.Required("priority"): cv.positive_int,
+        vol.Required("priority"): user_priority,
         vol.Optional("description"): cv.string,
     })
     
@@ -743,20 +715,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         vol.Required("setup_value"): cv.string,
         vol.Required("valid_from"): cv.datetime,
         vol.Required("valid_to"): cv.datetime,
-        vol.Optional("priority", default=99): cv.positive_int,
+        vol.Optional("priority", default=99): user_priority,
         vol.Optional("valid_from_ora"): vol.All(vol.Coerce(float), validate_time_format),
         vol.Optional("valid_to_ora"): vol.All(vol.Coerce(float), validate_time_format),
         vol.Optional("days_of_week"): vol.Any(cv.string, [vol.In([0, 1, 2, 3, 4, 5, 6])]),
-    })
-
-    set_manual_config_schema = vol.Schema({
-        vol.Required("setup_name"): cv.string,
-        vol.Required("setup_value"): cv.string,
-        vol.Optional("valid_to"): cv.datetime,
-    })
-
-    clear_manual_config_schema = vol.Schema({
-        vol.Required("setup_name"): cv.string,
     })
     
     set_schedule_config_schema = vol.Schema({
@@ -765,7 +727,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         vol.Required("valid_from_ora"): vol.All(vol.Coerce(float), validate_time_format),
         vol.Required("valid_to_ora"): vol.All(vol.Coerce(float), validate_time_format),
         vol.Optional("days_of_week", default="0,1,2,3,4,5,6"): vol.Any(cv.string, [vol.In([0, 1, 2, 3, 4, 5, 6])]),
-        vol.Optional("priority", default=99): cv.positive_int,
+        vol.Optional("priority", default=99): user_priority,
     })
     
     set_conditional_config_schema = vol.Schema({
@@ -774,7 +736,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         vol.Required("conditional_config"): cv.string,
         vol.Required("conditional_operator"): vol.In(["==", "!=", ">", "<", ">=", "<=", "contains", "not_contains"]),
         vol.Required("conditional_value"): cv.string,
-        vol.Optional("priority", default=99): cv.positive_int,
+        vol.Optional("priority", default=99): user_priority,
         vol.Optional("valid_from_ora"): vol.Any(int, float),
         vol.Optional("valid_to_ora"): vol.Any(int, float),
     })
@@ -783,14 +745,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         vol.Optional("entity_id"): cv.entity_id,
         vol.Required("setup_name"): cv.string,
         vol.Required("setup_value"): cv.string,
-        vol.Optional("valid_to_date"): cv.datetime,
+        vol.Optional("valid_to"): cv.datetime,
     })
 
     clear_manual_override_schema = vol.Schema({
         vol.Optional("entity_id"): cv.entity_id,
         vol.Required("setup_name"): cv.string,
     })
-    
+
     delete_config_schema = vol.Schema({
         vol.Required("setup_name"): cv.string,
         vol.Optional("config_type", default="all"): vol.In(["all", "standard", "time", "schedule", "conditional"]),
@@ -840,14 +802,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     
     hass.services.async_register(
         DOMAIN, "set_time_config", handle_set_time_config, schema=set_time_config_schema
-    )
-
-    hass.services.async_register(
-        DOMAIN, "set_manual_config", handle_set_manual_config, schema=set_manual_config_schema
-    )
-
-    hass.services.async_register(
-        DOMAIN, "clear_manual_config", handle_clear_manual_config, schema=clear_manual_config_schema
     )
     
     hass.services.async_register(
@@ -964,6 +918,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     })
     
     get_valid_values_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
         vol.Optional("setup_name"): cv.string,
     })
     

@@ -538,7 +538,7 @@ class MiaConfigCard extends HTMLElement {
                             </select>
                         </div>
                         <div style="flex: 0 0 90px;">
-                            <label style="font-weight: 500; font-size: 16px;">Priorità <small style="font-weight: normal; color: var(--secondary-text-color);">(MANUAL = 0)</small>:</label>
+                            <label style="font-weight: 500; font-size: 16px;">Priorità:</label>
                             <input type="number" id="modal-global-priority" min="1" max="999" value="99" style="width: 72px; padding: 8px; margin-top: 8px; border: 1px solid var(--divider-color); border-radius: 4px; background: var(--card-background-color); color: var(--primary-text-color); box-sizing: border-box;">
                         </div>
                     </div>
@@ -1659,42 +1659,6 @@ class MiaConfigCard extends HTMLElement {
                 console.error('Errore caricamento valori validi:', err);
             }
         };
-
-        window.dcToggleManualOverride = async (setupName, isManual) => {
-            try {
-                if (isManual) {
-                    await window._miaConfigCardInstance.callMiaConfigService('clear_manual_override', {
-                        setup_name: setupName
-                    });
-                } else {
-                    const valueSelect = window._miaConfigCardInstance.content.querySelector(`#dc-manual-value-${setupName}`);
-                    const endInput = window._miaConfigCardInstance.content.querySelector(`#dc-manual-end-${setupName}`);
-                    const setupValue = valueSelect?.value;
-                    if (!setupValue) {
-                        alert('Seleziona un valore da forzare');
-                        return;
-                    }
-
-                    const serviceData = {
-                        setup_name: setupName,
-                        setup_value: setupValue
-                    };
-                    if (endInput?.value) {
-                        serviceData.valid_to_date = endInput.value;
-                    }
-
-                    await window._miaConfigCardInstance.callMiaConfigService('set_manual_override', {
-                        ...serviceData
-                    });
-                }
-
-                await window._miaConfigCardInstance.loadDashboard();
-                window._miaConfigCardInstance.loadConfigurations();
-            } catch (err) {
-                console.error('Errore toggle forzatura manuale:', err);
-                alert(`Errore forzatura manuale: ${err.message}`);
-            }
-        };
         
         // Quick Override - Apre tab Configura e precompila form temporale
         window.dcQuickOverride = (setupName) => {
@@ -1893,26 +1857,8 @@ class MiaConfigCard extends HTMLElement {
                 // Ottieni descrizione dal valore valido se disponibile
                 const valueDescription = validValuesMap[setupName]?.[value]?.description;
                 const valueDisplay = valueDescription ? `${value} <small style="color: var(--secondary-text-color);">(${valueDescription})</small>` : value;
-                const manualMode = attrs.manual_override_active === true;
-                const manualSuggestedValue = attrs.manual_override_last_value ?? value;
-                const manualValidTo = attrs.manual_override_valid_to || '';
-                const validValueEntries = Object.entries(validValuesMap[setupName] || {})
-                    .sort(([, a], [, b]) => (a.sort_order || 0) - (b.sort_order || 0));
-                const manualOptions = validValueEntries.length > 0
-                    ? validValueEntries.map(([optionValue, meta]) => {
-                        const selected = String(optionValue) === String(manualSuggestedValue) ? 'selected' : '';
-                        const label = meta.description ? `${meta.description} (${optionValue})` : optionValue;
-                        const safeValue = String(optionValue).replace(/"/g, '&quot;');
-                        return `<option value="${safeValue}" ${selected}>${label}</option>`;
-                    }).join('')
-                    : ['true', 'false'].map((boolValue) => {
-                        const selected = String(boolValue) === String(manualSuggestedValue) ? 'selected' : '';
-                        const label = boolValue === 'true' ? 'Vero' : 'Falso';
-                        return `<option value="${boolValue}" ${selected}>${label}</option>`;
-                    }).join('');
                 
-                const typeLabel = manualMode ? '🛠️ Forzatura (tempo)' :
-                                 source === 'time' ? '⏰ Tempo' :
+                const typeLabel = source === 'time' ? '⏰ Tempo' :
                                  source === 'schedule' ? '📅 Orario' :
                                  source === 'standard' ? '⚙️ Standard' : '❌ Nessuna';
                 
@@ -1925,15 +1871,6 @@ class MiaConfigCard extends HTMLElement {
                             <small>Origine: ${typeLabel}</small>
                         </div>
                         <div class="dc-dashboard-actions">
-                            <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 6px; flex-wrap: wrap;">
-                                <select id="dc-manual-value-${setupName}" style="padding: 4px 6px; font-size: 12px; max-width: 150px;">
-                                    ${manualOptions}
-                                </select>
-                                <input type="datetime-local" id="dc-manual-end-${setupName}" value="${manualValidTo ? String(manualValidTo).slice(0,16) : ''}" style="padding: 4px 6px; font-size: 12px; max-width: 180px;" title="Fine forzatura (opzionale)">
-                                <button class="${manualMode ? 'dc-btn-secondary' : 'dc-btn'}" onclick="event.stopPropagation(); window.dcToggleManualOverride('${setupName}', ${manualMode})" style="padding: 6px 10px; font-size: 12px;">
-                                    ${manualMode ? '🔁 AUTO' : '🛠️ MAN'}
-                                </button>
-                            </div>
                             <button class="dc-btn" onclick="event.stopPropagation(); window.dcQuickOverride('${setupName}')" style="padding: 6px 10px; font-size: 12px;">➕ Override</button>
                             <button class="dc-btn-secondary" onclick="event.stopPropagation(); window.dcShowWeeklyFor('${setupName}')" style="padding: 6px 10px; font-size: 12px;">📅 Vista</button>
                         </div>

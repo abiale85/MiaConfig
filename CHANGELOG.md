@@ -1,12 +1,18 @@
 # 📋 Changelog - Mia Config
 
-## v2.3.8 - October 27, 2026 🚀 Widget Auto/Manuale
+## v2.3.9 - October 27, 2026 🛠️ Widget Auto/Manuale
 
 ### ✨ Nuove funzionalità
-- Aggiunti i widget Lovelace indipendenti Boolean, Select e Number.
-- Aggiunte le modalità Auto e Manuale con scadenza opzionale dell'override.
-- L'override manuale usa la priorità riservata `MANUAL_OVERRIDE_PRIORITY = 0` senza modificare lo schema SQLite.
-- Aggiornata la documentazione italiana con esempi di configurazione.
+- Widget Lovelace indipendenti Boolean, Select e Number con modalità Auto/Manuale e scadenza opzionale.
+- Nuovi servizi `set_manual_override` e `clear_manual_override`.
+- La forzatura manuale è una configurazione a tempo con priorità riservata `0`, sempre vincente; schema del database invariato.
+
+### 🔧 Modifiche
+- Le priorità impostabili dall'utente partono da 1 (lo 0 è riservato alla forzatura manuale).
+- `get_valid_values` accetta `entity_id` per le installazioni multi-istanza.
+
+### 🧹 Pulizia
+- Rimosse le modifiche non previste della 2.3.8 (tabella `configurazioni_manuali`, servizi duplicati, modifiche alla card principale).
 
 ## v2.3.3 - January 17, 2026 🐛 Weekly View Time Config Gap Fix
 

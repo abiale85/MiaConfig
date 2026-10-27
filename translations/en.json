@@ -167,7 +167,7 @@
     },
     "set_manual_override": {
       "name": "Set Manual Override",
-      "description": "Manually forces a value as a timed override with dedicated priority until cleared or expired.",
+      "description": "Forces a value with the reserved highest priority (above any configuration) until cleared or expired.",
       "fields": {
         "setup_name": {
           "name": "Configuration Name",
@@ -177,9 +177,9 @@
           "name": "Forced Value",
           "description": "Value to apply while in manual mode."
         },
-        "valid_to_date": {
+        "valid_to": {
           "name": "Manual End Time",
-          "description": "End date/time for the override; then it automatically returns to auto mode."
+          "description": "Optional end date/time; then it automatically returns to auto mode."
         }
       }
     },
