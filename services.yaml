@@ -256,6 +256,53 @@ set_schedule_config:
           max: 999
           mode: box
 
+set_manual_override:
+  name: Imposta Forzatura Manuale
+  description: Forza manualmente un valore ignorando la logica standard finché non viene rimossa
+  fields:
+    entity_id:
+      name: Entità
+      description: Entità sensor.mia_config_* dell'istanza da utilizzare (opzionale, usa l'istanza di default se non specificato)
+      required: false
+      example: "sensor.mia_config_temperatura_target"
+      selector:
+        entity:
+          integration: mia_config
+    setup_name:
+      name: Nome Configurazione
+      description: Nome della configurazione da forzare
+      required: true
+      example: "temperatura_target"
+      selector:
+        text:
+    setup_value:
+      name: Valore Forzato
+      description: Valore da forzare manualmente
+      required: true
+      example: "1"
+      selector:
+        text:
+
+clear_manual_override:
+  name: Rimuovi Forzatura Manuale
+  description: Rimuove la forzatura manuale e ripristina il comportamento automatico
+  fields:
+    entity_id:
+      name: Entità
+      description: Entità sensor.mia_config_* dell'istanza da utilizzare (opzionale, usa l'istanza di default se non specificato)
+      required: false
+      example: "sensor.mia_config_temperatura_target"
+      selector:
+        entity:
+          integration: mia_config
+    setup_name:
+      name: Nome Configurazione
+      description: Nome della configurazione da riportare in automatico
+      required: true
+      example: "temperatura_target"
+      selector:
+        text:
+
 delete_config:
   name: Elimina Configurazione
   description: Elimina una configurazione esistente

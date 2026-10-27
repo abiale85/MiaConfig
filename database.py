@@ -37,6 +37,7 @@ class ConfigDatabase:
             'configurazioni_a_orario': [],  # Lista di dict con tutte le config a orario
             'configurazioni_a_tempo': [],  # Lista di dict con tutte le config a tempo
             'configurazioni_condizionali': [],  # Lista di dict con tutte le config condizionali
+            'configurazioni_manuali': [],  # Lista di dict con le forzature manuali
             'descrizioni': {},  # Dict {setup_name: description}
             'loaded': False  # Flag per sapere se la cache è stata caricata
         }
@@ -103,6 +104,10 @@ class ConfigDatabase:
         # Carica configurazioni condizionali
         cursor.execute("SELECT * FROM configurazioni_condizionali ORDER BY priority")
         self._memory_cache['configurazioni_condizionali'] = [dict(row) for row in cursor.fetchall()]
+
+        # Carica forzature manuali
+        cursor.execute("SELECT * FROM configurazioni_manuali")
+        self._memory_cache['configurazioni_manuali'] = [dict(row) for row in cursor.fetchall()]
         
         # Carica descrizioni
         cursor.execute("SELECT setup_name, description FROM configurazioni_descrizioni")
@@ -114,7 +119,8 @@ class ConfigDatabase:
             f"Cache in-memory caricata: {len(self._memory_cache['configurazioni'])} standard, "
             f"{len(self._memory_cache['configurazioni_a_orario'])} orario, "
             f"{len(self._memory_cache['configurazioni_a_tempo'])} tempo, "
-            f"{len(self._memory_cache['configurazioni_condizionali'])} condizionali"
+            f"{len(self._memory_cache['configurazioni_condizionali'])} condizionali, "
+            f"{len(self._memory_cache['configurazioni_manuali'])} manuali"
         )
     
     def initialize(self) -> None:
@@ -131,6 +137,16 @@ class ConfigDatabase:
                 setup_value TEXT,
                 priority INTEGER NOT NULL DEFAULT 99,
                 enabled INTEGER NOT NULL DEFAULT 1
+            )
+        """)
+
+        # Tabella forzature manuali (manual/auto)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS configurazioni_manuali (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                setup_name TEXT NOT NULL UNIQUE,
+                setup_value TEXT,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
         
@@ -243,6 +259,12 @@ class ConfigDatabase:
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_condizionali_config 
             ON configurazioni_condizionali(conditional_config, priority)
+        """)
+
+        # Indice forzature manuali
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_manuali_setup_name
+            ON configurazioni_manuali(setup_name)
         """)
         
         # Indice per storico (filtro per setup_name e timestamp per grafici)
@@ -510,6 +532,19 @@ class ConfigDatabase:
         - NON include condizionali (gestiti separatamente con logica ricorsiva)
         """
         relevant_configs = []
+
+        # Forzature manuali (priorità assoluta)
+        for row in self._memory_cache['configurazioni_manuali']:
+            if target_setup_name and row['setup_name'] != target_setup_name:
+                continue
+            relevant_configs.append({
+                'setup_name': row['setup_name'],
+                'value': row['setup_value'],
+                'priority': -1,
+                'source': 'manual',
+                'source_order': -1,
+                'id': row['id']
+            })
         
         # Configurazioni a tempo attive - FILTRA DA CACHE IN-MEMORY
         for row in self._memory_cache['configurazioni_a_tempo']:
@@ -886,6 +921,62 @@ class ConfigDatabase:
         
         # Invalida tutte le cache dopo modifica configurazione
         self._invalidate_caches()
+
+    def set_manual_override(self, setup_name: str, setup_value: str) -> None:
+        """Imposta o aggiorna una forzatura manuale per un setup."""
+        setup_name = self.validate_setup_name(setup_name)
+        cursor = self.conn.cursor()
+
+        cursor.execute(
+            "SELECT setup_value FROM configurazioni_manuali WHERE setup_name = ?",
+            (setup_name,)
+        )
+        existing = cursor.fetchone()
+
+        cursor.execute("""
+            INSERT INTO configurazioni_manuali (setup_name, setup_value, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(setup_name) DO UPDATE SET
+                setup_value = excluded.setup_value,
+                updated_at = CURRENT_TIMESTAMP
+        """, (setup_name, setup_value))
+
+        self._save_to_history(
+            setup_name,
+            'manual',
+            {'setup_value': setup_value, 'priority': -1},
+            'UPDATE' if existing else 'INSERT'
+        )
+
+        self.conn.commit()
+        _LOGGER.debug(f"Set manual override: {setup_name} = {setup_value}")
+        self._invalidate_caches()
+
+    def clear_manual_override(self, setup_name: str) -> bool:
+        """Rimuove la forzatura manuale per un setup."""
+        setup_name = self.validate_setup_name(setup_name)
+        cursor = self.conn.cursor()
+
+        cursor.execute(
+            "SELECT setup_value FROM configurazioni_manuali WHERE setup_name = ?",
+            (setup_name,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return False
+
+        self._save_to_history(
+            setup_name,
+            'manual',
+            {'setup_value': row['setup_value'], 'priority': -1},
+            'DELETE'
+        )
+        cursor.execute("DELETE FROM configurazioni_manuali WHERE setup_name = ?", (setup_name,))
+
+        self.conn.commit()
+        _LOGGER.debug(f"Cleared manual override: {setup_name}")
+        self._invalidate_caches()
+        return True
     
     def update_standard_config(self, config_id: int, setup_value: str, priority: int, description: str = None) -> None:
         """Aggiorna una configurazione standard esistente."""
@@ -1224,6 +1315,17 @@ class ConfigDatabase:
                     'DELETE'
                 )
             cursor.execute("DELETE FROM configurazioni_condizionali WHERE setup_name = ?", (setup_name,))
+
+        if config_type == "all":
+            cursor.execute("SELECT setup_value FROM configurazioni_manuali WHERE setup_name = ?", (setup_name,))
+            manual_row = cursor.fetchone()
+            if manual_row:
+                self._save_to_history(
+                    setup_name, 'manual',
+                    {'setup_value': manual_row['setup_value'], 'priority': -1},
+                    'DELETE'
+                )
+            cursor.execute("DELETE FROM configurazioni_manuali WHERE setup_name = ?", (setup_name,))
         
         # Invalida cache descrizioni (potrebbero essere state rimosse insieme alle config)
         self._descriptions_cache = None
@@ -1247,6 +1349,7 @@ class ConfigDatabase:
         names.update(row['setup_name'] for row in self._memory_cache['configurazioni_a_orario'])
         names.update(row['setup_name'] for row in self._memory_cache['configurazioni_a_tempo'])
         names.update(row['setup_name'] for row in self._memory_cache['configurazioni_condizionali'])
+        names.update(row['setup_name'] for row in self._memory_cache['configurazioni_manuali'])
         
         return sorted(list(names))
     

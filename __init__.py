@@ -410,6 +410,50 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         except ValueError as err:
             _LOGGER.error(f"Errore nella configurazione condizionale: {err}")
             raise
+
+    async def handle_set_manual_override(call: ServiceCall) -> None:
+        """Gestisce il servizio per impostare una forzatura manuale."""
+        entity_id = call.data.get("entity_id")
+        db = get_db_from_entity_id(hass, entity_id)
+
+        setup_name = call.data.get("setup_name")
+        setup_value = call.data.get("setup_value")
+
+        await hass.async_add_executor_job(
+            db.set_manual_override, setup_name, setup_value
+        )
+
+        for entry_id, data in hass.data.get(DOMAIN, {}).items():
+            if isinstance(data, dict):
+                if 'clear_cache' in data:
+                    data['clear_cache']()
+                if 'coordinator' in data:
+                    await data['coordinator'].async_request_refresh()
+
+        _LOGGER.info(f"Forzatura manuale impostata per '{setup_name}'")
+
+    async def handle_clear_manual_override(call: ServiceCall) -> None:
+        """Gestisce il servizio per rimuovere una forzatura manuale."""
+        entity_id = call.data.get("entity_id")
+        db = get_db_from_entity_id(hass, entity_id)
+
+        setup_name = call.data.get("setup_name")
+
+        removed = await hass.async_add_executor_job(
+            db.clear_manual_override, setup_name
+        )
+
+        for entry_id, data in hass.data.get(DOMAIN, {}).items():
+            if isinstance(data, dict):
+                if 'clear_cache' in data:
+                    data['clear_cache']()
+                if 'coordinator' in data:
+                    await data['coordinator'].async_request_refresh()
+
+        if removed:
+            _LOGGER.info(f"Forzatura manuale rimossa per '{setup_name}'")
+        else:
+            _LOGGER.info(f"Nessuna forzatura manuale presente per '{setup_name}'")
     
     async def handle_update_standard_config(call: ServiceCall) -> None:
         """Gestisce il servizio per aggiornare una configurazione standard esistente."""
@@ -694,6 +738,17 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         vol.Optional("valid_from_ora"): vol.Any(int, float),
         vol.Optional("valid_to_ora"): vol.Any(int, float),
     })
+
+    set_manual_override_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
+        vol.Required("setup_name"): cv.string,
+        vol.Required("setup_value"): cv.string,
+    })
+
+    clear_manual_override_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
+        vol.Required("setup_name"): cv.string,
+    })
     
     delete_config_schema = vol.Schema({
         vol.Required("setup_name"): cv.string,
@@ -752,6 +807,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     
     hass.services.async_register(
         DOMAIN, "set_conditional_config", handle_set_conditional_config, schema=set_conditional_config_schema
+    )
+
+    hass.services.async_register(
+        DOMAIN, "set_manual_override", handle_set_manual_override, schema=set_manual_override_schema
+    )
+
+    hass.services.async_register(
+        DOMAIN, "clear_manual_override", handle_clear_manual_override, schema=clear_manual_override_schema
     )
     
     hass.services.async_register(
