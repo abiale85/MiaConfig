@@ -5,6 +5,7 @@
 ### ✨ Nuove funzionalità
 - Widget Lovelace indipendenti Boolean, Select e Number con modalità Auto/Manuale e scadenza opzionale.
 - Nuovi servizi `set_manual_override` e `clear_manual_override`.
+- Editor visuale dei widget (niente più "Editor visuale non supportato").
 - La forzatura manuale è una configurazione a tempo con priorità riservata `0`, sempre vincente; schema del database invariato.
 
 ### 🔧 Modifiche

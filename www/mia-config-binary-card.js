@@ -6,6 +6,19 @@ const MANUAL_OVERRIDE_PRIORITY = 0;
 class MiaConfigControlCard extends HTMLElement {
     static cardType = 'binary';
 
+    static getConfigElement() {
+        const editor = document.createElement('mia-config-control-card-editor');
+        editor.cardType = this.cardType;
+        return editor;
+    }
+
+    static getStubConfig(hass) {
+        const entity = Object.keys(hass.states).find(entityId =>
+            entityId.startsWith('sensor.') && hass.states[entityId].attributes?.integration === 'mia_config'
+        );
+        return { entity: entity || '' };
+    }
+
     setConfig(config) {
         if (!config || !config.entity) {
             throw new Error('Devi specificare entity nella configurazione della card');
@@ -200,6 +213,70 @@ class MiaConfigControlCard extends HTMLElement {
         return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     }
 }
+
+// Editor visuale: usa ha-form di Home Assistant
+const EDITOR_LABELS = {
+    entity: 'Entità Mia Config',
+    name: 'Nome (opzionale)',
+    setup_name: 'Nome configurazione (opzionale, se l\'entità non espone setup_name)',
+    min: 'Minimo (opzionale)',
+    max: 'Massimo (opzionale)'
+};
+
+class MiaConfigControlCardEditor extends HTMLElement {
+    setConfig(config) {
+        this._config = config;
+        this.render();
+    }
+
+    set hass(hass) {
+        this._hass = hass;
+        this.render();
+    }
+
+    getSchema() {
+        const schema = [
+            { name: 'entity', required: true, selector: { entity: { filter: { domain: 'sensor', integration: 'mia_config' } } } },
+            { name: 'name', selector: { text: {} } },
+            { name: 'setup_name', selector: { text: {} } }
+        ];
+        if (this.cardType === 'number') {
+            schema.push({
+                type: 'grid',
+                name: '',
+                schema: [
+                    { name: 'min', selector: { number: { mode: 'box', step: 'any' } } },
+                    { name: 'max', selector: { number: { mode: 'box', step: 'any' } } }
+                ]
+            });
+        }
+        return schema;
+    }
+
+    render() {
+        if (!this._hass || !this._config) return;
+        if (!this._form) {
+            this._form = document.createElement('ha-form');
+            this._form.computeLabel = (schema) => EDITOR_LABELS[schema.name] ?? schema.name;
+            this._form.addEventListener('value-changed', (ev) => {
+                ev.stopPropagation();
+                const config = { ...ev.detail.value };
+                // Rimuove i campi opzionali svuotati per non lasciare chiavi vuote nello YAML
+                Object.keys(config).forEach(key => {
+                    if (config[key] === '' || config[key] === undefined || config[key] === null) delete config[key];
+                });
+                this._config = config;
+                this.dispatchEvent(new CustomEvent('config-changed', { detail: { config }, bubbles: true, composed: true }));
+            });
+            this.appendChild(this._form);
+        }
+        this._form.hass = this._hass;
+        this._form.schema = this.getSchema();
+        this._form.data = this._config;
+    }
+}
+
+customElements.define('mia-config-control-card-editor', MiaConfigControlCardEditor);
 
 class MiaConfigBinaryCard extends MiaConfigControlCard {
     static cardType = 'binary';
