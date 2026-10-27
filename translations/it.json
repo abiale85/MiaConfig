@@ -176,6 +176,10 @@
         "setup_value": {
           "name": "Valore forzato",
           "description": "Valore da applicare in modalità manuale."
+        },
+        "valid_to_date": {
+          "name": "Fine forzatura",
+          "description": "Data e ora di fine forzatura; al termine torna in automatico."
         }
       }
     },

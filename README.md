@@ -379,6 +379,7 @@ service: mia_config.set_manual_override
 data:
   setup_name: "riscaldamento"
   setup_value: "1"
+  valid_to_date: "2026-10-27 20:00:00"  # Opzionale, ritorno automatico in modalità AUTO
   entity_id: sensor.miahomeconfig_main  # Opzionale
 ```
 

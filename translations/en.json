@@ -176,6 +176,10 @@
         "setup_value": {
           "name": "Forced Value",
           "description": "Value to apply while in manual mode."
+        },
+        "valid_to_date": {
+          "name": "Manual End Time",
+          "description": "End date/time for the override; then it automatically returns to auto mode."
         }
       }
     },

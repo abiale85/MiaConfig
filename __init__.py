@@ -418,9 +418,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         setup_name = call.data.get("setup_name")
         setup_value = call.data.get("setup_value")
+        valid_to = call.data.get("valid_to_date")
 
         await hass.async_add_executor_job(
-            db.set_manual_override, setup_name, setup_value
+            db.set_manual_override, setup_name, setup_value, valid_to
         )
 
         for entry_id, data in hass.data.get(DOMAIN, {}).items():
@@ -743,6 +744,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         vol.Optional("entity_id"): cv.entity_id,
         vol.Required("setup_name"): cv.string,
         vol.Required("setup_value"): cv.string,
+        vol.Optional("valid_to_date"): cv.datetime,
     })
 
     clear_manual_override_schema = vol.Schema({

@@ -146,6 +146,7 @@ class ConfigDatabase:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 setup_name TEXT NOT NULL UNIQUE,
                 setup_value TEXT,
+                valid_to_date TEXT,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -272,6 +273,12 @@ class ConfigDatabase:
             CREATE INDEX IF NOT EXISTS idx_storico_name_timestamp 
             ON configurazioni_storico(setup_name, timestamp)
         """)
+
+        # Migrazione: aggiunge valid_to_date alle forzature manuali se mancante
+        cursor.execute("PRAGMA table_info(configurazioni_manuali)")
+        manual_columns = {row['name'] for row in cursor.fetchall()}
+        if 'valid_to_date' not in manual_columns:
+            cursor.execute("ALTER TABLE configurazioni_manuali ADD COLUMN valid_to_date TEXT")
         
         self.conn.commit()
         
@@ -537,6 +544,14 @@ class ConfigDatabase:
         for row in self._memory_cache['configurazioni_manuali']:
             if target_setup_name and row['setup_name'] != target_setup_name:
                 continue
+            if row.get('valid_to_date'):
+                try:
+                    valid_to = self._to_local_datetime(row['valid_to_date'])
+                except Exception:
+                    _LOGGER.warning("valid_to_date non valida per forzatura manuale '%s': %s", row['setup_name'], row['valid_to_date'])
+                    continue
+                if not (target_datetime < valid_to):
+                    continue
             relevant_configs.append({
                 'setup_name': row['setup_name'],
                 'value': row['setup_value'],
@@ -922,10 +937,20 @@ class ConfigDatabase:
         # Invalida tutte le cache dopo modifica configurazione
         self._invalidate_caches()
 
-    def set_manual_override(self, setup_name: str, setup_value: str) -> None:
+    def set_manual_override(self, setup_name: str, setup_value: str, valid_to_date: Optional[str] = None) -> None:
         """Imposta o aggiorna una forzatura manuale per un setup."""
         setup_name = self.validate_setup_name(setup_name)
         cursor = self.conn.cursor()
+        parsed_valid_to_date = None
+        if valid_to_date is not None:
+            if isinstance(valid_to_date, datetime):
+                parsed_valid_to_date = self._ensure_local_dt(valid_to_date).replace(tzinfo=None).isoformat()
+            else:
+                parsed_valid_to_date = self._to_local_datetime(str(valid_to_date)).replace(tzinfo=None).isoformat()
+
+            now_local = self._ensure_local_dt(dt_util.now()).replace(tzinfo=None)
+            if datetime.fromisoformat(parsed_valid_to_date) <= now_local:
+                raise ValueError("La data/ora di fine forzatura deve essere nel futuro")
 
         cursor.execute(
             "SELECT setup_value FROM configurazioni_manuali WHERE setup_name = ?",
@@ -934,22 +959,23 @@ class ConfigDatabase:
         existing = cursor.fetchone()
 
         cursor.execute("""
-            INSERT INTO configurazioni_manuali (setup_name, setup_value, updated_at)
-            VALUES (?, ?, CURRENT_TIMESTAMP)
+            INSERT INTO configurazioni_manuali (setup_name, setup_value, valid_to_date, updated_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(setup_name) DO UPDATE SET
                 setup_value = excluded.setup_value,
+                valid_to_date = excluded.valid_to_date,
                 updated_at = CURRENT_TIMESTAMP
-        """, (setup_name, setup_value))
+        """, (setup_name, setup_value, parsed_valid_to_date))
 
         self._save_to_history(
             setup_name,
             'manual',
-            {'setup_value': setup_value, 'priority': -1},
+            {'setup_value': setup_value, 'priority': -1, 'valid_to_date': parsed_valid_to_date},
             'UPDATE' if existing else 'INSERT'
         )
 
         self.conn.commit()
-        _LOGGER.debug(f"Set manual override: {setup_name} = {setup_value}")
+        _LOGGER.debug(f"Set manual override: {setup_name} = {setup_value} (valid_to={parsed_valid_to_date})")
         self._invalidate_caches()
 
     def clear_manual_override(self, setup_name: str) -> bool:
@@ -958,7 +984,7 @@ class ConfigDatabase:
         cursor = self.conn.cursor()
 
         cursor.execute(
-            "SELECT setup_value FROM configurazioni_manuali WHERE setup_name = ?",
+            "SELECT setup_value, valid_to_date FROM configurazioni_manuali WHERE setup_name = ?",
             (setup_name,)
         )
         row = cursor.fetchone()
@@ -968,7 +994,7 @@ class ConfigDatabase:
         self._save_to_history(
             setup_name,
             'manual',
-            {'setup_value': row['setup_value'], 'priority': -1},
+            {'setup_value': row['setup_value'], 'priority': -1, 'valid_to_date': row['valid_to_date']},
             'DELETE'
         )
         cursor.execute("DELETE FROM configurazioni_manuali WHERE setup_name = ?", (setup_name,))
@@ -1317,12 +1343,12 @@ class ConfigDatabase:
             cursor.execute("DELETE FROM configurazioni_condizionali WHERE setup_name = ?", (setup_name,))
 
         if config_type == "all":
-            cursor.execute("SELECT setup_value FROM configurazioni_manuali WHERE setup_name = ?", (setup_name,))
+            cursor.execute("SELECT setup_value, valid_to_date FROM configurazioni_manuali WHERE setup_name = ?", (setup_name,))
             manual_row = cursor.fetchone()
             if manual_row:
                 self._save_to_history(
                     setup_name, 'manual',
-                    {'setup_value': manual_row['setup_value'], 'priority': -1},
+                    {'setup_value': manual_row['setup_value'], 'priority': -1, 'valid_to_date': manual_row['valid_to_date']},
                     'DELETE'
                 )
             cursor.execute("DELETE FROM configurazioni_manuali WHERE setup_name = ?", (setup_name,))

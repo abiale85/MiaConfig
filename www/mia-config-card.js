@@ -1668,15 +1668,23 @@ class MiaConfigCard extends HTMLElement {
                     });
                 } else {
                     const valueSelect = window._miaConfigCardInstance.content.querySelector(`#dc-manual-value-${setupName}`);
+                    const endInput = window._miaConfigCardInstance.content.querySelector(`#dc-manual-end-${setupName}`);
                     const setupValue = valueSelect?.value;
                     if (!setupValue) {
                         alert('Seleziona un valore da forzare');
                         return;
                     }
 
-                    await window._miaConfigCardInstance.callMiaConfigService('set_manual_override', {
+                    const serviceData = {
                         setup_name: setupName,
                         setup_value: setupValue
+                    };
+                    if (endInput?.value) {
+                        serviceData.valid_to_date = endInput.value;
+                    }
+
+                    await window._miaConfigCardInstance.callMiaConfigService('set_manual_override', {
+                        ...serviceData
                     });
                 }
 
@@ -1915,10 +1923,11 @@ class MiaConfigCard extends HTMLElement {
                             <small>Origine: ${typeLabel}</small>
                         </div>
                         <div class="dc-dashboard-actions">
-                            <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 6px;">
+                            <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 6px; flex-wrap: wrap;">
                                 <select id="dc-manual-value-${setupName}" style="padding: 4px 6px; font-size: 12px; max-width: 150px;">
                                     ${manualOptions}
                                 </select>
+                                <input type="datetime-local" id="dc-manual-end-${setupName}" style="padding: 4px 6px; font-size: 12px; max-width: 180px;" title="Fine forzatura (opzionale)">
                                 <button class="${manualMode ? 'dc-btn-secondary' : 'dc-btn'}" onclick="event.stopPropagation(); window.dcToggleManualOverride('${setupName}', ${manualMode})" style="padding: 6px 10px; font-size: 12px;">
                                     ${manualMode ? '🔁 AUTO' : '🛠️ MAN'}
                                 </button>

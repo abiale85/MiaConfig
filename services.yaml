@@ -282,6 +282,13 @@ set_manual_override:
       example: "1"
       selector:
         text:
+    valid_to_date:
+      name: Fine Forzatura (opzionale)
+      description: Data/ora di fine forzatura; al termine torna in automatico
+      required: false
+      example: "2026-10-27 20:00:00"
+      selector:
+        datetime:
 
 clear_manual_override:
   name: Rimuovi Forzatura Manuale
