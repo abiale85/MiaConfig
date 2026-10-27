@@ -7,8 +7,11 @@ class MiaConfigCard extends HTMLElement {
         this._instance = this;
         // Toggle debug globale (può essere settato via config.debug o window.miaConfigDebug)
         this._debug = window.miaConfigDebug === true;
-        // Mantiene anche variabile globale per compatibilità con funzioni esistenti
+        // Variabile globale usata dalle funzioni window.dc* (onclick nell'HTML): punta alla card
+        // con cui l'utente sta interagendo, così più card (più istanze) non si confondono
         window._miaConfigCardInstance = this;
+        const activate = () => { window._miaConfigCardInstance = this; };
+        ['pointerdown', 'touchstart', 'focusin', 'keydown'].forEach(type => this.addEventListener(type, activate, true));
         // Definisci subito le funzioni window che potrebbero essere chiamate dalla dashboard
         // prima che render() sia completato
         this.initializeWindowFunctions();
@@ -19,19 +22,28 @@ class MiaConfigCard extends HTMLElement {
         this._hass = hass;
         const assistant = this.content?.querySelector('mia-config-assistant');
         if (assistant) assistant.hass = hass;
+        if (this.content && this.getInstances().map(i => i.entity_id).join(',') !== this._instancesKey) {
+            if (!this.getSelectedEntryId()) this.configuredEntityId = this.getInstances()[0]?.entity_id || null;
+            this.renderInstanceBar();
+        }
         if (!this.content) {
-            // Determina il nome dell'istanza dal primo sensore disponibile
+            window._miaConfigCardInstance = this;
+            // Istanza: entity_id dallo YAML, altrimenti la prima istanza trovata
+            if (!this.configuredEntityId) {
+                this.configuredEntityId = this.getInstances()[0]?.entity_id || null;
+            }
             const instanceName = this.getInstanceName();
-            
+
             this.innerHTML = `
                 <ha-card header="${instanceName}">
                     <div class="card-content">
+                        <div id="dc-instance-bar"></div>
                         <div id="dynamic-config-ui"></div>
                     </div>
                 </ha-card>
             `;
             this.content = this.querySelector("#dynamic-config-ui");
-            this.configuredEntityId = null; // Entity ID configurato via YAML
+            this.renderInstanceBar();
             this.render();
             // Assicura che setupEventListeners sia chiamato dopo render
             // per garantire che tutte le funzioni window siano disponibili
@@ -39,37 +51,71 @@ class MiaConfigCard extends HTMLElement {
         } else if (firstLoad && this.content) {
             // Prima volta che _hass diventa disponibile e content già esiste
             // Carica dashboard se è il tab attivo
-            const dashboardTab = window._miaConfigCardInstance.content.querySelector('#dc-tab-dashboard');
+            const dashboardTab = this.content.querySelector('#dc-tab-dashboard');
             if (dashboardTab && dashboardTab.classList.contains('active')) {
                 this.loadDashboard();
             }
         }
     }
     
+    // Istanze Mia Config: un sensore principale (con total_configs) per ogni database
+    getInstances() {
+        if (!this._hass) return [];
+        return Object.values(this._hass.states)
+            .filter(state => state.entity_id.startsWith('sensor.')
+                && state.attributes.integration === 'mia_config'
+                && state.attributes.total_configs !== undefined)
+            .map(state => ({ entity_id: state.entity_id, db_name: state.attributes.db_name, entry_id: state.attributes.entry_id }))
+            .sort((a, b) => String(a.db_name).localeCompare(String(b.db_name)));
+    }
+
+    // entry_id dell'istanza selezionata (qualsiasi sensore dell'istanza lo espone)
+    getSelectedEntryId() {
+        const entityId = this.getSelectedEntityId();
+        return entityId ? this._hass?.states?.[entityId]?.attributes?.entry_id || null : null;
+    }
+
     getInstanceName() {
         if (!this._hass) return "Mia Config";
-        
-        // Cerca entity_id configurato via YAML
-        if (this._config && this._config.entity_id) {
-            const entity = this._hass.states[this._config.entity_id];
-            if (entity && entity.attributes.db_name) {
-                return entity.attributes.db_name;
-            }
+        const entityId = this.getSelectedEntityId();
+        const entity = entityId ? this._hass.states[entityId] : null;
+        return entity?.attributes?.db_name || "Mia Config";
+    }
+
+    // Selettore di istanza: visibile solo con più istanze e senza entity_id fissato nello YAML
+    renderInstanceBar() {
+        const bar = this.querySelector('#dc-instance-bar');
+        if (!bar) return;
+        const instances = this.getInstances();
+        this._instancesKey = instances.map(i => i.entity_id).join(',');
+        if (instances.length < 2 || this._config?.entity_id) {
+            bar.innerHTML = '';
+            return;
         }
-        
-        // Cerca il primo sensore mia_config disponibile
-        for (const entityId in this._hass.states) {
-            if (entityId.includes('_main') && entityId.startsWith('sensor.')) {
-                const entity = this._hass.states[entityId];
-                if (entity.attributes.integration === 'mia_config' && entity.attributes.db_name) {
-                    return entity.attributes.db_name;
-                }
-            }
-        }
-        
-        return "Mia Config";
+        const selectedEntry = this.getSelectedEntryId();
+        bar.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 14px;">
+                <label for="dc-instance-select" style="color: var(--secondary-text-color);">Istanza:</label>
+                <select id="dc-instance-select" style="padding: 6px 8px; border-radius: 6px; border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); font-size: 14px;">
+                    ${instances.map(i => `<option value="${i.entity_id}" ${i.entry_id === selectedEntry ? 'selected' : ''}>${i.db_name}</option>`).join('')}
+                </select>
+            </div>`;
+        bar.querySelector('select').addEventListener('change', (ev) => this.switchInstance(ev.target.value));
+    }
+
+    switchInstance(entityId) {
+        window._miaConfigCardInstance = this;
+        this.configuredEntityId = entityId;
+        this.querySelector('ha-card')?.setAttribute('header', this.getInstanceName());
+        this.render();
+        this.setupEventListeners();
+        this.loadDashboard();
     }
     
+    connectedCallback() {
+        window._miaConfigCardInstance = this;
+    }
+
     disconnectedCallback() {
         // Cleanup: rimuovi il tooltip flottante quando il componente viene distrutto
         const floatingTooltip = document.querySelector('.dc-weekly-tooltip-floating');
@@ -590,11 +636,11 @@ class MiaConfigCard extends HTMLElement {
                                     <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
                                     <div class="dc-time-input">
                                         <select id="modal-from-hour" required>
-                                            ${window._miaConfigCardInstance.generateHourOptions(0, 23)}
+                                            ${this.generateHourOptions(0, 23)}
                                         </select>
                                         <span class="dc-time-separator">:</span>
                                         <select id="modal-from-minute" required>
-                                            ${window._miaConfigCardInstance.generateMinuteOptions()}
+                                            ${this.generateMinuteOptions()}
                                         </select>
                                     </div>
                                 </div>
@@ -603,11 +649,11 @@ class MiaConfigCard extends HTMLElement {
                                     <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
                                     <div class="dc-time-input">
                                         <select id="modal-to-hour" required>
-                                            ${window._miaConfigCardInstance.generateHourOptions(0, 23)}
+                                            ${this.generateHourOptions(0, 23)}
                                         </select>
                                         <span class="dc-time-separator">:</span>
                                         <select id="modal-to-minute" required>
-                                            ${window._miaConfigCardInstance.generateMinuteOptions()}
+                                            ${this.generateMinuteOptions()}
                                         </select>
                                     </div>
                                 </div>
@@ -675,18 +721,18 @@ class MiaConfigCard extends HTMLElement {
                                     <div>
                                         <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
                                         <div class="dc-time-input">
-                                            <select id="modal-time-from-hour">${window._miaConfigCardInstance.generateHourOptions(0, 23)}</select>
+                                            <select id="modal-time-from-hour">${this.generateHourOptions(0, 23)}</select>
                                             <span class="dc-time-separator">:</span>
-                                            <select id="modal-time-from-minute">${window._miaConfigCardInstance.generateMinuteOptions()}</select>
+                                            <select id="modal-time-from-minute">${this.generateMinuteOptions()}</select>
                                         </div>
                                     </div>
                                     <span style="font-size: 18px; align-self: flex-end; padding-bottom: 8px;">→</span>
                                     <div>
                                         <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
                                         <div class="dc-time-input">
-                                            <select id="modal-time-to-hour">${window._miaConfigCardInstance.generateHourOptions(0, 23)}</select>
+                                            <select id="modal-time-to-hour">${this.generateHourOptions(0, 23)}</select>
                                             <span class="dc-time-separator">:</span>
-                                            <select id="modal-time-to-minute">${window._miaConfigCardInstance.generateMinuteOptions()}</select>
+                                            <select id="modal-time-to-minute">${this.generateMinuteOptions()}</select>
                                         </div>
                                     </div>
                                 </div>
@@ -769,18 +815,18 @@ class MiaConfigCard extends HTMLElement {
                                     <div>
                                         <label style="font-size: 12px; margin-bottom: 4px;">Dalle:</label>
                                         <div class="dc-time-input">
-                                            <select id="modal-conditional-from-hour">${window._miaConfigCardInstance.generateHourOptions(0, 23)}</select>
+                                            <select id="modal-conditional-from-hour">${this.generateHourOptions(0, 23)}</select>
                                             <span class="dc-time-separator">:</span>
-                                            <select id="modal-conditional-from-minute">${window._miaConfigCardInstance.generateMinuteOptions()}</select>
+                                            <select id="modal-conditional-from-minute">${this.generateMinuteOptions()}</select>
                                         </div>
                                     </div>
                                     <span style="font-size: 18px; align-self: flex-end; padding-bottom: 8px;">→</span>
                                     <div>
                                         <label style="font-size: 12px; margin-bottom: 4px;">Alle:</label>
                                         <div class="dc-time-input">
-                                            <select id="modal-conditional-to-hour">${window._miaConfigCardInstance.generateHourOptions(0, 23)}</select>
+                                            <select id="modal-conditional-to-hour">${this.generateHourOptions(0, 23)}</select>
                                             <span class="dc-time-separator">:</span>
-                                            <select id="modal-conditional-to-minute">${window._miaConfigCardInstance.generateMinuteOptions()}</select>
+                                            <select id="modal-conditional-to-minute">${this.generateMinuteOptions()}</select>
                                         </div>
                                     </div>
                                 </div>
@@ -810,7 +856,7 @@ class MiaConfigCard extends HTMLElement {
         `;
 
         // setupEventListeners() ora è chiamato in set hass dopo render()
-        window._miaConfigCardInstance.loadConfigurations();
+        this.loadConfigurations();
         this.setDefaultTimeValues();
     }
     
@@ -847,8 +893,8 @@ class MiaConfigCard extends HTMLElement {
             return `${year}-${month}-${day}T${hours}:${minutes}`;
         };
         
-        const validFromInput = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-time input[name="valid_from"]');
-        const validToInput = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-time input[name="valid_to"]');
+        const validFromInput = this.content.querySelector('#modal-dc-form-time input[name="valid_from"]');
+        const validToInput = this.content.querySelector('#modal-dc-form-time input[name="valid_to"]');
         
         if (validFromInput) validFromInput.value = formatDateTime(now);
         if (validToInput) validToInput.value = formatDateTime(midnight);
@@ -860,7 +906,7 @@ class MiaConfigCard extends HTMLElement {
         
         window.dcShowWeeklyFor = (setupName) => {
             // Verifica che il contenuto sia renderizzato
-            if (!this.window._miaConfigCardInstance.content) {
+            if (!window._miaConfigCardInstance.content) {
                 setTimeout(() => window.dcShowWeeklyFor(setupName), 100);
                 return;
             }
@@ -893,7 +939,7 @@ class MiaConfigCard extends HTMLElement {
         };
         
         window.dcLoadWeeklyView = async () => {
-            if (!this._hass || !this.content) {
+            if (!window._miaConfigCardInstance._hass || !window._miaConfigCardInstance.content) {
                 return;
             }
             
@@ -904,10 +950,10 @@ class MiaConfigCard extends HTMLElement {
             }
             
             try {
-                const entityId = this.getSelectedEntityId();
+                const entityId = window._miaConfigCardInstance.getSelectedEntityId();
                 const serviceData = entityId ? { entity_id: entityId } : {};
                 
-                const result = await this._hass.callWS({
+                const result = await window._miaConfigCardInstance._hass.callWS({
                     type: 'call_service',
                     domain: 'mia_config',
                     service: 'get_configurations',
@@ -923,7 +969,7 @@ class MiaConfigCard extends HTMLElement {
                     return;
                 }
                 
-                this.renderWeeklyView(setupName, setupConfigs);
+                window._miaConfigCardInstance.renderWeeklyView(setupName, setupConfigs);
             } catch (error) {
                 console.error('Error loading weekly view:', error);
                 window._miaConfigCardInstance.content.querySelector('#dc-weekly-view').innerHTML = `<p style="color: red;">Errore: ${error.message}</p>`;
@@ -935,13 +981,13 @@ class MiaConfigCard extends HTMLElement {
 
     setupEventListeners() {
         // Form handlers per modal di inserimento/modifica
-        const modalStandardForm = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-standard');
+        const modalStandardForm = this.content.querySelector('#modal-dc-form-standard');
         if (modalStandardForm) {
             modalStandardForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const form = e.target;
                 const formData = new FormData(form);
-                const modal = window._miaConfigCardInstance.content.querySelector('#dc-add-config-modal');
+                const modal = this.content.querySelector('#dc-add-config-modal');
                 const isEditMode = modal?.dataset.mode === 'edit';
                 
                 try {
@@ -956,8 +1002,8 @@ class MiaConfigCard extends HTMLElement {
                         if (description && description.trim()) {
                             serviceData.description = description.trim();
                         }
-                        await window._miaConfigCardInstance.callMiaConfigService('update_standard_config', serviceData);
-                        window._miaConfigCardInstance.showToast('Configurazione modificata!');
+                        await this.callMiaConfigService('update_standard_config', serviceData);
+                        this.showToast('Configurazione modificata!');
                     } else {
                         // Modalità aggiungi
                         const serviceData = {
@@ -969,38 +1015,38 @@ class MiaConfigCard extends HTMLElement {
                         if (description && description.trim()) {
                             serviceData.description = description.trim();
                         }
-                        await window._miaConfigCardInstance.callMiaConfigService('set_config', serviceData);
-                        window._miaConfigCardInstance.showToast('Configurazione salvata!');
+                        await this.callMiaConfigService('set_config', serviceData);
+                        this.showToast('Configurazione salvata!');
                     }
                     form.reset();
                     window.dcCloseAddConfigModal();
                     setTimeout(() => {
-                        window._miaConfigCardInstance.loadConfigurations();
+                        this.loadConfigurations();
                         this.loadConfigsForValidValues();
                     }, 500);
                 } catch (err) {
                     console.error('Errore salvataggio:', err);
-                    window._miaConfigCardInstance.showToast('Errore: ' + err.message, true);
+                    this.showToast('Errore: ' + err.message, true);
                 }
             });
         }
         
-        const modalScheduleForm = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-schedule');
+        const modalScheduleForm = this.content.querySelector('#modal-dc-form-schedule');
         if (modalScheduleForm) {
             modalScheduleForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const form = e.target;
-                const modal = window._miaConfigCardInstance.content.querySelector('#dc-add-config-modal');
+                const modal = this.content.querySelector('#dc-add-config-modal');
                 const isEditMode = modal?.dataset.mode === 'edit';
                 
-                const setupName = window._miaConfigCardInstance.content.querySelector('#modal-schedule-config-select').value;
-                const setupValue = window._miaConfigCardInstance.content.querySelector('#modal-schedule-setup-value').value;
-                const fromHour = window._miaConfigCardInstance.content.querySelector('#modal-from-hour').value;
-                const fromMinute = window._miaConfigCardInstance.content.querySelector('#modal-from-minute').value;
-                const toHour = window._miaConfigCardInstance.content.querySelector('#modal-to-hour').value;
-                const toMinute = window._miaConfigCardInstance.content.querySelector('#modal-to-minute').value;
-                const selectedDays = Array.from(window._miaConfigCardInstance.content.querySelectorAll('#modal-dc-form-schedule input[name="days"]:checked')).map(el => el.value);
-                const priority = window._miaConfigCardInstance.content.querySelector('#modal-global-priority').value;
+                const setupName = this.content.querySelector('#modal-schedule-config-select').value;
+                const setupValue = this.content.querySelector('#modal-schedule-setup-value').value;
+                const fromHour = this.content.querySelector('#modal-from-hour').value;
+                const fromMinute = this.content.querySelector('#modal-from-minute').value;
+                const toHour = this.content.querySelector('#modal-to-hour').value;
+                const toMinute = this.content.querySelector('#modal-to-minute').value;
+                const selectedDays = Array.from(this.content.querySelectorAll('#modal-dc-form-schedule input[name="days"]:checked')).map(el => el.value);
+                const priority = this.content.querySelector('#modal-global-priority').value;
                 
                 try {
                     const validFromOra = parseFloat(fromHour) + parseFloat(fromMinute) / 60;
@@ -1008,7 +1054,7 @@ class MiaConfigCard extends HTMLElement {
                     
                     if (isEditMode) {
                         // In modalità edit: elimina e ricrea
-                        await window._miaConfigCardInstance.callMiaConfigService('delete_single_config', {
+                        await this.callMiaConfigService('delete_single_config', {
                             config_type: 'schedule',
                             config_id: parseInt(modal.dataset.editId)
                         });
@@ -1022,39 +1068,39 @@ class MiaConfigCard extends HTMLElement {
                         days_of_week: selectedDays.join(','),
                         priority: parseInt(priority)
                     };
-                    await window._miaConfigCardInstance.callMiaConfigService('set_schedule_config', serviceData);
+                    await this.callMiaConfigService('set_schedule_config', serviceData);
                     
                     form.reset();
                     window.dcCloseAddConfigModal();
-                    window._miaConfigCardInstance.showToast(isEditMode ? 'Override orario modificato!' : 'Override orario aggiunto!');
-                    setTimeout(() => window._miaConfigCardInstance.loadConfigurations(), 500);
+                    this.showToast(isEditMode ? 'Override orario modificato!' : 'Override orario aggiunto!');
+                    setTimeout(() => this.loadConfigurations(), 500);
                 } catch (err) {
                     console.error('Errore:', err);
-                    window._miaConfigCardInstance.showToast('Errore: ' + err.message, true);
+                    this.showToast('Errore: ' + err.message, true);
                 }
             });
         }
         
-        const modalTimeForm = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-time');
+        const modalTimeForm = this.content.querySelector('#modal-dc-form-time');
         if (modalTimeForm) {
             modalTimeForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const form = e.target;
-                const modal = window._miaConfigCardInstance.content.querySelector('#dc-add-config-modal');
+                const modal = this.content.querySelector('#dc-add-config-modal');
                 const isEditMode = modal?.dataset.mode === 'edit';
                 
-                const setupName = window._miaConfigCardInstance.content.querySelector('#modal-time-config-select').value;
-                const setupValue = window._miaConfigCardInstance.content.querySelector('#modal-time-setup-value').value;
-                const validFrom = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-time input[name="valid_from"]').value;
-                const validTo = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-time input[name="valid_to"]').value;
-                const priority = window._miaConfigCardInstance.content.querySelector('#modal-global-priority').value;
-                const enableHours = window._miaConfigCardInstance.content.querySelector('#modal-time-enable-hours').checked;
-                const enableDays = window._miaConfigCardInstance.content.querySelector('#modal-time-enable-days').checked;
+                const setupName = this.content.querySelector('#modal-time-config-select').value;
+                const setupValue = this.content.querySelector('#modal-time-setup-value').value;
+                const validFrom = this.content.querySelector('#modal-dc-form-time input[name="valid_from"]').value;
+                const validTo = this.content.querySelector('#modal-dc-form-time input[name="valid_to"]').value;
+                const priority = this.content.querySelector('#modal-global-priority').value;
+                const enableHours = this.content.querySelector('#modal-time-enable-hours').checked;
+                const enableDays = this.content.querySelector('#modal-time-enable-days').checked;
                 
                 try {
                     if (isEditMode) {
                         // In modalità edit: elimina e ricrea
-                        await window._miaConfigCardInstance.callMiaConfigService('delete_single_config', {
+                        await this.callMiaConfigService('delete_single_config', {
                             config_type: 'time',
                             config_id: parseInt(modal.dataset.editId)
                         });
@@ -1068,45 +1114,45 @@ class MiaConfigCard extends HTMLElement {
                         priority: parseInt(priority)
                     };
                     if (enableHours) {
-                        const fromHour = window._miaConfigCardInstance.content.querySelector('#modal-time-from-hour').value;
-                        const fromMinute = window._miaConfigCardInstance.content.querySelector('#modal-time-from-minute').value;
-                        const toHour = window._miaConfigCardInstance.content.querySelector('#modal-time-to-hour').value;
-                        const toMinute = window._miaConfigCardInstance.content.querySelector('#modal-time-to-minute').value;
+                        const fromHour = this.content.querySelector('#modal-time-from-hour').value;
+                        const fromMinute = this.content.querySelector('#modal-time-from-minute').value;
+                        const toHour = this.content.querySelector('#modal-time-to-hour').value;
+                        const toMinute = this.content.querySelector('#modal-time-to-minute').value;
                         serviceData.valid_from_ora = parseFloat(fromHour) + parseFloat(fromMinute) / 60;
                         serviceData.valid_to_ora = parseFloat(toHour) + parseFloat(toMinute) / 60;
                     }
                     if (enableDays) {
-                        const selectedDays = Array.from(window._miaConfigCardInstance.content.querySelectorAll('#modal-dc-form-time input[name="time-days"]:checked')).map(el => el.value);
+                        const selectedDays = Array.from(this.content.querySelectorAll('#modal-dc-form-time input[name="time-days"]:checked')).map(el => el.value);
                         serviceData.days_of_week = selectedDays.join(',');
                     }
-                    await window._miaConfigCardInstance.callMiaConfigService('set_time_config', serviceData);
+                    await this.callMiaConfigService('set_time_config', serviceData);
                     
                     form.reset();
                     window.dcCloseAddConfigModal();
-                    window._miaConfigCardInstance.showToast(isEditMode ? 'Override temporale modificato!' : 'Override temporale aggiunto!');
-                    setTimeout(() => window._miaConfigCardInstance.loadConfigurations(), 500);
+                    this.showToast(isEditMode ? 'Override temporale modificato!' : 'Override temporale aggiunto!');
+                    setTimeout(() => this.loadConfigurations(), 500);
                 } catch (err) {
                     console.error('Errore:', err);
-                    window._miaConfigCardInstance.showToast('Errore: ' + err.message, true);
+                    this.showToast('Errore: ' + err.message, true);
                 }
             });
         }
         
-        const modalConditionalForm = window._miaConfigCardInstance.content.querySelector('#modal-dc-form-conditional');
+        const modalConditionalForm = this.content.querySelector('#modal-dc-form-conditional');
         if (modalConditionalForm) {
             modalConditionalForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const form = e.target;
-                const modal = window._miaConfigCardInstance.content.querySelector('#dc-add-config-modal');
+                const modal = this.content.querySelector('#dc-add-config-modal');
                 const isEditMode = modal?.dataset.mode === 'edit';
                 
                 // Validazione elementi obbligatori
-                const setupNameElement = window._miaConfigCardInstance.content.querySelector('#modal-conditional-config-select');
-                const setupValueElement = window._miaConfigCardInstance.content.querySelector('#modal-conditional-setup-value');
-                const conditionalConfigElement = window._miaConfigCardInstance.content.querySelector('#modal-conditional-source-config');
-                const conditionalOperatorElement = window._miaConfigCardInstance.content.querySelector('#modal-conditional-operator');
-                const conditionalValueElement = window._miaConfigCardInstance.content.querySelector('#modal-conditional-comparison-value');
-                const priorityElement = window._miaConfigCardInstance.content.querySelector('#modal-global-priority');
+                const setupNameElement = this.content.querySelector('#modal-conditional-config-select');
+                const setupValueElement = this.content.querySelector('#modal-conditional-setup-value');
+                const conditionalConfigElement = this.content.querySelector('#modal-conditional-source-config');
+                const conditionalOperatorElement = this.content.querySelector('#modal-conditional-operator');
+                const conditionalValueElement = this.content.querySelector('#modal-conditional-comparison-value');
+                const priorityElement = this.content.querySelector('#modal-global-priority');
                 
                 // Se mancano elementi critici, annulla il submit
                 if (!setupNameElement?.value || !setupValueElement?.value || !conditionalConfigElement?.value || !conditionalOperatorElement?.value || !conditionalValueElement?.value || !priorityElement?.value) {
@@ -1119,12 +1165,12 @@ class MiaConfigCard extends HTMLElement {
                 const conditionalOperator = conditionalOperatorElement.value;
                 const conditionalValue = conditionalValueElement.value;
                 const priority = priorityElement.value;
-                const enableHours = window._miaConfigCardInstance.content.querySelector('#modal-conditional-enable-hours')?.checked || false;
+                const enableHours = this.content.querySelector('#modal-conditional-enable-hours')?.checked || false;
                 
                 try {
                     if (isEditMode) {
                         // In modalità edit: elimina e ricrea
-                        await window._miaConfigCardInstance.callMiaConfigService('delete_single_config', {
+                        await this.callMiaConfigService('delete_single_config', {
                             config_type: 'conditional',
                             config_id: parseInt(modal.dataset.editId)
                         });
@@ -1139,36 +1185,36 @@ class MiaConfigCard extends HTMLElement {
                         priority: parseInt(priority)
                     };
                     if (enableHours) {
-                        const fromHour = window._miaConfigCardInstance.content.querySelector('#modal-conditional-from-hour').value;
-                        const fromMinute = window._miaConfigCardInstance.content.querySelector('#modal-conditional-from-minute').value;
-                        const toHour = window._miaConfigCardInstance.content.querySelector('#modal-conditional-to-hour').value;
-                        const toMinute = window._miaConfigCardInstance.content.querySelector('#modal-conditional-to-minute').value;
+                        const fromHour = this.content.querySelector('#modal-conditional-from-hour').value;
+                        const fromMinute = this.content.querySelector('#modal-conditional-from-minute').value;
+                        const toHour = this.content.querySelector('#modal-conditional-to-hour').value;
+                        const toMinute = this.content.querySelector('#modal-conditional-to-minute').value;
                         serviceData.valid_from_ora = parseFloat(fromHour) + parseFloat(fromMinute) / 60;
                         serviceData.valid_to_ora = parseFloat(toHour) + parseFloat(toMinute) / 60;
                     }
-                    await window._miaConfigCardInstance.callMiaConfigService('set_conditional_config', serviceData);
+                    await this.callMiaConfigService('set_conditional_config', serviceData);
                     
                     form.reset();
                     window.dcCloseAddConfigModal();
-                    window._miaConfigCardInstance.showToast(isEditMode ? 'Override condizionale modificato!' : 'Override condizionale aggiunto!');
-                    setTimeout(() => window._miaConfigCardInstance.loadConfigurations(), 500);
+                    this.showToast(isEditMode ? 'Override condizionale modificato!' : 'Override condizionale aggiunto!');
+                    setTimeout(() => this.loadConfigurations(), 500);
                 } catch (err) {
                     console.error('Errore:', err);
-                    window._miaConfigCardInstance.showToast('Errore: ' + err.message, true);
+                    this.showToast('Errore: ' + err.message, true);
                 }
             });
         }
 
         // Toggle per filtri opzionali nel modal Time
-        const modalTimeHoursToggle = window._miaConfigCardInstance.content.querySelector('#modal-time-enable-hours');
-        const modalTimeHoursContainer = window._miaConfigCardInstance.content.querySelector('#modal-time-hours-container');
+        const modalTimeHoursToggle = this.content.querySelector('#modal-time-enable-hours');
+        const modalTimeHoursContainer = this.content.querySelector('#modal-time-hours-container');
         if (modalTimeHoursToggle && modalTimeHoursContainer) {
             modalTimeHoursToggle.addEventListener('change', (e) => {
                 modalTimeHoursContainer.style.display = e.target.checked ? 'block' : 'none';
             });
         }
-        const modalTimeDaysToggle = window._miaConfigCardInstance.content.querySelector('#modal-time-enable-days');
-        const modalTimeDaysContainer = window._miaConfigCardInstance.content.querySelector('#modal-time-days-container');
+        const modalTimeDaysToggle = this.content.querySelector('#modal-time-enable-days');
+        const modalTimeDaysContainer = this.content.querySelector('#modal-time-days-container');
         if (modalTimeDaysToggle && modalTimeDaysContainer) {
             modalTimeDaysToggle.addEventListener('change', (e) => {
                 modalTimeDaysContainer.style.display = e.target.checked ? 'block' : 'none';
@@ -1176,8 +1222,8 @@ class MiaConfigCard extends HTMLElement {
         }
 
         // Toggle per filtri opzionali nel modal Conditional
-        const modalConditionalHoursToggle = window._miaConfigCardInstance.content.querySelector('#modal-conditional-enable-hours');
-        const modalConditionalHoursContainer = window._miaConfigCardInstance.content.querySelector('#modal-conditional-hours-container');
+        const modalConditionalHoursToggle = this.content.querySelector('#modal-conditional-enable-hours');
+        const modalConditionalHoursContainer = this.content.querySelector('#modal-conditional-hours-container');
         if (modalConditionalHoursToggle && modalConditionalHoursContainer) {
             modalConditionalHoursToggle.addEventListener('change', (e) => {
                 modalConditionalHoursContainer.style.display = e.target.checked ? 'block' : 'none';
@@ -1185,12 +1231,12 @@ class MiaConfigCard extends HTMLElement {
         }
         
         // Update conditional preview on operator change (modal)
-        const modalConditionalOperator = window._miaConfigCardInstance.content.querySelector('#modal-conditional-operator');
+        const modalConditionalOperator = this.content.querySelector('#modal-conditional-operator');
         if (modalConditionalOperator) {
             modalConditionalOperator.addEventListener('change', () => {
-                const sourceSelect = window._miaConfigCardInstance.content.querySelector('#modal-conditional-source-config');
+                const sourceSelect = this.content.querySelector('#modal-conditional-source-config');
                 const operator = modalConditionalOperator.value;
-                const previewSpan = window._miaConfigCardInstance.content.querySelector('#modal-conditional-preview');
+                const previewSpan = this.content.querySelector('#modal-conditional-preview');
                 if (sourceSelect && sourceSelect.value && previewSpan) {
                     previewSpan.textContent = `${sourceSelect.value} ${operator} [valore]`;
                 }
@@ -1206,15 +1252,15 @@ class MiaConfigCard extends HTMLElement {
             window._miaConfigCardInstance.content.querySelector(`#dc-tab-${tabName}`).classList.add('active');
             
             if (tabName === 'dashboard') {
-                this.loadDashboard();
+                window._miaConfigCardInstance.loadDashboard();
             } else if (tabName === 'config') {
                 window._miaConfigCardInstance.loadConfigurations();
-                this.loadStandardConfigsForSelect();
-                this.loadConfigsForValidValues();
+                window._miaConfigCardInstance.loadStandardConfigsForSelect();
+                window._miaConfigCardInstance.loadConfigsForValidValues();
             } else if (tabName === 'weekly') {
-                this.loadConfigsForWeeklyView();
+                window._miaConfigCardInstance.loadConfigsForWeeklyView();
             } else if (tabName === 'history') {
-                this.loadConfigsForHistoryFilter();
+                window._miaConfigCardInstance.loadConfigsForHistoryFilter();
                 if (typeof window.dcLoadHistory === 'function') {
                     window.dcLoadHistory();
                 }
@@ -1234,19 +1280,19 @@ class MiaConfigCard extends HTMLElement {
                 
                 // Carica le configurazioni standard per i select (schedule, time, conditional)
                 if (formType === 'schedule' || formType === 'time' || formType === 'conditional') {
-                    this.loadStandardConfigsForSelect();
+                    window._miaConfigCardInstance.loadStandardConfigsForSelect();
                 }
                 
                 // Reimposta valori di default per il form time
                 if (formType === 'time') {
-                    this.setDefaultTimeValues();
+                    window._miaConfigCardInstance.setDefaultTimeValues();
                 }
             }
         };
         
         window.dcSwitchConfigView = (mode) => {
             // Salva la modalità di visualizzazione
-            this.configViewMode = mode;
+            window._miaConfigCardInstance.configViewMode = mode;
             
             // Aggiorna i pulsanti
             window._miaConfigCardInstance.content.querySelectorAll('.dc-view-btn').forEach(btn => {
@@ -1580,7 +1626,7 @@ class MiaConfigCard extends HTMLElement {
         };
 
         window.dcLoadValidValuesForForm = async (formType) => {
-            await this.dcLoadValidValuesForForm(formType);
+            await window._miaConfigCardInstance.dcLoadValidValuesForForm(formType);
         };
         
         window.dcUpdateConditionalOptions = async () => {
@@ -1729,7 +1775,7 @@ class MiaConfigCard extends HTMLElement {
                 return instance.showToast('Popup non disponibile: riavvia Home Assistant per caricare i widget', true);
             }
             const options = {
-                title: entityId.replace('sensor.mia_config_', '').replace(/_/g, ' '),
+                title: (instance._hass.states[entityId]?.attributes?.setup_name || entityId.replace('sensor.mia_config_', '')).replace(/_/g, ' '),
                 onDone: () => instance.refreshDashboardSoon(entityId)
             };
             if (mode === 'override') {
@@ -1846,10 +1892,10 @@ class MiaConfigCard extends HTMLElement {
                 }
             }
             
-            const scheduleSelect = window._miaConfigCardInstance.content.querySelector('#modal-schedule-config-select');
-            const timeSelect = window._miaConfigCardInstance.content.querySelector('#modal-time-config-select');
-            const conditionalSelect = window._miaConfigCardInstance.content.querySelector('#modal-conditional-config-select');
-            const conditionalSourceSelect = window._miaConfigCardInstance.content.querySelector('#modal-conditional-source-config');
+            const scheduleSelect = this.content.querySelector('#modal-schedule-config-select');
+            const timeSelect = this.content.querySelector('#modal-time-config-select');
+            const conditionalSelect = this.content.querySelector('#modal-conditional-config-select');
+            const conditionalSourceSelect = this.content.querySelector('#modal-conditional-source-config');
             
             if (standardConfigs.length === 0) {
                 const noConfigOption = '<option value="">-- Nessuna configurazione standard disponibile --</option>';
@@ -1905,14 +1951,17 @@ class MiaConfigCard extends HTMLElement {
     }
 
     async loadDashboard() {
-        const container = window._miaConfigCardInstance.content.querySelector('#dc-dashboard-content');
+        const container = this.content.querySelector('#dc-dashboard-content');
         container.innerHTML = 'Caricamento...';
         
         try {
             // Ottieni tutti i sensori mia_config
+            const selectedEntry = this.getSelectedEntryId();
             const sensors = Object.keys(this._hass.states)
                 .filter(id => {
                     if (!id.startsWith('sensor.mia_config_')) return false;
+                    // Solo i sensori dell'istanza selezionata
+                    if (selectedEntry && this._hass.states[id]?.attributes?.entry_id !== selectedEntry) return false;
                     // Escludi solo aggregatori noti
                     if (id === 'sensor.miahomeconfig' || id === 'sensor.mia_config_main') return false;
                     const entity = this._hass.states[id];
@@ -1923,7 +1972,8 @@ class MiaConfigCard extends HTMLElement {
                 .map(id => ({
                     id,
                     entity: this._hass.states[id],
-                    name: id.replace('sensor.mia_config_', '').replace(/_/g, ' ')
+                    // Il nome viene da setup_name: con più istanze l'entity_id può avere un suffisso (_2)
+                    name: (this._hass.states[id].attributes.setup_name || id.replace('sensor.mia_config_', '')).replace(/_/g, ' ')
                 }));
             
             if (sensors.length === 0) {
@@ -2037,7 +2087,7 @@ class MiaConfigCard extends HTMLElement {
     }
 
     async loadConfigurations() {
-        const container = window._miaConfigCardInstance.content.querySelector('#dc-config-list');
+        const container = this.content.querySelector('#dc-config-list');
         container.innerHTML = 'Caricamento...';
         
         // Determina la modalità di visualizzazione
@@ -2286,7 +2336,7 @@ class MiaConfigCard extends HTMLElement {
                 composed: true,
             });
             event.detail = { entityId };
-            this.dispatchEvent(event);
+            window._miaConfigCardInstance.dispatchEvent(event);
         };
         
         window.dcDeleteSingleConfig = async (type, id) => {
@@ -2616,13 +2666,13 @@ class MiaConfigCard extends HTMLElement {
             if (globalPriority) globalPriority.value = 99;
 
             // Valori default per time picker
-            this.setDefaultTimeValues();
+            window._miaConfigCardInstance.setDefaultTimeValues();
 
             // Mostra form default
             window.dcShowModalConfigForm('time');
             
             // Carica le configurazioni standard per i select
-            this.loadStandardConfigsForSelect();
+            window._miaConfigCardInstance.loadStandardConfigsForSelect();
             
             // Il valore della configurazione standard torna un campo di testo libero
             window.dcSetStandardValueField(null);
@@ -2672,7 +2722,7 @@ class MiaConfigCard extends HTMLElement {
                 
                 // Carica le configurazioni standard per i select
                 if (formType === 'schedule' || formType === 'time' || formType === 'conditional') {
-                    this.loadStandardConfigsForSelect();
+                    window._miaConfigCardInstance.loadStandardConfigsForSelect();
                 }
             }
         };
@@ -2822,7 +2872,7 @@ class MiaConfigCard extends HTMLElement {
             container.innerHTML = 'Caricamento storico...';
             
             try {
-                const entityId = this.getSelectedEntityId();
+                const entityId = window._miaConfigCardInstance.getSelectedEntityId();
                 const serviceData = {
                     setup_name: setupName || undefined,
                     limit: itemsPerPage,
@@ -2832,7 +2882,7 @@ class MiaConfigCard extends HTMLElement {
                     serviceData.entity_id = entityId;
                 }
                 
-                const result = await this._hass.callWS({
+                const result = await window._miaConfigCardInstance._hass.callWS({
                     type: 'call_service',
                     domain: 'mia_config',
                     service: 'get_history',
@@ -2945,7 +2995,7 @@ class MiaConfigCard extends HTMLElement {
             container.innerHTML = 'Caricamento...';
             
             try {
-                const entityId = this.getSelectedEntityId();
+                const entityId = window._miaConfigCardInstance.getSelectedEntityId();
                 const serviceData = {
                     setup_name: setupName
                 };
@@ -2953,7 +3003,7 @@ class MiaConfigCard extends HTMLElement {
                     serviceData.entity_id = entityId;
                 }
                 
-                const response = await this._hass.callWS({
+                const response = await window._miaConfigCardInstance._hass.callWS({
                     type: 'call_service',
                     domain: 'mia_config',
                     service: 'get_valid_values',
@@ -3057,13 +3107,13 @@ class MiaConfigCard extends HTMLElement {
             }
             
             try {
-                const entityId = this.getSelectedEntityId();
+                const entityId = window._miaConfigCardInstance.getSelectedEntityId();
                 const serviceData = { setup_name: setupName };
                 if (entityId) {
                     serviceData.entity_id = entityId;
                 }
                 
-                const response = await this._hass.callWS({
+                const response = await window._miaConfigCardInstance._hass.callWS({
                     type: 'call_service',
                     domain: 'mia_config',
                     service: 'get_valid_values',
@@ -3125,7 +3175,7 @@ class MiaConfigCard extends HTMLElement {
             }
             
             try {
-                const entityId = this.getSelectedEntityId();
+                const entityId = window._miaConfigCardInstance.getSelectedEntityId();
                 const serviceData = {
                     setup_name: setupName,
                     value: value,
@@ -3141,7 +3191,7 @@ class MiaConfigCard extends HTMLElement {
                     serviceData.entity_id = entityId;
                 }
                 
-                await this._hass.callService('mia_config', 'add_valid_value', serviceData);
+                await window._miaConfigCardInstance._hass.callService('mia_config', 'add_valid_value', serviceData);
                 
                 window._miaConfigCardInstance.showToast('Valore valido salvato');
                 window.dcHideAddValidValueForm();
@@ -3157,13 +3207,13 @@ class MiaConfigCard extends HTMLElement {
             if (!confirm('Eliminare questo valore valido?')) return;
             
             try {
-                const entityId = this.getSelectedEntityId();
+                const entityId = window._miaConfigCardInstance.getSelectedEntityId();
                 const serviceData = { id: id };
                 if (entityId) {
                     serviceData.entity_id = entityId;
                 }
                 
-                await this._hass.callService('mia_config', 'delete_valid_value', serviceData);
+                await window._miaConfigCardInstance._hass.callService('mia_config', 'delete_valid_value', serviceData);
                 
                 window._miaConfigCardInstance.showToast('Valore valido eliminato');
                 window.dcLoadValidValues();
@@ -3179,13 +3229,13 @@ class MiaConfigCard extends HTMLElement {
             
             try {
                 // Recupera i dettagli dalla storia
-                const entityId = this.getSelectedEntityId();
+                const entityId = window._miaConfigCardInstance.getSelectedEntityId();
                 const serviceData = { limit: 1000 };
                 if (entityId) {
                     serviceData.entity_id = entityId;
                 }
                 
-                const result = await this._hass.callWS({
+                const result = await window._miaConfigCardInstance._hass.callWS({
                     type: 'call_service',
                     domain: 'mia_config',
                     service: 'get_history',
@@ -3569,7 +3619,7 @@ class MiaConfigCard extends HTMLElement {
             });
             
             const configs = result.response || {};
-            const select = window._miaConfigCardInstance.content.querySelector('#weekly-config-select');
+            const select = this.content.querySelector('#weekly-config-select');
             
             if (!select) return;
             
@@ -3599,7 +3649,7 @@ class MiaConfigCard extends HTMLElement {
             });
             
             const configs = result.response || {};
-            const select = window._miaConfigCardInstance.content.querySelector('#history-filter');
+            const select = this.content.querySelector('#history-filter');
             
             if (!select) return;
             
@@ -3622,10 +3672,10 @@ class MiaConfigCard extends HTMLElement {
             }
             
             try {
-                const entityId = this.getSelectedEntityId();
+                const entityId = window._miaConfigCardInstance.getSelectedEntityId();
                 const serviceData = entityId ? { entity_id: entityId } : {};
                 
-                const result = await this._hass.callWS({
+                const result = await window._miaConfigCardInstance._hass.callWS({
                     type: 'call_service',
                     domain: 'mia_config',
                     service: 'get_configurations',
@@ -3636,7 +3686,7 @@ class MiaConfigCard extends HTMLElement {
                 const configs = result.response || {};
                 const setupConfigs = configs[setupName] || [];
                 
-                this.renderWeeklyView(setupName, setupConfigs);
+                window._miaConfigCardInstance.renderWeeklyView(setupName, setupConfigs);
                 
             } catch (error) {
                 console.error('Error loading weekly view:', error);
@@ -3646,7 +3696,7 @@ class MiaConfigCard extends HTMLElement {
     }
 
     async renderWeeklyView(setupName, configs) {
-        const container = window._miaConfigCardInstance.content.querySelector('#dc-weekly-view');
+        const container = this.content.querySelector('#dc-weekly-view');
         
         // Mostra loading
         container.innerHTML = '<div style="padding: 20px; text-align: center;">Caricamento vista settimanale...</div>';
@@ -3993,7 +4043,7 @@ class MiaConfigCard extends HTMLElement {
             // Aggiungi event listener per chiudere il modal cliccando sul backdrop
             setTimeout(() => {
                 if (!container.isConnected) return;
-                const modal = window._miaConfigCardInstance.content.querySelector('#dc-weekly-event-modal');
+                const modal = this.content.querySelector('#dc-weekly-event-modal');
                 if (modal) {
                     modal.addEventListener('click', function(e) {
                         // Chiudi solo se si clicca sul backdrop (non sul contenuto)
@@ -4748,7 +4798,7 @@ class MiaConfigCard extends HTMLElement {
     }
     
     async loadConfigsForValidValues() {
-        const select = window._miaConfigCardInstance.content.querySelector('#vv-config-select');
+        const select = this.content.querySelector('#vv-config-select');
         if (!select) return;
         
         try {

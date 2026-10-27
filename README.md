@@ -60,6 +60,11 @@ Ogni istanza:
 - Crea un sensore principale per monitorare lo stato
 - È completamente isolata dalle altre istanze
 
+Con più istanze:
+- **Card principale**: senza `entity_id` mostra un selettore **Istanza** nell'intestazione; con `entity_id` (un sensore qualsiasi dell'istanza, es. `sensor.mia_config_casa`) resta fissata su quell'istanza. Più card principali, anche nella stessa vista, lavorano ciascuna sulla propria istanza.
+- **Widget e scorciatoie**: lavorano sull'istanza del sensore indicato in `entity`; con più istanze al nome predefinito si aggiunge quello del database (es. *riscaldamento · casa*).
+- **Assistente**: senza `entity` mostra un selettore di istanza accanto alla casella di testo.
+
 ## Interfaccia UI
 
 ### Installazione Card Lovelace

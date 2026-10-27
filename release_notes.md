@@ -16,6 +16,8 @@
 ### 🔧 Modifiche
 - Le priorità impostabili dall'utente partono da 1 (lo 0 è riservato alla forzatura manuale).
 - Tutti i servizi accettano `entity_id`: prima la card configurata con un'istanza specifica dava errore "extra keys not allowed" a ogni salvataggio.
+- Multi-istanza nella card principale: l'`entity_id` configurato nello YAML veniva ignorato (azzerato al primo aggiornamento); ora la card resta sull'istanza scelta, mostra un selettore se ce ne sono più di una, filtra la dashboard per istanza e più card nella stessa pagina non si scambiano più comandi.
+- Multi-istanza in widget e assistente: nome del database nei nomi predefiniti e selettore di istanza nell'assistente.
 - Modifica di una configurazione standard: il valore si sceglie tra i Valori Validi, se definiti.
 
 ### 🧹 Pulizia

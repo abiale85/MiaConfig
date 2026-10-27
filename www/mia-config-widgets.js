@@ -80,6 +80,14 @@ const nextOccurrence = (hhmm, after = new Date()) => {
     return date;
 };
 
+// Istanze Mia Config: un sensore principale (con total_configs) per ogni database
+const getInstances = (hass) => Object.values(hass?.states || {})
+    .filter(state => state.entity_id.startsWith('sensor.')
+        && state.attributes.integration === 'mia_config'
+        && state.attributes.total_configs !== undefined)
+    .map(state => ({ entity_id: state.entity_id, db_name: state.attributes.db_name, entry_id: state.attributes.entry_id }))
+    .sort((a, b) => String(a.db_name).localeCompare(String(b.db_name)));
+
 const isTruthy = (value) => ['true', '1', 'on', 'yes', 'enabled'].includes(String(value).toLowerCase());
 
 // Valori validi esattamente 0 e 1: si trattano come un interruttore
@@ -583,8 +591,12 @@ class MiaConfigWidget extends HTMLElement {
     }
 
     getName() {
+        if (this._config.name) return this._config.name;
         const entity = this.getEntity();
-        return this._config.name || entity?.attributes?.friendly_name || this._config.entity;
+        const name = entity?.attributes?.friendly_name || this._config.entity;
+        // Con più istanze il nome del database distingue configurazioni omonime
+        const db = entity?.attributes?.db_name;
+        return db && getInstances(this._hass).length > 1 ? `${name} · ${db}` : name;
     }
 
     displayValue(value, type) {
@@ -1453,7 +1465,12 @@ class MiaConfigAssistant extends HTMLElement {
     set hass(hass) {
         const first = !this._hass;
         this._hass = hass;
-        if (first) this.render();
+        // Ridisegna al primo hass o se cambia il numero di istanze (selettore)
+        const instances = getInstances(hass).length;
+        if (first || instances !== this._instanceCount) {
+            this._instanceCount = instances;
+            if (!this._busy) this.render();
+        }
     }
 
     getCardSize() {
@@ -1472,6 +1489,14 @@ class MiaConfigAssistant extends HTMLElement {
         this.dispatchEvent(new CustomEvent('mia-config-changed', { detail: { entity_id: entityId }, bubbles: true, composed: true }));
     }
 
+    // Sensore che identifica l'istanza: entity dalla configurazione, altrimenti quella scelta nel selettore
+    getInstanceEntity() {
+        if (this._config.entity) return this._config.entity;
+        const instances = getInstances(this._hass);
+        if (!instances.some(i => i.entity_id === this._instanceEntity)) this._instanceEntity = instances[0]?.entity_id;
+        return this._instanceEntity;
+    }
+
     async submit() {
         const text = this._text.trim();
         if (!text || this._busy) return;
@@ -1481,7 +1506,8 @@ class MiaConfigAssistant extends HTMLElement {
         this.render();
         try {
             const serviceData = { text };
-            if (this._config.entity) serviceData.entity_id = this._config.entity;
+            const instanceEntity = this.getInstanceEntity();
+            if (instanceEntity) serviceData.entity_id = instanceEntity;
             if (this._config.setup_name) serviceData.setup_name = this._config.setup_name;
             if (this._config.ai_task_entity) serviceData.ai_task_entity = this._config.ai_task_entity;
             const result = await this._hass.callWS({
@@ -1555,6 +1581,12 @@ class MiaConfigAssistant extends HTMLElement {
     render() {
         if (!this._config) return;
         const available = !this._hass || this.aiTaskAvailable();
+        const instances = this._config.entity ? [] : getInstances(this._hass);
+        const selectedInstance = this.getInstanceEntity();
+        const instanceSelect = instances.length > 1 ? `
+            <select class="instance" data-instance title="Istanza" ${this._busy ? 'disabled' : ''}>
+                ${instances.map(i => `<option value="${escapeHtml(i.entity_id)}" ${i.entity_id === selectedInstance ? 'selected' : ''}>${escapeHtml(i.db_name)}</option>`).join('')}
+            </select>` : '';
         const message = this._message ? `
             <div class="msg ${this._message.type}">
                 <ha-icon icon="${{ error: 'mdi:alert-circle-outline', success: 'mdi:check-circle-outline', info: 'mdi:information-outline' }[this._message.type]}"></ha-icon>
@@ -1583,6 +1615,10 @@ class MiaConfigAssistant extends HTMLElement {
                 }
                 .box:focus-within { border-color: var(--mia-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mia-accent) 20%, transparent); }
                 .box > ha-icon { color: var(--mia-accent); --mdc-icon-size: 20px; flex: none; }
+                .instance {
+                    flex: none; max-width: 30%; height: 30px; padding: 0 6px; border-radius: 999px; font: inherit; font-size: 12px;
+                    border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color);
+                }
                 input { flex: 1; min-width: 0; height: 40px; border: none; outline: none; background: none; font: inherit; font-size: 15px; color: var(--primary-text-color); }
                 .send {
                     flex: none; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
@@ -1607,6 +1643,7 @@ class MiaConfigAssistant extends HTMLElement {
                 ${this._config.compact ? '' : `<div class="title"><ha-icon icon="mdi:creation"></ha-icon>${escapeHtml(this._config.name || 'Chiedi a Mia Config')}</div>`}
                 <div class="box">
                     ${this._config.compact ? '<ha-icon icon="mdi:creation"></ha-icon>' : ''}
+                    ${instanceSelect}
                     <input data-text type="text" value="${escapeHtml(this._text)}" ${this._busy ? 'disabled' : ''}
                         placeholder="${escapeHtml(this._config.placeholder || 'Es. riscaldamento acceso fino alle 22, domani dalle 18 alle 20 profilo eco…')}">
                     <button class="send" data-send ${this._busy || !this._text.trim() ? 'disabled' : ''} title="Interpreta">
@@ -1628,6 +1665,9 @@ class MiaConfigAssistant extends HTMLElement {
             if (ev.key === 'Enter') this.submit();
         });
         this.shadowRoot.querySelector('[data-send]').addEventListener('click', () => this.submit());
+        this.shadowRoot.querySelector('[data-instance]')?.addEventListener('change', (ev) => {
+            this._instanceEntity = ev.target.value;
+        });
         this.shadowRoot.querySelector('[data-auto]')?.addEventListener('click', () => this.confirmAuto());
         this.shadowRoot.querySelector('[data-cancel]')?.addEventListener('click', () => {
             this._pending = null;
