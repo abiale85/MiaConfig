@@ -147,6 +147,23 @@ show_custom: true           # pulsante "Personalizzato"
 show_active: true           # elenco override attivi
 ```
 
+### Assistente a parole (AI Task)
+
+Scrivi cosa vuoi fare, per esempio *"riscaldamento acceso fino alle 22"*, *"domani dalle 18 alle 20 profilo eco con priorità 2"* oppure *"torna in automatico"*. L'LLM che hai configurato in Home Assistant interpreta la frase e si apre il popup **già compilato**, con la tua frase in evidenza: controlli e confermi. Senza conferma non viene modificato nulla.
+
+- **Requisiti**: Home Assistant 2025.7 o successivo e un'integrazione AI (OpenAI, Anthropic, Google, Ollama…) configurata come **AI Task**. Viene usata l'entità AI Task preferita (Impostazioni → Sistema → Generale → AI), oppure quella indicata in `ai_task_entity`.
+- **Dove**: in cima alla dashboard della card principale (solo se AI Task è disponibile) e nella card `custom:mia-config-assistant` (**Mia Config Assistente** nel selettore card).
+- La risposta dell'LLM viene sempre verificata: configurazione esistente, valore tra i Valori Validi (accetta anche la descrizione, es. "Riscalda" → `1`), orari futuri e coerenti, priorità tra 1 e 999.
+
+```yaml
+type: custom:mia-config-assistant
+name: Chiedi a Mia Config              # opzionale
+setup_name: profilo_temperatura        # opzionale: limita a una configurazione
+ai_task_entity: ai_task.openai_ai_task # opzionale
+```
+
+Il servizio `mia_config.interpret_request` restituisce la stessa proposta (azione, configurazione, valore, inizio, fine, priorità, spiegazione) senza applicarla.
+
 ### Popup dalla card principale
 
 Nella dashboard della card principale ogni configurazione ha:

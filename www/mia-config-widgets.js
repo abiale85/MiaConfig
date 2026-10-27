@@ -185,8 +185,9 @@ class MiaConfigWidgetDialog extends HTMLElement {
         this._onKey = (ev) => { if (ev.key === 'Escape') this.close(); };
     }
 
-    // opts: { mode, title, subtitle, type, value, values, min, max, step, unit, durations, manual, currentUntil,
-    //         nextChangeAt, priority, onApply(value, until, { from, priority }), onAuto }
+    // opts: { mode, title, subtitle, note, type, value, values, min, max, step, unit, durations, manual, currentUntil,
+    //         nextChangeAt, priority, presetFrom, presetUntil, onApply(value, until, { from, priority }), onAuto }
+    // presetFrom/presetUntil (Date, presetUntil anche null = senza scadenza) precompilano inizio e fine.
     open(opts) {
         this._o = { mode: 'manual', durations: DEFAULT_DURATIONS, ...opts };
         const o = this._o;
@@ -196,8 +197,19 @@ class MiaConfigWidgetDialog extends HTMLElement {
         else this._duration = o.nextChangeAt ? 'next' : String(o.durations[1] ?? o.durations[0] ?? 'none');
         this._start = 'now';
         this._startTime = '';
+        this._fixedStart = null;
         this._time = '';
         this._datetime = '';
+        if (o.presetUntil === null) {
+            this._duration = 'none';
+        } else if (o.presetUntil instanceof Date) {
+            this._duration = 'datetime';
+            this._datetime = toLocalIso(o.presetUntil).slice(0, 16);
+        }
+        if (o.presetFrom instanceof Date && o.presetFrom.getTime() > Date.now() + 60000) {
+            this._start = 'fixed';
+            this._fixedStart = o.presetFrom;
+        }
         this._priority = o.priority ?? 1;
         this._error = null;
         this._busy = false;
@@ -213,6 +225,7 @@ class MiaConfigWidgetDialog extends HTMLElement {
 
     computeStart() {
         if (this._start === 'now') return new Date();
+        if (this._start === 'fixed') return this._fixedStart;
         return this._startTime ? nextOccurrence(this._startTime) : undefined;
     }
 
@@ -238,7 +251,7 @@ class MiaConfigWidgetDialog extends HTMLElement {
             if (this._start === 'now') return `Da adesso <b>${untilText(until)}</b> (${length})`;
             // "Dalle 21:00 alle 23:00", "Domani dalle 21:00 alle 23:00", "Il 28/10 dalle 21:00 a domani alle 01:00"
             const day = whenText(start).replace(/alle \d\d:\d\d$/, '').trim();
-            const end = start.toDateString() === until.toDateString() ? `alle ${formatTime(until).split(' ').pop()}` : `a ${whenText(until).replace(/^il /, '')}`;
+            const end = start.toDateString() === until.toDateString() ? `alle ${formatTime(until).split(' ').pop()}` : untilText(until).replace(/^fino /, '');
             const from = `${day ? `${day.charAt(0).toUpperCase()}${day.slice(1)} dalle` : 'Dalle'} ${formatTime(start).split(' ').pop()}`;
             return `${from} <b>${end}</b> (${length})`;
         }
@@ -271,6 +284,7 @@ class MiaConfigWidgetDialog extends HTMLElement {
                 <div class="label">Inizio</div>
                 <div class="chips">
                     ${chip('data-start', this._start, 'now', 'Adesso', 'mdi:play')}
+                    ${this._fixedStart ? chip('data-start', this._start, 'fixed', formatTime(this._fixedStart), 'mdi:calendar-start') : ''}
                     ${chip('data-start', this._start, 'time', 'Alle…', 'mdi:clock-start')}
                 </div>
                 ${this._start === 'time' ? `<div class="extra"><input data-start-time type="time" value="${escapeHtml(this._startTime)}"></div>` : ''}
@@ -310,6 +324,11 @@ class MiaConfigWidgetDialog extends HTMLElement {
                 h2 { margin: 0; font-size: 20px; font-weight: 500; display: flex; align-items: center; gap: 10px; }
                 h2 ha-icon { color: var(--mia-accent); --mdc-icon-size: 24px; }
                 .subtitle { margin: 4px 0 0 34px; font-size: 13px; color: var(--mia-muted); }
+                .note {
+                    display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; padding: 10px 12px; border-radius: 12px;
+                    font-size: 14px; font-style: italic; background: color-mix(in srgb, var(--mia-accent) 10%, transparent);
+                }
+                .note ha-icon { --mdc-icon-size: 18px; color: var(--mia-accent); flex: none; margin-top: 1px; }
                 .section { margin-top: 20px; }
                 .label { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--mia-muted); margin-bottom: 10px; }
                 .hint { text-transform: none; letter-spacing: 0; }
@@ -333,6 +352,7 @@ class MiaConfigWidgetDialog extends HTMLElement {
             <div class="sheet" role="dialog" aria-modal="true">
                 <h2><ha-icon icon="${mode.icon}"></ha-icon>${escapeHtml(o.title)}</h2>
                 ${o.subtitle ? `<div class="subtitle">${escapeHtml(o.subtitle)}</div>` : ''}
+                ${o.note ? `<div class="note"><ha-icon icon="mdi:creation"></ha-icon><span>${escapeHtml(o.note)}</span></div>` : ''}
                 <div class="section">
                     <div class="label">Valore</div>
                     ${renderValueControl(o.type, this._value, o)}
@@ -665,7 +685,8 @@ class MiaConfigWidget extends HTMLElement {
     }
 
     // Apre un popup per un'entità senza bisogno di un widget in dashboard (usato da card principale e scorciatoie).
-    // mode: manual | override | value. options: { subtitle, priority, onSave(value) per value, onDone() }
+    // mode: manual | override | value. options: { title, subtitle, note, value, from, until, priority,
+    //                                             onSave(value) per value, onDone() }
     static async openFor(hass, entityId, mode = 'manual', options = {}) {
         const widget = document.createElement('mia-config-widget');
         widget.setConfig({ entity: entityId, layout: 'row', ...(options.config || {}) });
@@ -686,6 +707,9 @@ class MiaConfigWidget extends HTMLElement {
             mode,
             title: options.title || this.getName(),
             subtitle: options.subtitle,
+            note: options.note,
+            presetFrom: options.from,
+            presetUntil: options.until,
             priority: options.priority ?? this._config.priority ?? 1,
             type,
             value: value ?? (type === 'boolean' ? isTruthy(this.getCurrentValue()) : this.getCurrentValue()),
@@ -1399,6 +1423,249 @@ class MiaConfigShortcutsEditor extends MiaConfigWidgetEditor {
     }
 }
 
+// ---------- Assistente a parole (AI Task) ----------
+
+// Interpreta una frase con il servizio mia_config.interpret_request (AI Task di Home Assistant)
+// e apre il popup precompilato: la modifica si applica solo dopo la conferma dell'utente.
+class MiaConfigAssistant extends HTMLElement {
+    static getConfigElement() {
+        return document.createElement('mia-config-assistant-editor');
+    }
+
+    static getStubConfig() {
+        return {};
+    }
+
+    constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+    }
+
+    setConfig(config) {
+        this._config = config || {};
+        this._text = '';
+        this._busy = false;
+        this._message = null;
+        this._pending = null;
+        this.render();
+    }
+
+    set hass(hass) {
+        const first = !this._hass;
+        this._hass = hass;
+        if (first) this.render();
+    }
+
+    getCardSize() {
+        return 2;
+    }
+
+    getGridOptions() {
+        return { columns: 12, min_columns: 6 };
+    }
+
+    aiTaskAvailable() {
+        return !!this._hass?.services?.ai_task?.generate_data;
+    }
+
+    notifyChanged(entityId) {
+        this.dispatchEvent(new CustomEvent('mia-config-changed', { detail: { entity_id: entityId }, bubbles: true, composed: true }));
+    }
+
+    async submit() {
+        const text = this._text.trim();
+        if (!text || this._busy) return;
+        this._busy = true;
+        this._message = null;
+        this._pending = null;
+        this.render();
+        try {
+            const serviceData = { text };
+            if (this._config.entity) serviceData.entity_id = this._config.entity;
+            if (this._config.setup_name) serviceData.setup_name = this._config.setup_name;
+            if (this._config.ai_task_entity) serviceData.ai_task_entity = this._config.ai_task_entity;
+            const result = await this._hass.callWS({
+                type: 'call_service',
+                domain: 'mia_config',
+                service: 'interpret_request',
+                service_data: serviceData,
+                return_response: true
+            });
+            this.handleProposal(result.response || {});
+        } catch (error) {
+            this._message = { type: 'error', text: error.message || 'Interpretazione non riuscita' };
+        }
+        this._busy = false;
+        this.render();
+    }
+
+    handleProposal(proposal) {
+        if (proposal.action === 'none') {
+            this._message = { type: 'info', text: proposal.explanation || 'Non ho capito la richiesta' };
+            return;
+        }
+        if (!proposal.entity_id) {
+            this._message = { type: 'error', text: `Nessun sensore trovato per la configurazione ${proposal.setup_name}` };
+            return;
+        }
+        if (proposal.action === 'auto') {
+            this._pending = proposal;
+            return;
+        }
+        const done = () => {
+            this._text = '';
+            this._message = { type: 'success', text: proposal.explanation || 'Fatto' };
+            this.render();
+            this.notifyChanged(proposal.entity_id);
+        };
+        MiaConfigWidget.openFor(this._hass, proposal.entity_id, proposal.action, {
+            subtitle: proposal.explanation,
+            note: `“${proposal.request}”`,
+            value: proposal.value,
+            from: parseDate(proposal.start) || undefined,
+            until: proposal.end ? parseDate(proposal.end) : (proposal.action === 'manual' ? null : undefined),
+            priority: proposal.priority,
+            onDone: done
+        }).catch(error => {
+            this._message = { type: 'error', text: error.message };
+            this.render();
+        });
+    }
+
+    async confirmAuto() {
+        const proposal = this._pending;
+        this._busy = true;
+        this.render();
+        try {
+            await this._hass.callService('mia_config', 'clear_manual_override', {
+                entity_id: proposal.entity_id,
+                setup_name: proposal.setup_name
+            });
+            this._text = '';
+            this._message = { type: 'success', text: proposal.explanation || 'Tornato in automatico' };
+            this.notifyChanged(proposal.entity_id);
+        } catch (error) {
+            this._message = { type: 'error', text: error.message || 'Operazione non riuscita' };
+        }
+        this._pending = null;
+        this._busy = false;
+        this.render();
+    }
+
+    render() {
+        if (!this._config) return;
+        const available = !this._hass || this.aiTaskAvailable();
+        const message = this._message ? `
+            <div class="msg ${this._message.type}">
+                <ha-icon icon="${{ error: 'mdi:alert-circle-outline', success: 'mdi:check-circle-outline', info: 'mdi:information-outline' }[this._message.type]}"></ha-icon>
+                <span>${escapeHtml(this._message.text)}</span>
+            </div>` : '';
+        const pending = this._pending ? `
+            <div class="msg confirm">
+                <ha-icon icon="mdi:autorenew"></ha-icon>
+                <span>${escapeHtml(this._pending.explanation || `Torno in automatico ${this._pending.setup_name}?`)}</span>
+                <button class="link" data-cancel>Annulla</button>
+                <button class="pill" data-auto>Torna in Auto</button>
+            </div>` : '';
+
+        this.shadowRoot.innerHTML = `
+            <style>
+                ${BASE_STYLE}
+                :host { --mia-accent: var(--mia-auto-color); }
+                ha-card { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+                .compact ha-card, ha-card.compact { padding: 0; background: none; border: none; box-shadow: none; }
+                .title { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 14px; }
+                .title ha-icon { color: var(--mia-accent); --mdc-icon-size: 20px; }
+                .box {
+                    display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 14px; border-radius: 999px;
+                    border: 1px solid var(--divider-color); background: var(--secondary-background-color, transparent);
+                    transition: border-color .2s, box-shadow .2s;
+                }
+                .box:focus-within { border-color: var(--mia-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mia-accent) 20%, transparent); }
+                .box > ha-icon { color: var(--mia-accent); --mdc-icon-size: 20px; flex: none; }
+                input { flex: 1; min-width: 0; height: 40px; border: none; outline: none; background: none; font: inherit; font-size: 15px; color: var(--primary-text-color); }
+                .send {
+                    flex: none; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+                    background: var(--mia-accent); color: var(--text-primary-color, #fff);
+                }
+                .send:disabled { opacity: .35; }
+                .spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .4); border-top-color: #fff; animation: spin .8s linear infinite; }
+                @keyframes spin { to { transform: rotate(360deg); } }
+                .msg { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 8px 12px; border-radius: 12px; }
+                .msg ha-icon { --mdc-icon-size: 18px; flex: none; }
+                .msg span { flex: 1; }
+                .msg.error { color: var(--error-color, #db4437); background: color-mix(in srgb, var(--error-color, #db4437) 10%, transparent); }
+                .msg.success { color: var(--success-color, #43a047); background: color-mix(in srgb, var(--success-color, #43a047) 10%, transparent); }
+                .msg.info { color: var(--mia-muted); background: color-mix(in srgb, var(--mia-muted) 10%, transparent); }
+                .msg.confirm { background: color-mix(in srgb, var(--mia-accent) 10%, transparent); }
+                .msg.confirm ha-icon { color: var(--mia-accent); }
+                .link { color: var(--mia-muted); font-size: 13px; padding: 4px 8px; }
+                .pill { background: var(--mia-accent); color: var(--text-primary-color, #fff); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 500; }
+                .hint { font-size: 12px; color: var(--mia-muted); padding: 0 6px; }
+            </style>
+            <ha-card class="${this._config.compact ? 'compact' : ''}">
+                ${this._config.compact ? '' : `<div class="title"><ha-icon icon="mdi:creation"></ha-icon>${escapeHtml(this._config.name || 'Chiedi a Mia Config')}</div>`}
+                <div class="box">
+                    ${this._config.compact ? '<ha-icon icon="mdi:creation"></ha-icon>' : ''}
+                    <input data-text type="text" value="${escapeHtml(this._text)}" ${this._busy ? 'disabled' : ''}
+                        placeholder="${escapeHtml(this._config.placeholder || 'Es. riscaldamento acceso fino alle 22, domani dalle 18 alle 20 profilo eco…')}">
+                    <button class="send" data-send ${this._busy || !this._text.trim() ? 'disabled' : ''} title="Interpreta">
+                        ${this._busy ? '<span class="spinner"></span>' : '<ha-icon icon="mdi:arrow-up"></ha-icon>'}
+                    </button>
+                </div>
+                ${available ? '' : `<div class="hint">Serve un'integrazione AI configurata come AI Task (Home Assistant 2025.7 o successivo).</div>`}
+                ${this._busy ? '<div class="hint">Sto interpretando…</div>' : ''}
+                ${pending}
+                ${message}
+            </ha-card>
+        `;
+        const input = this.shadowRoot.querySelector('[data-text]');
+        input.addEventListener('input', (ev) => {
+            this._text = ev.target.value;
+            this.shadowRoot.querySelector('[data-send]').disabled = !this._text.trim();
+        });
+        input.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter') this.submit();
+        });
+        this.shadowRoot.querySelector('[data-send]').addEventListener('click', () => this.submit());
+        this.shadowRoot.querySelector('[data-auto]')?.addEventListener('click', () => this.confirmAuto());
+        this.shadowRoot.querySelector('[data-cancel]')?.addEventListener('click', () => {
+            this._pending = null;
+            this.render();
+        });
+    }
+}
+
+const ASSISTANT_LABELS = {
+    entity: 'Istanza (un sensore Mia Config qualsiasi dell\'istanza, opzionale)',
+    name: 'Titolo',
+    placeholder: 'Testo di esempio',
+    setup_name: 'Limita a questa configurazione (opzionale)',
+    ai_task_entity: 'Entità AI Task (opzionale, altrimenti quella preferita)'
+};
+
+class MiaConfigAssistantEditor extends MiaConfigWidgetEditor {
+    getSchema() {
+        return [
+            { name: 'name', selector: { text: {} } },
+            { name: 'placeholder', selector: { text: {} } },
+            { name: 'entity', selector: { entity: { filter: { domain: 'sensor', integration: 'mia_config' } } } },
+            { name: 'setup_name', selector: { text: {} } },
+            { name: 'ai_task_entity', selector: { entity: { filter: { domain: 'ai_task' } } } }
+        ];
+    }
+
+    get labels() {
+        return ASSISTANT_LABELS;
+    }
+
+    get defaults() {
+        return {};
+    }
+
+    stripDefaults() {}
+}
+
 // Alias delle beta 2.3.9-beta.1/2: restano funzionanti ma non compaiono nel selettore card
 class MiaConfigBinaryCard extends MiaConfigWidget {
     static forcedControl = 'boolean';
@@ -1417,6 +1684,8 @@ if (!customElements.get('mia-config-widget')) {
     customElements.define('mia-config-widget-dialog', MiaConfigWidgetDialog);
     customElements.define('mia-config-shortcuts', MiaConfigShortcuts);
     customElements.define('mia-config-shortcuts-editor', MiaConfigShortcutsEditor);
+    customElements.define('mia-config-assistant', MiaConfigAssistant);
+    customElements.define('mia-config-assistant-editor', MiaConfigAssistantEditor);
     customElements.define('mia-config-binary-card', MiaConfigBinaryCard);
     customElements.define('mia-config-select-card', MiaConfigSelectCard);
     customElements.define('mia-config-number-card', MiaConfigNumberCard);
@@ -1431,6 +1700,11 @@ if (!customElements.get('mia-config-widget')) {
         type: 'mia-config-shortcuts',
         name: 'Mia Config Scorciatoie',
         description: 'Pulsanti rapidi per aggiungere override a tempo a una configurazione',
+        preview: true
+    }, {
+        type: 'mia-config-assistant',
+        name: 'Mia Config Assistente',
+        description: "Forzature e override a parole, interpretati dall'AI Task di Home Assistant",
         preview: true
     });
 }

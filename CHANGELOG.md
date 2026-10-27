@@ -9,6 +9,7 @@
 - Il sensore espone la scadenza della forzatura manuale nell'attributo `valid_to`.
 - Nuovo widget `mia-config-shortcuts`: scorciatoie che creano override a tempo, override personalizzati da popup ed elenco degli override attivi con eliminazione.
 - Card principale: pulsanti **🖐️ Manuale**, **➕ Override** e, per le configurazioni solo standard, **✏️ Valore**, con lo stesso popup dei widget.
+- Assistente a parole: una frase viene interpretata dall'AI Task di Home Assistant (servizio `interpret_request`) e apre il popup precompilato da confermare; card `mia-config-assistant` e casella in cima alla dashboard della card principale.
 - Nuovi servizi `set_manual_override` e `clear_manual_override`.
 - Editor visuale del widget.
 - Le risorse Lovelace di card e widget sono gestite automaticamente (create, aggiornate con `?v=versione`, doppioni e file obsoleti rimossi): non serve più registrarle a mano.

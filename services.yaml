@@ -310,6 +310,38 @@ clear_manual_override:
       selector:
         text:
 
+interpret_request:
+  name: Interpreta Richiesta
+  description: Interpreta una richiesta in linguaggio naturale con AI Task di Home Assistant e restituisce una proposta (forzatura manuale, override o ritorno in automatico) senza applicarla
+  fields:
+    text:
+      name: Richiesta
+      description: Cosa vuoi fare, a parole
+      required: true
+      example: "metti il riscaldamento in comfort fino alle 22"
+      selector:
+        text:
+    entity_id:
+      name: Entità
+      description: Entità sensor.mia_config_* dell'istanza da utilizzare (opzionale, usa l'istanza di default se non specificato)
+      required: false
+      selector:
+        entity:
+          integration: mia_config
+    setup_name:
+      name: Nome Configurazione
+      description: Limita l'interpretazione a questa configurazione (opzionale)
+      required: false
+      selector:
+        text:
+    ai_task_entity:
+      name: Entità AI Task
+      description: Entità AI Task da usare (opzionale, altrimenti quella preferita nelle impostazioni)
+      required: false
+      selector:
+        entity:
+          domain: ai_task
+
 delete_config:
   name: Elimina Configurazione
   description: Elimina una configurazione esistente

@@ -31,6 +31,7 @@ from .const import (
     MANUAL_OVERRIDE_PRIORITY,
 )
 from .database import ConfigDatabase
+from .assistant import async_interpret_request
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -1020,6 +1021,32 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     
     hass.services.async_register(
         DOMAIN, "get_valid_values", handle_get_valid_values, schema=get_valid_values_schema, supports_response=SupportsResponse.OPTIONAL
+    )
+    
+    async def handle_interpret_request(call: ServiceCall) -> ServiceResponse:
+        """Interpreta una richiesta a parole con AI Task e restituisce una proposta (non la applica)."""
+        entity_id = call.data.get("entity_id")
+        db = get_db_from_entity_id(hass, entity_id)
+        state = hass.states.get(entity_id) if entity_id else None
+        entry_id = (state.attributes.get("entry_id") if state else None) or hass.data[DOMAIN].get("entry_id")
+        return await async_interpret_request(
+            hass,
+            db,
+            call.data["text"],
+            entry_id,
+            setup_name=call.data.get("setup_name"),
+            ai_task_entity=call.data.get("ai_task_entity"),
+        )
+    
+    interpret_request_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
+        vol.Required("text"): cv.string,
+        vol.Optional("setup_name"): cv.string,
+        vol.Optional("ai_task_entity"): cv.entity_id,
+    })
+    
+    hass.services.async_register(
+        DOMAIN, "interpret_request", handle_interpret_request, schema=interpret_request_schema, supports_response=SupportsResponse.ONLY
     )
     
     hass.services.async_register(

@@ -192,6 +192,24 @@
           "description": "Name of the configuration to return to auto mode."
         }
       }
+    },
+    "interpret_request": {
+      "name": "Interpret request",
+      "description": "Interprets a natural-language request with AI Task and returns a proposal without applying it.",
+      "fields": {
+        "text": {
+          "name": "Request",
+          "description": "What you want to do, in plain words."
+        },
+        "setup_name": {
+          "name": "Configuration name",
+          "description": "Restrict the interpretation to this configuration."
+        },
+        "ai_task_entity": {
+          "name": "AI Task entity",
+          "description": "AI Task entity to use (otherwise the preferred one)."
+        }
+      }
     }
   },
   "sensor": {

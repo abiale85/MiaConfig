@@ -192,6 +192,24 @@
           "description": "Nome della configurazione da riportare in automatico."
         }
       }
+    },
+    "interpret_request": {
+      "name": "Interpreta richiesta",
+      "description": "Interpreta una richiesta a parole con AI Task e restituisce una proposta senza applicarla.",
+      "fields": {
+        "text": {
+          "name": "Richiesta",
+          "description": "Cosa vuoi fare, a parole."
+        },
+        "setup_name": {
+          "name": "Nome configurazione",
+          "description": "Limita l'interpretazione a questa configurazione."
+        },
+        "ai_task_entity": {
+          "name": "Entità AI Task",
+          "description": "Entità AI Task da usare (altrimenti quella preferita)."
+        }
+      }
     }
   },
   "sensor": {

@@ -17,6 +17,8 @@ class MiaConfigCard extends HTMLElement {
     set hass(hass) {
         const firstLoad = !this._hass;
         this._hass = hass;
+        const assistant = this.content?.querySelector('mia-config-assistant');
+        if (assistant) assistant.hass = hass;
         if (!this.content) {
             // Determina il nome dell'istanza dal primo sensore disponibile
             const instanceName = this.getInstanceName();
@@ -1873,6 +1875,20 @@ class MiaConfigCard extends HTMLElement {
         }
     }
 
+    // Assistente a parole (file dei widget) in cima alla dashboard, solo se AI Task è disponibile
+    mountAssistant(container) {
+        if (!customElements.get('mia-config-assistant') || !this._hass?.services?.ai_task?.generate_data) return;
+        const assistant = document.createElement('mia-config-assistant');
+        const config = { compact: true };
+        if (this.getSelectedEntityId()) config.entity = this.getSelectedEntityId();
+        assistant.setConfig(config);
+        assistant.hass = this._hass;
+        assistant.style.display = 'block';
+        assistant.style.marginBottom = '16px';
+        assistant.addEventListener('mia-config-changed', (ev) => this.refreshDashboardSoon(ev.detail.entity_id));
+        container.prepend(assistant);
+    }
+
     // Ricarica la dashboard quando lo stato dell'entità cambia (massimo 5 secondi)
     refreshDashboardSoon(entityId) {
         const before = this._hass?.states?.[entityId];
@@ -2013,6 +2029,7 @@ class MiaConfigCard extends HTMLElement {
             
             html += '</div>';
             container.innerHTML = html;
+            this.mountAssistant(container);
         } catch (err) {
             console.error('Errore caricamento dashboard:', err);
             container.innerHTML = '<p style="color: red;">Errore caricamento dati</p>';
