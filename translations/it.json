@@ -167,7 +167,7 @@
     },
     "set_manual_override": {
       "name": "Imposta forzatura manuale",
-      "description": "Forza manualmente un valore fino a rimozione.",
+      "description": "Forza manualmente un valore come override a tempo con priorità dedicata fino a rimozione o scadenza.",
       "fields": {
         "setup_name": {
           "name": "Nome configurazione",

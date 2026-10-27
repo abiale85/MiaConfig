@@ -258,7 +258,7 @@ set_schedule_config:
 
 set_manual_override:
   name: Imposta Forzatura Manuale
-  description: Forza manualmente un valore ignorando la logica standard finché non viene rimossa
+  description: Forza manualmente un valore come override a tempo con priorità dedicata finché non viene rimossa o scade
   fields:
     entity_id:
       name: Entità

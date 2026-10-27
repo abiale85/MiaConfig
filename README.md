@@ -372,7 +372,7 @@ response_variable: valid_values
 
 #### `mia_config.set_manual_override`
 
-Forza manualmente un valore per una configurazione (modalità MANUALE), ignorando la logica automatica fino a rimozione.
+Forza manualmente un valore per una configurazione tramite una configurazione a tempo con priorità dedicata (una sola forzatura per setup), ignorando la logica automatica fino a rimozione o scadenza.
 
 ```yaml
 service: mia_config.set_manual_override

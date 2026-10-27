@@ -1893,26 +1893,28 @@ class MiaConfigCard extends HTMLElement {
                 // Ottieni descrizione dal valore valido se disponibile
                 const valueDescription = validValuesMap[setupName]?.[value]?.description;
                 const valueDisplay = valueDescription ? `${value} <small style="color: var(--secondary-text-color);">(${valueDescription})</small>` : value;
-                const manualMode = source === 'manual';
+                const manualMode = attrs.manual_override_active === true;
+                const manualSuggestedValue = attrs.manual_override_last_value ?? value;
+                const manualValidTo = attrs.manual_override_valid_to || '';
                 const validValueEntries = Object.entries(validValuesMap[setupName] || {})
                     .sort(([, a], [, b]) => (a.sort_order || 0) - (b.sort_order || 0));
                 const manualOptions = validValueEntries.length > 0
                     ? validValueEntries.map(([optionValue, meta]) => {
-                        const selected = String(optionValue) === String(value) ? 'selected' : '';
+                        const selected = String(optionValue) === String(manualSuggestedValue) ? 'selected' : '';
                         const label = meta.description ? `${meta.description} (${optionValue})` : optionValue;
                         const safeValue = String(optionValue).replace(/"/g, '&quot;');
                         return `<option value="${safeValue}" ${selected}>${label}</option>`;
                     }).join('')
                     : ['true', 'false'].map((boolValue) => {
-                        const selected = String(boolValue) === String(value) ? 'selected' : '';
+                        const selected = String(boolValue) === String(manualSuggestedValue) ? 'selected' : '';
                         const label = boolValue === 'true' ? 'Vero' : 'Falso';
                         return `<option value="${boolValue}" ${selected}>${label}</option>`;
                     }).join('');
                 
-                const typeLabel = source === 'time' ? '⏰ Tempo' :
+                const typeLabel = manualMode ? '🛠️ Forzatura (tempo)' :
+                                 source === 'time' ? '⏰ Tempo' :
                                  source === 'schedule' ? '📅 Orario' :
-                                 source === 'standard' ? '⚙️ Standard' :
-                                 source === 'manual' ? '🛠️ Manuale' : '❌ Nessuna';
+                                 source === 'standard' ? '⚙️ Standard' : '❌ Nessuna';
                 
                 html += `
                     <div class="dc-config-item" style="background: var(--card-background-color); border-left: 4px solid var(--primary-color); display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
@@ -1927,7 +1929,7 @@ class MiaConfigCard extends HTMLElement {
                                 <select id="dc-manual-value-${setupName}" style="padding: 4px 6px; font-size: 12px; max-width: 150px;">
                                     ${manualOptions}
                                 </select>
-                                <input type="datetime-local" id="dc-manual-end-${setupName}" style="padding: 4px 6px; font-size: 12px; max-width: 180px;" title="Fine forzatura (opzionale)">
+                                <input type="datetime-local" id="dc-manual-end-${setupName}" value="${manualValidTo ? String(manualValidTo).slice(0,16) : ''}" style="padding: 4px 6px; font-size: 12px; max-width: 180px;" title="Fine forzatura (opzionale)">
                                 <button class="${manualMode ? 'dc-btn-secondary' : 'dc-btn'}" onclick="event.stopPropagation(); window.dcToggleManualOverride('${setupName}', ${manualMode})" style="padding: 6px 10px; font-size: 12px;">
                                     ${manualMode ? '🔁 AUTO' : '🛠️ MAN'}
                                 </button>

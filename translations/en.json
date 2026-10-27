@@ -167,7 +167,7 @@
     },
     "set_manual_override": {
       "name": "Set Manual Override",
-      "description": "Manually forces a value until it is cleared.",
+      "description": "Manually forces a value as a timed override with dedicated priority until cleared or expired.",
       "fields": {
         "setup_name": {
           "name": "Configuration Name",
