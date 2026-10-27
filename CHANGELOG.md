@@ -3,7 +3,9 @@
 ## v2.3.9 - October 27, 2026 🛠️ Widget Auto/Manuale
 
 ### ✨ Nuove funzionalità
-- Widget Lovelace unico `mia-config-widget` con modalità Auto/Manuale, scadenza opzionale e tipo di controllo dedotto automaticamente (interruttore, tendina, numero, testo).
+- Widget Lovelace unico `mia-config-widget` in tre formati (riga, riquadro, card completa) con tipo di controllo dedotto automaticamente.
+- Popup di forzatura con durate rapide (30 min … 4 h), "fino alle HH:MM", "fino al prossimo cambio automatico", data e ora o senza scadenza.
+- Il sensore espone la scadenza della forzatura manuale nell'attributo `valid_to`.
 - Nuovi servizi `set_manual_override` e `clear_manual_override`.
 - Editor visuale del widget.
 - Card e widget caricati automaticamente in tutte le dashboard: non serve più registrare risorse Lovelace.

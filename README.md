@@ -92,22 +92,33 @@ La card ti permette di:
 
 ### Widget Auto/Manuale
 
-Un solo widget, `custom:mia-config-widget`, per forzare manualmente un valore da qualunque dashboard, indipendente dalla card principale. Si configura dall'editor visuale (cerca **Mia Config Widget** tra le card) oppure in YAML:
+Un solo widget, `custom:mia-config-widget` (**Mia Config Widget** nel selettore card), per forzare manualmente un valore da qualunque dashboard, indipendente dalla card principale. Tre formati:
+
+| `layout` | Aspetto |
+|---|---|
+| `row` (predefinito) | Grande come una riga entità. In **Auto** ha il contorno tratteggiato grigio; in **Manuale** il contorno è arancione pieno, con il pulsante per tornare in Auto |
+| `tile` | Riquadro compatto con valore e stato |
+| `card` | Card completa: selettore Auto/Manuale, controlli del valore sempre visibili, scadenza |
+
+Quando forzi un valore si apre un popup **Per quanto tempo**: 30 min, 1 h, 2 h, 4 h, *fino al prossimo cambio automatico*, *fino alle HH:MM* (basta l'orario: se è già passato vale per domani), *data e ora* oppure *senza scadenza*. Se sei già in Manuale e cambi valore, la scadenza resta quella di prima.
 
 ```yaml
 type: custom:mia-config-widget
 entity: sensor.mia_config_temperatura_clima
+layout: row                # row | tile | card
 name: Temperatura          # opzionale
+icon: mdi:thermometer      # opzionale
 control: auto              # opzionale: auto | boolean | select | number | text
-min: 5                     # opzionale, per i numeri
-max: 35
+min: 5                     # opzionali, per i numeri
+max: 30
+step: 0.5
+unit: °C
+durations: [15, 30, 60, 180]   # opzionale: durate rapide in minuti (predefinite 30, 60, 120, 240)
 ```
 
-Con `control: auto` (predefinito) il tipo si deduce da solo: tendina se esistono **Valori Validi**, interruttore se il valore è `true/false` o `on/off`, campo numerico se è un numero, altrimenti testo.
+Con `control: auto` il tipo si deduce da solo: tendina se esistono **Valori Validi**, interruttore se il valore è `true/false` o `on/off`, numero se è numerico, altrimenti testo.
 
-In **Auto** vale la normale risoluzione delle configurazioni; in **Manuale** il valore applicato vince su qualunque configurazione. La forzatura usa una priorità riservata (`0`), più alta di qualsiasi priorità selezionabile (che parte da 1). La **Fine manuale** è opzionale: alla scadenza si torna automaticamente in Auto.
-
-Opzionale: `setup_name`, se l'entità non espone l'attributo.
+La forzatura usa una priorità riservata (`0`), più alta di qualsiasi priorità selezionabile (che parte da 1), e alla scadenza si torna automaticamente in Auto. Opzionale: `setup_name`, se l'entità non espone l'attributo.
 
 Per maggiori dettagli vedi [UI_GUIDE.md](UI_GUIDE.md)
 

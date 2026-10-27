@@ -50,9 +50,10 @@ Aggiungi la card **Mia Config Widget** dall'editor visuale, oppure in YAML:
 ```yaml
 type: custom:mia-config-widget
 entity: sensor.mia_config_abilitazione_clima
+layout: row   # row (come un'entità) | tile | card
 ```
 
-Il tipo di controllo (interruttore, tendina, numero, testo) si deduce automaticamente. In **Manuale** il valore vince su qualsiasi configurazione finché non torni in **Auto** o scade la **Fine manuale**.
+Tocca il valore per forzarlo: si apre un popup dove scegli per quanto tempo (30 min, 1 h, fino alle 22:30, fino al prossimo cambio automatico…). In **Manuale** il contorno diventa arancione; il pulsante ↻ riporta in **Auto**.
 
 ## Primo Utilizzo
 

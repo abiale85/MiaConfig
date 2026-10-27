@@ -2158,5 +2158,10 @@ class ConfigDatabase:
         # Aggiungi le descrizioni al risultato dalla cache
         for name in result:
             result[name]['description'] = self._descriptions_cache.get(name)
+            # Scadenza della forzatura manuale (esposta dal sensore come attributo valid_to)
+            if result[name]['source'] == 'time' and result[name]['priority'] == MANUAL_OVERRIDE_PRIORITY:
+                row = next((r for r in self._memory_cache['configurazioni_a_tempo'] if r['id'] == result[name]['id']), None)
+                if row and not str(row['valid_to_date']).startswith('9999'):
+                    result[name]['valid_to'] = row['valid_to_date']
         
         return result
