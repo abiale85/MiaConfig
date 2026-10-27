@@ -4640,11 +4640,14 @@ class MiaConfigCard extends HTMLElement {
     }
 }
 
-customElements.define('mia-config-card', MiaConfigCard);
+// Il file può essere caricato due volte (caricamento automatico + vecchia risorsa manuale)
+if (!customElements.get('mia-config-card')) {
+    customElements.define('mia-config-card', MiaConfigCard);
 
-window.customCards = window.customCards || [];
-window.customCards.push({
-    type: 'mia-config-card',
-    name: 'Mia Config Card',
-    description: 'Gestione configurazioni dinamiche'
-});
+    window.customCards = window.customCards || [];
+    window.customCards.push({
+        type: 'mia-config-card',
+        name: 'Mia Config Card',
+        description: 'Gestione configurazioni dinamiche'
+    });
+}

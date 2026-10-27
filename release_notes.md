@@ -1,9 +1,10 @@
 ## v2.3.9 - 27 Ottobre 2026 🛠️ Widget Auto/Manuale
 
 ### ✨ Nuove funzionalità
-- Widget Lovelace indipendenti Boolean, Select e Number con modalità Auto/Manuale e scadenza opzionale.
+- Widget Lovelace unico `mia-config-widget` con modalità Auto/Manuale, scadenza opzionale e tipo di controllo dedotto automaticamente (interruttore, tendina, numero, testo).
 - Nuovi servizi `set_manual_override` e `clear_manual_override`.
-- Editor visuale dei widget (niente più "Editor visuale non supportato").
+- Editor visuale del widget.
+- Card e widget caricati automaticamente in tutte le dashboard: non serve più registrare risorse Lovelace.
 - La forzatura manuale è una configurazione a tempo con priorità riservata `0`, sempre vincente; schema del database invariato.
 
 ### 🔧 Modifiche

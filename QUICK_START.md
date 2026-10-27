@@ -27,23 +27,9 @@ mia_config:
 
 ### 4. Installa l'Interfaccia UI (Opzionale ma Consigliato)
 
-#### A. Registra la Risorsa
-**Metodo 1 - Tramite UI:**
-1. Vai su **Impostazioni** → **Dashboard**
-2. Click sui tre puntini in alto a destra → **Risorse**
-3. Click **+ Aggiungi Risorsa**
-4. URL: `/mia_config_local/mia-config-card.js`
-5. Tipo: **JavaScript Module**
-
-**Metodo 2 - Tramite YAML:**
-Aggiungi a `configuration.yaml`:
-```yaml
-lovelace:
-  mode: yaml
-  resources:
-    - url: /mia_config_local/mia-config-card.js
-      type: module
-```
+#### A. Risorse
+Non serve registrare nulla: l'integrazione carica automaticamente card e widget in tutte le dashboard.
+Se in passato hai aggiunto a mano la risorsa `/mia_config_local/mia-config-card.js` puoi rimuoverla.
 
 #### B. Aggiungi la Card
 1. Vai su un dashboard
@@ -59,14 +45,14 @@ entity_id: sensor.miahomeconfig_main  # Opzionale
 
 ### Widget Auto/Manuale in altre dashboard
 
-Registra la risorsa `/mia_config_local/mia-config-binary-card.js` (tipo `module`) e aggiungi una card:
+Aggiungi la card **Mia Config Widget** dall'editor visuale, oppure in YAML:
 
 ```yaml
-type: custom:mia-config-binary-card   # oppure mia-config-select-card / mia-config-number-card
+type: custom:mia-config-widget
 entity: sensor.mia_config_abilitazione_clima
 ```
 
-In **Manuale** il valore vince su qualsiasi configurazione finché non torni in **Auto** o scade la **Fine manuale**.
+Il tipo di controllo (interruttore, tendina, numero, testo) si deduce automaticamente. In **Manuale** il valore vince su qualsiasi configurazione finché non torni in **Auto** o scade la **Fine manuale**.
 
 ## Primo Utilizzo
 
@@ -136,7 +122,7 @@ automation:
 
 ### La card non appare
 - Verifica che il file sia in `custom_components/mia_config/www/mia-config-card.js`
-- Controlla di aver registrato la risorsa con l'URL: `/mia_config_local/mia-config-card.js`
+- Riavvia Home Assistant dopo l'installazione o l'aggiornamento: card e widget vengono caricati all'avvio
 - Ricarica completamente il browser (Ctrl+F5 o Cmd+Shift+R)
 - Controlla la console del browser (F12) per errori
 

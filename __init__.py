@@ -11,6 +11,8 @@ from aiohttp import web
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.loader import async_get_integration
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.exceptions import ConfigEntryNotReady
 import voluptuous as vol
@@ -195,6 +197,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.info(f"Registered static path: /mia_config_local -> {www_path}")
     except Exception as err:
         _LOGGER.warning("Impossibile registrare risorse statiche: %s", err)
+    
+    # Carica automaticamente card e widget in tutte le dashboard (una sola volta per avvio).
+    # Il parametro ?v= forza il browser a scaricare i file aggiornati dopo ogni aggiornamento.
+    if not hass.data[DOMAIN].get("frontend_registered"):
+        integration = await async_get_integration(hass, DOMAIN)
+        for js_file in ("mia-config-card.js", "mia-config-widgets.js"):
+            add_extra_js_url(hass, f"/mia_config_local/{js_file}?v={integration.version}")
+        hass.data[DOMAIN]["frontend_registered"] = True
     
     # Carica il platform sensor
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

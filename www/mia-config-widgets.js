@@ -2,14 +2,15 @@
 // La forzatura manuale usa i servizi set_manual_override / clear_manual_override,
 // che salvano una configurazione a tempo con priorità riservata 0 (la più alta in assoluto).
 const MANUAL_OVERRIDE_PRIORITY = 0;
+const CONTROL_TYPES = ['auto', 'boolean', 'select', 'number', 'text'];
+const BOOLEAN_PAIRS = { true: 'false', false: 'true', on: 'off', off: 'on' };
 
-class MiaConfigControlCard extends HTMLElement {
-    static cardType = 'binary';
+class MiaConfigWidget extends HTMLElement {
+    // Tipo imposto dagli alias delle beta precedenti (mia-config-binary-card ecc.)
+    static forcedControl = null;
 
     static getConfigElement() {
-        const editor = document.createElement('mia-config-control-card-editor');
-        editor.cardType = this.cardType;
-        return editor;
+        return document.createElement('mia-config-widget-editor');
     }
 
     static getStubConfig(hass) {
@@ -23,8 +24,12 @@ class MiaConfigControlCard extends HTMLElement {
         if (!config || !config.entity) {
             throw new Error('Devi specificare entity nella configurazione della card');
         }
+        const control = this.constructor.forcedControl || config.control || 'auto';
+        if (!CONTROL_TYPES.includes(control)) {
+            throw new Error(`control non valido: ${control} (valori ammessi: ${CONTROL_TYPES.join(', ')})`);
+        }
         this._config = config;
-        this._type = this.constructor.cardType;
+        this._control = control;
         this._values = Array.isArray(config.options) ? config.options : [];
         this._valuesLoaded = false;
         this._editing = false;
@@ -35,7 +40,7 @@ class MiaConfigControlCard extends HTMLElement {
 
     set hass(hass) {
         this._hass = hass;
-        if (this._type === 'select' && !this._valuesLoaded) {
+        if (['auto', 'select'].includes(this._control) && !this._valuesLoaded) {
             this.loadValidValues();
         }
         // Ridisegna solo se cambia l'entità controllata e l'utente non sta modificando il valore
@@ -66,6 +71,16 @@ class MiaConfigControlCard extends HTMLElement {
         return attrs.source === 'time' && Number(attrs.priority) === MANUAL_OVERRIDE_PRIORITY;
     }
 
+    // In modalità auto il tipo si deduce da valori validi e valore corrente
+    getControlType() {
+        if (this._control !== 'auto') return this._control;
+        if (this._values.length > 0) return 'select';
+        const current = String(this.getCurrentValue()).toLowerCase();
+        if (current in BOOLEAN_PAIRS) return 'boolean';
+        if (current !== '' && !isNaN(Number(current))) return 'number';
+        return 'text';
+    }
+
     async loadValidValues() {
         this._valuesLoaded = true;
         const setupName = this.getSetupName();
@@ -91,20 +106,23 @@ class MiaConfigControlCard extends HTMLElement {
         }
     }
 
-    renderManualInput(disabled) {
+    renderManualInput(type, disabled) {
         const current = this.getCurrentValue();
-        if (this._type === 'binary') {
+        if (type === 'boolean') {
             const checked = ['true', '1', 'on', 'yes', 'enabled'].includes(String(current).toLowerCase());
             return `<input data-manual-value type="checkbox" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}>`;
         }
-        if (this._type === 'select') {
+        if (type === 'select') {
             const options = this._values.map(item => {
                 const option = typeof item === 'object' ? item : { value: item, label: item };
                 return `<option value="${this.escape(option.value)}" ${String(option.value) === String(current) ? 'selected' : ''}>${this.escape(option.label)}</option>`;
             }).join('');
             return `<select data-manual-value ${disabled ? 'disabled' : ''}>${options}</select>`;
         }
-        return `<input data-manual-value type="number" step="any" value="${this.escape(current)}" ${this._config.min !== undefined ? `min="${this.escape(this._config.min)}"` : ''} ${this._config.max !== undefined ? `max="${this.escape(this._config.max)}"` : ''} ${disabled ? 'disabled' : ''}>`;
+        if (type === 'number') {
+            return `<input data-manual-value type="number" step="any" value="${this.escape(current)}" ${this._config.min !== undefined ? `min="${this.escape(this._config.min)}"` : ''} ${this._config.max !== undefined ? `max="${this.escape(this._config.max)}"` : ''} ${disabled ? 'disabled' : ''}>`;
+        }
+        return `<input data-manual-value type="text" value="${this.escape(current)}" ${disabled ? 'disabled' : ''}>`;
     }
 
     render() {
@@ -113,8 +131,9 @@ class MiaConfigControlCard extends HTMLElement {
         const active = this.isManualActive();
         const manual = active || this._editing;
         const current = this.getCurrentValue();
+        const type = this.getControlType();
         const name = this._config.name || entity?.attributes?.friendly_name || this._config.entity;
-        const typeLabel = this._type === 'binary' ? 'Boolean' : this._type === 'select' ? 'Valori validi' : 'Numero';
+        const typeLabel = { boolean: 'Boolean', select: 'Valori validi', number: 'Numero', text: 'Testo' }[type];
         this.innerHTML = `
             <ha-card>
                 <div class="control-card">
@@ -125,7 +144,7 @@ class MiaConfigControlCard extends HTMLElement {
                         <button data-mode="manual" class="${manual ? 'active' : ''}">Manuale</button>
                     </div>
                     <label>Valore manuale</label>
-                    <div class="value-input">${this.renderManualInput(!manual)}</div>
+                    <div class="value-input">${this.renderManualInput(type, !manual)}</div>
                     <label>Fine manuale (opzionale)</label>
                     <input data-valid-to type="datetime-local" ${manual ? '' : 'disabled'}>
                     <button data-apply class="apply" ${manual ? '' : 'disabled'}>Applica valore manuale</button>
@@ -160,12 +179,19 @@ class MiaConfigControlCard extends HTMLElement {
         this.querySelector('[data-apply]')?.addEventListener('click', () => this.applyManual());
     }
 
+    // Mantiene il "vocabolario" del valore corrente (on/off oppure true/false)
+    booleanValue(checked) {
+        const current = String(this.getCurrentValue()).toLowerCase();
+        const family = current === 'on' || current === 'off' ? ['on', 'off'] : ['true', 'false'];
+        return checked ? family[0] : family[1];
+    }
+
     async applyManual() {
         const setupName = this.getSetupName();
         if (!setupName) return this.showError("L'entità non espone setup_name: specificarlo nella configurazione");
         const input = this.querySelector('[data-manual-value]');
         let value = input?.value;
-        if (this._type === 'binary') value = input?.checked ? 'true' : 'false';
+        if (this.getControlType() === 'boolean') value = this.booleanValue(input?.checked);
         if (value === undefined || value === '') return this.showError('Inserisci un valore da forzare');
         // datetime-local restituisce un orario locale senza fuso: il backend lo interpreta come locale
         const validTo = this.querySelector('[data-valid-to]')?.value;
@@ -217,13 +243,14 @@ class MiaConfigControlCard extends HTMLElement {
 // Editor visuale: usa ha-form di Home Assistant
 const EDITOR_LABELS = {
     entity: 'Entità Mia Config',
+    control: 'Tipo di controllo',
     name: 'Nome (opzionale)',
     setup_name: 'Nome configurazione (opzionale, se l\'entità non espone setup_name)',
     min: 'Minimo (opzionale)',
     max: 'Massimo (opzionale)'
 };
 
-class MiaConfigControlCardEditor extends HTMLElement {
+class MiaConfigWidgetEditor extends HTMLElement {
     setConfig(config) {
         this._config = config;
         this.render();
@@ -237,10 +264,25 @@ class MiaConfigControlCardEditor extends HTMLElement {
     getSchema() {
         const schema = [
             { name: 'entity', required: true, selector: { entity: { filter: { domain: 'sensor', integration: 'mia_config' } } } },
+            {
+                name: 'control',
+                selector: {
+                    select: {
+                        mode: 'dropdown',
+                        options: [
+                            { value: 'auto', label: 'Automatico (dedotto dal valore)' },
+                            { value: 'boolean', label: 'Boolean (interruttore)' },
+                            { value: 'select', label: 'Valori validi (tendina)' },
+                            { value: 'number', label: 'Numero' },
+                            { value: 'text', label: 'Testo libero' }
+                        ]
+                    }
+                }
+            },
             { name: 'name', selector: { text: {} } },
             { name: 'setup_name', selector: { text: {} } }
         ];
-        if (this.cardType === 'number') {
+        if (['auto', 'number'].includes(this._config.control || 'auto')) {
             schema.push({
                 type: 'grid',
                 name: '',
@@ -261,40 +303,47 @@ class MiaConfigControlCardEditor extends HTMLElement {
             this._form.addEventListener('value-changed', (ev) => {
                 ev.stopPropagation();
                 const config = { ...ev.detail.value };
-                // Rimuove i campi opzionali svuotati per non lasciare chiavi vuote nello YAML
+                // Rimuove i campi opzionali svuotati (e il default auto) per non sporcare lo YAML
                 Object.keys(config).forEach(key => {
                     if (config[key] === '' || config[key] === undefined || config[key] === null) delete config[key];
                 });
+                if (config.control === 'auto') delete config.control;
                 this._config = config;
+                this.render();
                 this.dispatchEvent(new CustomEvent('config-changed', { detail: { config }, bubbles: true, composed: true }));
             });
             this.appendChild(this._form);
         }
         this._form.hass = this._hass;
         this._form.schema = this.getSchema();
-        this._form.data = this._config;
+        this._form.data = { control: 'auto', ...this._config };
     }
 }
 
-customElements.define('mia-config-control-card-editor', MiaConfigControlCardEditor);
-
-class MiaConfigBinaryCard extends MiaConfigControlCard {
-    static cardType = 'binary';
+// Alias delle beta 2.3.9-beta.1/2: restano funzionanti ma non compaiono nel selettore card
+class MiaConfigBinaryCard extends MiaConfigWidget {
+    static forcedControl = 'boolean';
 }
-class MiaConfigSelectCard extends MiaConfigControlCard {
-    static cardType = 'select';
+class MiaConfigSelectCard extends MiaConfigWidget {
+    static forcedControl = 'select';
 }
-class MiaConfigNumberCard extends MiaConfigControlCard {
-    static cardType = 'number';
+class MiaConfigNumberCard extends MiaConfigWidget {
+    static forcedControl = 'number';
 }
 
-customElements.define('mia-config-binary-card', MiaConfigBinaryCard);
-customElements.define('mia-config-select-card', MiaConfigSelectCard);
-customElements.define('mia-config-number-card', MiaConfigNumberCard);
+// Il file può essere caricato due volte (caricamento automatico + vecchia risorsa manuale)
+if (!customElements.get('mia-config-widget')) {
+    customElements.define('mia-config-widget', MiaConfigWidget);
+    customElements.define('mia-config-widget-editor', MiaConfigWidgetEditor);
+    customElements.define('mia-config-binary-card', MiaConfigBinaryCard);
+    customElements.define('mia-config-select-card', MiaConfigSelectCard);
+    customElements.define('mia-config-number-card', MiaConfigNumberCard);
 
-window.customCards = window.customCards || [];
-window.customCards.push(
-    { type: 'mia-config-binary-card', name: 'Mia Config Boolean Card', description: 'Controllo booleano Auto/Manuale' },
-    { type: 'mia-config-select-card', name: 'Mia Config Select Card', description: 'Controllo a valori validi Auto/Manuale' },
-    { type: 'mia-config-number-card', name: 'Mia Config Number Card', description: 'Controllo numerico Auto/Manuale' }
-);
+    window.customCards = window.customCards || [];
+    window.customCards.push({
+        type: 'mia-config-widget',
+        name: 'Mia Config Widget',
+        description: 'Forzatura manuale Auto/Manuale di una configurazione',
+        preview: true
+    });
+}

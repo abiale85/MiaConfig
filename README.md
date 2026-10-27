@@ -64,10 +64,8 @@ Ogni istanza:
 
 ### Installazione Card Lovelace
 
-1. **Registra la risorsa**: Vai su **Impostazioni** → **Dashboard** → **Risorse** e aggiungi:
-   - URL: `/mia_config_local/mia-config-card.js`
-   - Tipo: `JavaScript Module`
-   - **Nota**: Il percorso `/mia_config_local/` viene servito automaticamente dalla cartella `custom_components/mia_config/www/`
+1. **Nessuna risorsa da registrare**: dalla versione 2.3.9 l'integrazione carica automaticamente la card principale e il widget in tutte le dashboard.
+   - Se in passato hai aggiunto a mano la risorsa `/mia_config_local/mia-config-card.js` puoi rimuoverla da **Impostazioni** → **Dashboard** → **Risorse** (non è un errore lasciarla).
 
 2. **Aggiungi la card** al tuo dashboard:
 ```yaml
@@ -92,40 +90,24 @@ La card ti permette di:
 - Eliminazione automatica quando la configurazione viene cancellata
 - Se non definiti, qualsiasi valore è accettato
 
-### Widget Auto/Manuale indipendenti
+### Widget Auto/Manuale
 
-Tre widget per forzare manualmente un valore da qualunque dashboard, indipendenti dalla card principale. Registra una sola risorsa:
-
-```yaml
-lovelace:
-  resources:
-    - url: /mia_config_local/mia-config-binary-card.js
-      type: module
-```
-
-In **Auto** vale la normale risoluzione delle configurazioni; in **Manuale** il valore applicato vince su qualunque configurazione. La forzatura usa una priorità riservata (`0`), più alta di qualsiasi priorità selezionabile (che parte da 1). La **Fine manuale** è opzionale: alla scadenza si torna automaticamente in Auto.
+Un solo widget, `custom:mia-config-widget`, per forzare manualmente un valore da qualunque dashboard, indipendente dalla card principale. Si configura dall'editor visuale (cerca **Mia Config Widget** tra le card) oppure in YAML:
 
 ```yaml
-type: custom:mia-config-binary-card   # true/false
-entity: sensor.mia_config_abilitazione_clima
-name: Abilitazione climatizzatore
-```
-
-```yaml
-type: custom:mia-config-select-card   # valori dal tab Valori Validi
-entity: sensor.mia_config_modalita_clima
-name: Modalità clima
-```
-
-```yaml
-type: custom:mia-config-number-card   # numero libero
+type: custom:mia-config-widget
 entity: sensor.mia_config_temperatura_clima
-name: Temperatura
-min: 5
+name: Temperatura          # opzionale
+control: auto              # opzionale: auto | boolean | select | number | text
+min: 5                     # opzionale, per i numeri
 max: 35
 ```
 
-Opzionale per tutti: `setup_name`, se l'entità non espone l'attributo.
+Con `control: auto` (predefinito) il tipo si deduce da solo: tendina se esistono **Valori Validi**, interruttore se il valore è `true/false` o `on/off`, campo numerico se è un numero, altrimenti testo.
+
+In **Auto** vale la normale risoluzione delle configurazioni; in **Manuale** il valore applicato vince su qualunque configurazione. La forzatura usa una priorità riservata (`0`), più alta di qualsiasi priorità selezionabile (che parte da 1). La **Fine manuale** è opzionale: alla scadenza si torna automaticamente in Auto.
+
+Opzionale: `setup_name`, se l'entità non espone l'attributo.
 
 Per maggiori dettagli vedi [UI_GUIDE.md](UI_GUIDE.md)
 
