@@ -4,6 +4,7 @@
 
 ### ✨ Nuove funzionalità
 - Widget Lovelace unico `mia-config-widget` in tre formati (riga, riquadro, card completa) con tipo di controllo dedotto automaticamente.
+- Se i Valori Validi sono esattamente `0` e `1` il widget mostra un interruttore (etichette dalle descrizioni dei valori).
 - Popup di forzatura con durate rapide (30 min … 4 h), "fino alle HH:MM", "fino al prossimo cambio automatico", data e ora o senza scadenza.
 - Il sensore espone la scadenza della forzatura manuale nell'attributo `valid_to`.
 - Nuovi servizi `set_manual_override` e `clear_manual_override`.

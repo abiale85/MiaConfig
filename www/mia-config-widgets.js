@@ -82,6 +82,16 @@ const nextOccurrence = (hhmm) => {
 
 const isTruthy = (value) => ['true', '1', 'on', 'yes', 'enabled'].includes(String(value).toLowerCase());
 
+// Valori validi esattamente 0 e 1: si trattano come un interruttore
+const isBinaryValues = (values) =>
+    values.length === 2 && values.map(item => String(item.value).trim()).sort().join(',') === '0,1';
+
+// Etichette acceso/spento: le descrizioni dei valori validi, se presenti
+const booleanLabels = (values = []) => {
+    const find = (candidates) => values.find(item => candidates.includes(String(item.value).toLowerCase()))?.description;
+    return { on: find(['1', 'true', 'on']) || 'Acceso', off: find(['0', 'false', 'off']) || 'Spento' };
+};
+
 // ---------- Stili comuni ----------
 
 const BASE_STYLE = `
@@ -130,10 +140,11 @@ const BASE_STYLE = `
 function renderValueControl(type, value, { values = [], min, max, unit } = {}) {
     if (type === 'boolean') {
         const on = isTruthy(value);
+        const labels = booleanLabels(values);
         return `
             <div class="bool-buttons">
-                <button data-pick="off" class="${on ? '' : 'selected'}"><ha-icon icon="mdi:power-off"></ha-icon>Spento</button>
-                <button data-pick="on" class="${on ? 'selected' : ''}"><ha-icon icon="mdi:power"></ha-icon>Acceso</button>
+                <button data-pick="off" class="${on ? '' : 'selected'}"><ha-icon icon="mdi:power-off"></ha-icon>${escapeHtml(labels.off)}</button>
+                <button data-pick="on" class="${on ? 'selected' : ''}"><ha-icon icon="mdi:power"></ha-icon>${escapeHtml(labels.on)}</button>
             </div>`;
     }
     if (type === 'select') {
@@ -462,7 +473,7 @@ class MiaConfigWidget extends HTMLElement {
     // In modalità auto il tipo si deduce da valori validi e valore corrente
     getControlType() {
         if (this._control !== 'auto') return this._control;
-        if (this._values.length > 0) return 'select';
+        if (this._values.length > 0) return isBinaryValues(this._values) ? 'boolean' : 'select';
         const current = String(this.getCurrentValue()).toLowerCase();
         if (current in BOOLEAN_PAIRS) return 'boolean';
         if (current !== '' && !isNaN(Number(current))) return 'number';
@@ -479,7 +490,10 @@ class MiaConfigWidget extends HTMLElement {
     }
 
     displayValue(value, type) {
-        if (type === 'boolean') return isTruthy(value) ? 'Acceso' : 'Spento';
+        if (type === 'boolean') {
+            const labels = booleanLabels(this._values);
+            return isTruthy(value) ? labels.on : labels.off;
+        }
         const match = this._values.find(item => String(item.value) === String(value));
         const text = match?.description || value;
         return this._config.unit && type === 'number' ? `${text} ${this._config.unit}` : text;
@@ -488,7 +502,9 @@ class MiaConfigWidget extends HTMLElement {
     // Mantiene il "vocabolario" del valore corrente (on/off oppure true/false)
     booleanValue(on) {
         const current = String(this.getCurrentValue()).toLowerCase();
-        const family = current === 'on' || current === 'off' ? ['on', 'off'] : ['true', 'false'];
+        const family = current === 'on' || current === 'off' ? ['on', 'off']
+            : current === '1' || current === '0' || isBinaryValues(this._values) ? ['1', '0']
+            : ['true', 'false'];
         return on ? family[0] : family[1];
     }
 

@@ -117,7 +117,7 @@ unit: °C
 durations: [15, 30, 60, 180]   # opzionale: durate rapide in minuti (predefinite 30, 60, 120, 240)
 ```
 
-Con `control: auto` il tipo si deduce da solo: tendina se esistono **Valori Validi**, interruttore se il valore è `true/false` o `on/off`, numero se è numerico, altrimenti testo.
+Con `control: auto` il tipo si deduce da solo: interruttore se i **Valori Validi** sono esattamente `0` e `1` (con le loro descrizioni come etichette), tendina se esistono altri **Valori Validi**, interruttore se il valore è `true/false` o `on/off`, numero se è numerico, altrimenti testo.
 
 La forzatura usa una priorità riservata (`0`), più alta di qualsiasi priorità selezionabile (che parte da 1), e alla scadenza si torna automaticamente in Auto. Opzionale: `setup_name`, se l'entità non espone l'attributo.
 
