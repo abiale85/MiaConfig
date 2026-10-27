@@ -1,10 +1,10 @@
 {
   "domain": "mia_config",
   "name": "Mia Config",
-  "version": "2.3.9-beta.4",
+  "version": "2.3.9-beta.5",
   "documentation": "https://github.com/abiale85/MiaConfig",
   "issue_tracker": "https://github.com/abiale85/MiaConfig/issues",
-  "dependencies": ["frontend", "http"],
+  "dependencies": ["frontend", "http", "lovelace"],
   "codeowners": ["@abiale85"],
   "requirements": [],
   "config_flow": true,

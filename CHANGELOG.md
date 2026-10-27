@@ -8,7 +8,7 @@
 - Il sensore espone la scadenza della forzatura manuale nell'attributo `valid_to`.
 - Nuovi servizi `set_manual_override` e `clear_manual_override`.
 - Editor visuale del widget.
-- Card e widget caricati automaticamente in tutte le dashboard: non serve più registrare risorse Lovelace.
+- Le risorse Lovelace di card e widget sono gestite automaticamente (create, aggiornate con `?v=versione`, doppioni e file obsoleti rimossi): non serve più registrarle a mano.
 - La forzatura manuale è una configurazione a tempo con priorità riservata `0`, sempre vincente; schema del database invariato.
 
 ### 🔧 Modifiche

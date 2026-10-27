@@ -198,13 +198,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except Exception as err:
         _LOGGER.warning("Impossibile registrare risorse statiche: %s", err)
     
-    # Carica automaticamente card e widget in tutte le dashboard (una sola volta per avvio).
-    # Il parametro ?v= forza il browser a scaricare i file aggiornati dopo ogni aggiornamento.
+    # Registra card e widget nelle dashboard (una sola volta per avvio)
     if not hass.data[DOMAIN].get("frontend_registered"):
-        integration = await async_get_integration(hass, DOMAIN)
-        for js_file in ("mia-config-card.js", "mia-config-widgets.js"):
-            add_extra_js_url(hass, f"/mia_config_local/{js_file}?v={integration.version}")
         hass.data[DOMAIN]["frontend_registered"] = True
+        try:
+            await _async_register_frontend(hass)
+        except Exception as err:
+            _LOGGER.warning("Impossibile registrare card e widget nelle dashboard: %s", err)
     
     # Carica il platform sensor
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -285,6 +285,72 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
             _LOGGER.warning(f"Database file not found: {db_path}")
     except Exception as err:
         _LOGGER.error(f"Error deleting database file {db_path}: {err}")
+
+
+FRONTEND_URL_BASE = "/mia_config_local"
+FRONTEND_FILES = ("mia-config-card.js", "mia-config-widgets.js")
+# File delle beta precedenti non più esistenti: le relative risorse vengono rimosse
+FRONTEND_OBSOLETE_FILES = ("mia-config-binary-card.js",)
+
+
+def _resource_file(url: str) -> str | None:
+    """Restituisce il nome del file se l'URL punta a /mia_config_local/<file>, altrimenti None."""
+    path = url.split("?", 1)[0]
+    if not path.startswith(f"{FRONTEND_URL_BASE}/"):
+        return None
+    return path[len(FRONTEND_URL_BASE) + 1:]
+
+
+async def _async_register_frontend(hass: HomeAssistant) -> None:
+    """Registra card e widget nelle dashboard caricando ogni file una sola volta.
+
+    Con le risorse Lovelace gestite da UI le aggiorna come fa HACS: crea quelle mancanti,
+    aggiorna il parametro ?v= alla versione corrente (così il browser scarica i file nuovi)
+    e rimuove doppioni e file obsoleti. Con le risorse in YAML (non modificabili) carica
+    tramite il frontend solo i file che non sono già presenti tra le risorse.
+    """
+    integration = await async_get_integration(hass, DOMAIN)
+    urls = {name: f"{FRONTEND_URL_BASE}/{name}?v={integration.version}" for name in FRONTEND_FILES}
+
+    lovelace = hass.data.get("lovelace")
+    resources = getattr(lovelace, "resources", None)
+    if resources is None and isinstance(lovelace, dict):
+        resources = lovelace.get("resources")
+
+    if resources is not None and hasattr(resources, "async_create_item"):
+        # Risorse gestite da UI (storage)
+        if not getattr(resources, "loaded", True):
+            await resources.async_load()
+            resources.loaded = True
+        seen = set()
+        for item in list(resources.async_items()):
+            name = _resource_file(item.get("url", ""))
+            if name is None:
+                continue
+            if name in FRONTEND_OBSOLETE_FILES or name in seen:
+                await resources.async_delete_item(item["id"])
+                _LOGGER.info("Rimossa risorsa Lovelace obsoleta o duplicata: %s", item["url"])
+            elif name in urls:
+                seen.add(name)
+                old_url = item["url"]
+                if old_url != urls[name] or item.get("type") != "module":
+                    await resources.async_update_item(item["id"], {"res_type": "module", "url": urls[name]})
+                    _LOGGER.info("Aggiornata risorsa Lovelace: %s -> %s", old_url, urls[name])
+        for name, url in urls.items():
+            if name not in seen:
+                await resources.async_create_item({"res_type": "module", "url": url})
+                _LOGGER.info("Aggiunta risorsa Lovelace: %s", url)
+        return
+
+    # Risorse in YAML: non si possono modificare, si evita solo di caricare due volte lo stesso file
+    existing = set()
+    if resources is not None and hasattr(resources, "async_items"):
+        existing = {_resource_file(item.get("url", "")) for item in resources.async_items()}
+    for name, url in urls.items():
+        if name in existing:
+            _LOGGER.info("Risorsa %s già presente nella configurazione YAML di Lovelace", name)
+        else:
+            add_extra_js_url(hass, url)
 
 
 def get_db_from_entity_id(hass: HomeAssistant, entity_id: str = None) -> ConfigDatabase:
