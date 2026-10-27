@@ -415,6 +415,30 @@ data:
 response_variable: valid_values
 ```
 
+#### `mia_config.set_manual_override`
+
+Forza manualmente un valore per una configurazione tramite una configurazione a tempo con priorità dedicata (una sola forzatura per setup), ignorando la logica automatica fino a rimozione o scadenza.
+
+```yaml
+service: mia_config.set_manual_override
+data:
+  setup_name: "riscaldamento"
+  setup_value: "1"
+  valid_to_date: "2026-10-27 20:00:00"  # Opzionale, ritorno automatico in modalità AUTO
+  entity_id: sensor.miahomeconfig_main  # Opzionale
+```
+
+#### `mia_config.clear_manual_override`
+
+Rimuove la forzatura manuale e riporta la configurazione in modalità AUTO.
+
+```yaml
+service: mia_config.clear_manual_override
+data:
+  setup_name: "riscaldamento"
+  entity_id: sensor.miahomeconfig_main  # Opzionale
+```
+
 ## Esempi di Utilizzo
 
 ### Esempio 1: Temperatura Climatizzatore
