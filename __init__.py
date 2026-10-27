@@ -773,6 +773,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     user_priority = vol.All(vol.Coerce(int), vol.Range(min=MANUAL_OVERRIDE_PRIORITY + 1))
 
     set_config_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
         vol.Required("setup_name"): cv.string,
         vol.Required("setup_value"): cv.string,
         vol.Optional("priority", default=99): user_priority,
@@ -780,6 +781,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     })
     
     update_standard_config_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
         vol.Required("config_id"): cv.positive_int,
         vol.Required("setup_value"): cv.string,
         vol.Required("priority"): user_priority,
@@ -787,6 +789,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     })
     
     set_time_config_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
         vol.Required("setup_name"): cv.string,
         vol.Required("setup_value"): cv.string,
         vol.Required("valid_from"): cv.datetime,
@@ -798,6 +801,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     })
     
     set_schedule_config_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
         vol.Required("setup_name"): cv.string,
         vol.Required("setup_value"): cv.string,
         vol.Required("valid_from_ora"): vol.All(vol.Coerce(float), validate_time_format),
@@ -807,6 +811,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     })
     
     set_conditional_config_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
         vol.Required("setup_name"): cv.string,
         vol.Required("setup_value"): cv.string,
         vol.Required("conditional_config"): cv.string,
@@ -830,11 +835,13 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     })
 
     delete_config_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
         vol.Required("setup_name"): cv.string,
         vol.Optional("config_type", default="all"): vol.In(["all", "standard", "time", "schedule", "conditional"]),
     })
     
     delete_single_config_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
         vol.Required("config_type"): vol.In(["standard", "time", "schedule", "conditional"]),
         vol.Required("config_id"): cv.positive_int,
     })
@@ -845,12 +852,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     })
     
     get_history_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
         vol.Optional("setup_name"): cv.string,
         vol.Optional("limit", default=50): cv.positive_int,
         vol.Optional("offset", default=0): cv.positive_int,
     })
     
     cleanup_history_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
         vol.Optional("setup_name"): cv.string,
         vol.Optional("retention_days", default=DEFAULT_HISTORY_RETENTION_DAYS): cv.positive_int,
         vol.Optional("max_entries_per_name", default=DEFAULT_MAX_HISTORY_PER_NAME): cv.positive_int,
@@ -858,6 +867,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     })
     
     simulate_schedule_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
         vol.Required("setup_name"): cv.string,
         vol.Optional("start_date"): cv.datetime,
         vol.Optional("days", default=14): cv.positive_int,
@@ -983,6 +993,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             return {"valid_values": all_values}
     
     add_valid_value_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
         vol.Required("setup_name"): cv.string,
         vol.Required("value"): cv.string,
         vol.Optional("description"): cv.string,
@@ -990,6 +1001,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     })
     
     delete_valid_value_schema = vol.Schema({
+        vol.Optional("entity_id"): cv.entity_id,
         vol.Required("id"): cv.positive_int,
     })
     

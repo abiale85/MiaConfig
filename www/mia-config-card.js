@@ -182,7 +182,7 @@ class MiaConfigCard extends HTMLElement {
                 .mia-config-card .dc-config-group-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
                 .mia-config-card .dc-config-group-content.expanded { max-height: 5000px; }
                 .mia-config-card .dc-config-group-inner { padding: 10px; }
-                .mia-config-card .dc-dashboard-actions { display: flex; gap: 5px; flex-direction: column; }
+                .mia-config-card .dc-dashboard-actions { display: grid; grid-template-columns: repeat(2, auto); gap: 5px; align-content: start; }
                 .mia-config-card .dc-dashboard-actions button { white-space: nowrap; }
                 @media (max-width: 768px) {
                     .mia-config-card .dc-tabs { flex-wrap: wrap; gap: 8px; justify-content: space-between; }
@@ -191,7 +191,7 @@ class MiaConfigCard extends HTMLElement {
                     .mia-config-card .dc-btn, .mia-config-card .dc-btn-secondary, .mia-config-card .dc-btn-danger { padding: 10px 12px; font-size: 13px; min-height: 44px; }
                     .mia-config-card .dc-config-item { flex-direction: column; align-items: flex-start; gap: 10px; }
                     .mia-config-card .dc-config-item .dc-btn, .mia-config-card .dc-config-item .dc-btn-delete { min-height: 44px; min-width: 44px; padding: 10px 12px; font-size: 16px; }
-                    .mia-config-card .dc-dashboard-actions { flex-direction: row; width: 100%; }
+                    .mia-config-card .dc-dashboard-actions { grid-template-columns: 1fr 1fr; width: 100%; }
                     .mia-config-card .dc-dashboard-actions button { flex: 1; }
                     .mia-config-card .dc-time-group { grid-template-columns: 1fr; }
                     .mia-config-card input[type="text"], .mia-config-card input[type="time"], .mia-config-card input[type="number"], .mia-config-card select { font-size: 16px !important; padding: 10px !important; min-height: 44px; }
@@ -1661,6 +1661,95 @@ class MiaConfigCard extends HTMLElement {
         };
         
         // Quick Override - Apre tab Configura e precompila form temporale
+        // Campo valore del form standard: tendina se la configurazione ha valori validi, altrimenti testo
+        window.dcSetStandardValueField = async (setupName, value = '') => {
+            const instance = window._miaConfigCardInstance;
+            const form = instance.content.querySelector('#modal-dc-form-standard');
+            const current = form?.querySelector('[name="setup_value"]');
+            if (!current) return;
+            let validValues = [];
+            if (setupName) {
+                try {
+                    const serviceData = { setup_name: setupName };
+                    const entityId = instance.getSelectedEntityId();
+                    if (entityId) serviceData.entity_id = entityId;
+                    const response = await instance._hass.callWS({
+                        type: 'call_service',
+                        domain: 'mia_config',
+                        service: 'get_valid_values',
+                        service_data: serviceData,
+                        return_response: true
+                    });
+                    validValues = response.response?.valid_values || [];
+                } catch (err) {
+                    console.error('Errore caricamento valori validi per form standard:', err);
+                }
+            }
+            let field;
+            if (validValues.length > 0) {
+                field = document.createElement('select');
+                field.style.width = '100%';
+                for (const vv of validValues) {
+                    const option = document.createElement('option');
+                    option.value = vv.value;
+                    option.textContent = vv.description ? `${vv.value} - ${vv.description}` : vv.value;
+                    field.appendChild(option);
+                }
+                // Mantiene un valore attuale non (più) presente tra i valori validi
+                if (value !== '' && !validValues.some(vv => String(vv.value) === String(value))) {
+                    const option = document.createElement('option');
+                    option.value = value;
+                    option.textContent = `${value} (non tra i valori validi)`;
+                    field.appendChild(option);
+                }
+            } else {
+                field = document.createElement('input');
+                field.type = 'text';
+                field.placeholder = 'es. 22';
+            }
+            field.name = 'setup_value';
+            field.required = true;
+            field.value = value;
+            current.replaceWith(field);
+        };
+
+        // Popup condiviso con i widget (file mia-config-widgets.js, caricato automaticamente).
+        // mode: manual | override | value
+        window.dcOpenPopup = async (mode, entityId) => {
+            const instance = window._miaConfigCardInstance;
+            const widgetClass = await Promise.race([
+                customElements.whenDefined('mia-config-widget'),
+                new Promise(resolve => setTimeout(() => resolve(null), 3000))
+            ]);
+            if (!widgetClass) {
+                // Widget non caricati: per gli override resta il form completo
+                if (mode === 'override') return window.dcQuickOverride(instance._hass.states[entityId]?.attributes?.setup_name);
+                return instance.showToast('Popup non disponibile: riavvia Home Assistant per caricare i widget', true);
+            }
+            const options = {
+                title: entityId.replace('sensor.mia_config_', '').replace(/_/g, ' '),
+                onDone: () => instance.refreshDashboardSoon(entityId)
+            };
+            if (mode === 'override') {
+                options.subtitle = 'Nuovo override a tempo';
+            } else if (mode === 'value') {
+                const standard = instance._dashboardStandard?.[entityId];
+                if (!standard) return;
+                options.subtitle = `Valore standard · priorità ${standard.priority}`;
+                options.value = standard.value;
+                options.onSave = (value) => instance.callMiaConfigService('update_standard_config', {
+                    config_id: standard.id,
+                    setup_value: value,
+                    priority: standard.priority
+                });
+            }
+            try {
+                await widgetClass.openFor(instance._hass, entityId, mode, options);
+            } catch (err) {
+                instance.showToast(`Errore: ${err.message}`, true);
+            }
+        };
+
         window.dcQuickOverride = (setupName) => {
             // Passa al tab configura
             const configTab = window._miaConfigCardInstance.content.querySelector('.dc-tab:nth-child(2)'); // Tab Configura
@@ -1784,6 +1873,21 @@ class MiaConfigCard extends HTMLElement {
         }
     }
 
+    // Ricarica la dashboard quando lo stato dell'entità cambia (massimo 5 secondi)
+    refreshDashboardSoon(entityId) {
+        const before = this._hass?.states?.[entityId];
+        const started = Date.now();
+        const check = () => {
+            const changed = this._hass?.states?.[entityId] !== before;
+            if (changed || Date.now() - started > 5000) {
+                this.loadDashboard();
+            } else {
+                setTimeout(check, 200);
+            }
+        };
+        setTimeout(check, 200);
+    }
+
     async loadDashboard() {
         const container = window._miaConfigCardInstance.content.querySelector('#dc-dashboard-content');
         container.innerHTML = 'Caricamento...';
@@ -1845,7 +1949,23 @@ class MiaConfigCard extends HTMLElement {
             } catch (err) {
                 // Nessun valore valido disponibile o errore nel caricamento, ignora silenziosamente
             }
-            
+
+            // Configurazioni dettagliate: servono per il pulsante "Valore" delle configurazioni solo standard
+            let detailedConfigs = {};
+            try {
+                const response = await this._hass.callWS({
+                    type: 'call_service',
+                    domain: 'mia_config',
+                    service: 'get_configurations',
+                    service_data: serviceData,
+                    return_response: true
+                });
+                detailedConfigs = response.response || {};
+            } catch (err) {
+                console.warn('Impossibile caricare le configurazioni per la dashboard:', err);
+            }
+            this._dashboardStandard = {};
+
             for (const sensor of sensors) {
                 const value = sensor.entity.state;
                 const attrs = sensor.entity.attributes;
@@ -1858,9 +1978,20 @@ class MiaConfigCard extends HTMLElement {
                 const valueDescription = validValuesMap[setupName]?.[value]?.description;
                 const valueDisplay = valueDescription ? `${value} <small style="color: var(--secondary-text-color);">(${valueDescription})</small>` : value;
                 
-                const typeLabel = source === 'time' ? '⏰ Tempo' :
+                const isManual = source === 'time' && Number(attrs.priority) === 0;
+                const typeLabel = isManual ? '🖐️ Manuale' :
+                                 source === 'time' ? '⏰ Tempo' :
                                  source === 'schedule' ? '📅 Orario' :
                                  source === 'standard' ? '⚙️ Standard' : '❌ Nessuna';
+
+                // Solo configurazioni standard (la forzatura manuale non conta): si può modificare il valore da popup
+                const nameConfigs = (detailedConfigs[setupName] || [])
+                    .filter(cfg => !(cfg.type === 'time' && Number(cfg.priority) === 0));
+                const standardOnly = nameConfigs.length > 0 && nameConfigs.every(cfg => cfg.type === 'standard');
+                if (standardOnly) {
+                    const standard = [...nameConfigs].sort((a, b) => a.priority - b.priority)[0];
+                    this._dashboardStandard[entityId] = { id: standard.id, priority: standard.priority, value: standard.value };
+                }
                 
                 html += `
                     <div class="dc-config-item" style="background: var(--card-background-color); border-left: 4px solid var(--primary-color); display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
@@ -1871,7 +2002,9 @@ class MiaConfigCard extends HTMLElement {
                             <small>Origine: ${typeLabel}</small>
                         </div>
                         <div class="dc-dashboard-actions">
-                            <button class="dc-btn" onclick="event.stopPropagation(); window.dcQuickOverride('${setupName}')" style="padding: 6px 10px; font-size: 12px;">➕ Override</button>
+                            ${standardOnly ? `<button class="dc-btn-secondary" onclick="event.stopPropagation(); window.dcOpenPopup('value', '${entityId}')" style="padding: 6px 10px; font-size: 12px;">✏️ Valore</button>` : ''}
+                            <button class="${isManual ? 'dc-btn' : 'dc-btn-secondary'}" onclick="event.stopPropagation(); window.dcOpenPopup('manual', '${entityId}')" style="padding: 6px 10px; font-size: 12px;${isManual ? ' background: var(--warning-color, #ff9800);' : ''}">🖐️ Manuale</button>
+                            <button class="dc-btn" onclick="event.stopPropagation(); window.dcOpenPopup('override', '${entityId}')" style="padding: 6px 10px; font-size: 12px;">➕ Override</button>
                             <button class="dc-btn-secondary" onclick="event.stopPropagation(); window.dcShowWeeklyFor('${setupName}')" style="padding: 6px 10px; font-size: 12px;">📅 Vista</button>
                         </div>
                     </div>
@@ -2235,8 +2368,7 @@ class MiaConfigCard extends HTMLElement {
                         nameInput.value = name;
                         nameInput.disabled = true; // Non modificabile in edit
                     }
-                    const valueInput = form.querySelector('input[name="setup_value"]');
-                    if (valueInput) valueInput.value = cfg.value;
+                    await window.dcSetStandardValueField(name, cfg.value);
                     const descInput = form.querySelector('input[name="description"]');
                     if (descInput) descInput.value = cfg.description || '';
                     const priorityInput = form.querySelector('input[name="priority"]');
@@ -2475,6 +2607,9 @@ class MiaConfigCard extends HTMLElement {
             // Carica le configurazioni standard per i select
             this.loadStandardConfigsForSelect();
             
+            // Il valore della configurazione standard torna un campo di testo libero
+            window.dcSetStandardValueField(null);
+
             // Abilita i campi che potrebbero essere disabilitati dalla modalità edit
             const fieldsToEnable = [
                 '#modal-setup-name',

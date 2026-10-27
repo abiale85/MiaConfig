@@ -7,6 +7,8 @@
 - Se i Valori Validi sono esattamente `0` e `1` il widget mostra un interruttore (etichette dalle descrizioni dei valori).
 - Popup di forzatura con durate rapide (30 min … 4 h), "fino alle HH:MM", "fino al prossimo cambio automatico", data e ora o senza scadenza.
 - Il sensore espone la scadenza della forzatura manuale nell'attributo `valid_to`.
+- Nuovo widget `mia-config-shortcuts`: scorciatoie che creano override a tempo, override personalizzati da popup ed elenco degli override attivi con eliminazione.
+- Card principale: pulsanti **🖐️ Manuale**, **➕ Override** e, per le configurazioni solo standard, **✏️ Valore**, con lo stesso popup dei widget.
 - Nuovi servizi `set_manual_override` e `clear_manual_override`.
 - Editor visuale del widget.
 - Le risorse Lovelace di card e widget sono gestite automaticamente (create, aggiornate con `?v=versione`, doppioni e file obsoleti rimossi): non serve più registrarle a mano.
@@ -14,7 +16,8 @@
 
 ### 🔧 Modifiche
 - Le priorità impostabili dall'utente partono da 1 (lo 0 è riservato alla forzatura manuale).
-- `get_valid_values` accetta `entity_id` per le installazioni multi-istanza.
+- Tutti i servizi accettano `entity_id`: prima la card configurata con un'istanza specifica dava errore "extra keys not allowed" a ogni salvataggio.
+- Modifica di una configurazione standard: il valore si sceglie tra i Valori Validi, se definiti.
 
 ### 🧹 Pulizia
 - Rimosse le modifiche non previste della 2.3.8 (tabella `configurazioni_manuali`, servizi duplicati, modifiche alla card principale).

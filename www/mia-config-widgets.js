@@ -71,12 +71,12 @@ const formatRemaining = (date) => {
     return days === 1 ? '1 giorno' : `${days} giorni`;
 };
 
-// Prossima occorrenza di un orario HH:MM (oggi se nel futuro, altrimenti domani)
-const nextOccurrence = (hhmm) => {
+// Prossima occorrenza di un orario HH:MM dopo un istante (predefinito: adesso)
+const nextOccurrence = (hhmm, after = new Date()) => {
     const [h, m] = hhmm.split(':').map(Number);
-    const date = new Date();
+    const date = new Date(after);
     date.setHours(h, m, 0, 0);
-    if (date.getTime() <= Date.now()) date.setDate(date.getDate() + 1);
+    if (date.getTime() <= after.getTime()) date.setDate(date.getDate() + 1);
     return date;
 };
 
@@ -168,6 +168,16 @@ function renderValueControl(type, value, { values = [], min, max, unit } = {}) {
 
 // ---------- Popup forzatura ----------
 
+// Popup condiviso da widget, scorciatoie e card principale. Modalità:
+// - manual:   forzatura manuale (valore + durata, anche senza scadenza)
+// - override: nuovo override a tempo (valore + inizio + durata + priorità)
+// - value:    solo valore (modifica della configurazione standard)
+const DIALOG_MODES = {
+    manual: { icon: 'mdi:hand-back-right', accent: 'var(--mia-manual-color)', apply: 'Forza' },
+    override: { icon: 'mdi:clock-plus-outline', accent: 'var(--mia-auto-color)', apply: 'Aggiungi override' },
+    value: { icon: 'mdi:pencil', accent: 'var(--mia-auto-color)', apply: 'Salva' }
+};
+
 class MiaConfigWidgetDialog extends HTMLElement {
     constructor() {
         super();
@@ -175,14 +185,20 @@ class MiaConfigWidgetDialog extends HTMLElement {
         this._onKey = (ev) => { if (ev.key === 'Escape') this.close(); };
     }
 
-    // opts: { title, type, value, values, min, max, step, unit, durations, manual, currentUntil, nextChangeAt, nextValue, onApply, onAuto }
+    // opts: { mode, title, subtitle, type, value, values, min, max, step, unit, durations, manual, currentUntil,
+    //         nextChangeAt, priority, onApply(value, until, { from, priority }), onAuto }
     open(opts) {
-        this._o = opts;
-        this._value = opts.value;
-        if (opts.manual) this._duration = opts.currentUntil ? 'keep' : 'none';
-        else this._duration = opts.nextChangeAt ? 'next' : String(opts.durations[1] ?? opts.durations[0] ?? 'none');
+        this._o = { mode: 'manual', durations: DEFAULT_DURATIONS, ...opts };
+        const o = this._o;
+        this._value = o.value;
+        if (o.mode === 'override') this._duration = String(o.durations[1] ?? o.durations[0] ?? 'time');
+        else if (o.manual) this._duration = o.currentUntil ? 'keep' : 'none';
+        else this._duration = o.nextChangeAt ? 'next' : String(o.durations[1] ?? o.durations[0] ?? 'none');
+        this._start = 'now';
+        this._startTime = '';
         this._time = '';
         this._datetime = '';
+        this._priority = o.priority ?? 1;
         this._error = null;
         this._busy = false;
         document.body.appendChild(this);
@@ -195,18 +211,37 @@ class MiaConfigWidgetDialog extends HTMLElement {
         this.remove();
     }
 
+    computeStart() {
+        if (this._start === 'now') return new Date();
+        return this._startTime ? nextOccurrence(this._startTime) : undefined;
+    }
+
     computeUntil() {
+        const start = this.computeStart() || new Date();
         const d = this._duration;
         if (d === 'none') return null;
         if (d === 'keep') return this._o.currentUntil;
         if (d === 'next') return this._o.nextChangeAt;
-        if (d === 'time') return this._time ? nextOccurrence(this._time) : undefined;
+        if (d === 'time') return this._time ? nextOccurrence(this._time, start) : undefined;
         if (d === 'datetime') return parseDate(this._datetime) || undefined;
-        return new Date(Date.now() + Number(d) * 60000);
+        return new Date(start.getTime() + Number(d) * 60000);
     }
 
-    untilPreview() {
+    preview() {
         const until = this.computeUntil();
+        if (this._o.mode === 'override') {
+            const start = this.computeStart();
+            if (start === undefined) return "Scegli l'orario di inizio";
+            if (!until) return 'Scegli quando terminare';
+            if (until <= start) return "La fine deve essere dopo l'inizio";
+            const length = formatDuration(Math.round((until - start) / 60000));
+            if (this._start === 'now') return `Da adesso <b>${untilText(until)}</b> (${length})`;
+            // "Dalle 21:00 alle 23:00", "Domani dalle 21:00 alle 23:00", "Il 28/10 dalle 21:00 a domani alle 01:00"
+            const day = whenText(start).replace(/alle \d\d:\d\d$/, '').trim();
+            const end = start.toDateString() === until.toDateString() ? `alle ${formatTime(until).split(' ').pop()}` : `a ${whenText(until).replace(/^il /, '')}`;
+            const from = `${day ? `${day.charAt(0).toUpperCase()}${day.slice(1)} dalle` : 'Dalle'} ${formatTime(start).split(' ').pop()}`;
+            return `${from} <b>${end}</b> (${length})`;
+        }
         if (until === undefined) return 'Scegli quando terminare';
         if (until === null) return 'Resta in manuale finché non torni in Auto';
         if (until.getTime() <= Date.now()) return 'La fine deve essere nel futuro';
@@ -215,23 +250,49 @@ class MiaConfigWidgetDialog extends HTMLElement {
 
     render() {
         const o = this._o;
-        const durationChip = (key, label, icon) => `
-            <button class="chip ${this._duration === key ? 'selected' : ''}" data-duration="${key}">
+        const mode = DIALOG_MODES[o.mode] || DIALOG_MODES.manual;
+        const isOverride = o.mode === 'override';
+        const chip = (attr, current, key, label, icon) => `
+            <button class="chip ${current === key ? 'selected' : ''}" ${attr}="${key}">
                 ${icon ? `<ha-icon icon="${icon}"></ha-icon>` : ''}${label}
             </button>`;
+        const durationChip = (key, label, icon) => chip('data-duration', this._duration, key, label, icon);
         const chips = [
-            o.manual && o.currentUntil ? durationChip('keep', `Mantieni (${formatTime(o.currentUntil)})`, 'mdi:timer-check-outline') : '',
+            o.mode === 'manual' && o.manual && o.currentUntil ? durationChip('keep', `Mantieni (${formatTime(o.currentUntil)})`, 'mdi:timer-check-outline') : '',
             ...o.durations.map(min => durationChip(String(min), formatDuration(min))),
-            !o.manual && o.nextChangeAt ? durationChip('next', `Prossimo cambio (${formatTime(o.nextChangeAt)})`, 'mdi:calendar-arrow-right') : '',
+            o.mode === 'manual' && !o.manual && o.nextChangeAt ? durationChip('next', `Prossimo cambio (${formatTime(o.nextChangeAt)})`, 'mdi:calendar-arrow-right') : '',
             durationChip('time', 'Fino alle…', 'mdi:clock-outline'),
             durationChip('datetime', 'Data e ora…', 'mdi:calendar-clock'),
-            durationChip('none', 'Senza scadenza', 'mdi:infinity')
+            isOverride ? '' : durationChip('none', 'Senza scadenza', 'mdi:infinity')
         ].join('');
+
+        const startSection = isOverride ? `
+            <div class="section">
+                <div class="label">Inizio</div>
+                <div class="chips">
+                    ${chip('data-start', this._start, 'now', 'Adesso', 'mdi:play')}
+                    ${chip('data-start', this._start, 'time', 'Alle…', 'mdi:clock-start')}
+                </div>
+                ${this._start === 'time' ? `<div class="extra"><input data-start-time type="time" value="${escapeHtml(this._startTime)}"></div>` : ''}
+            </div>` : '';
+        const durationSection = o.mode === 'value' ? '' : `
+            <div class="section">
+                <div class="label">${isOverride ? 'Durata' : 'Per quanto tempo'}</div>
+                <div class="chips">${chips}</div>
+                ${this._duration === 'time' ? `<div class="extra"><input data-time type="time" value="${escapeHtml(this._time)}"></div>` : ''}
+                ${this._duration === 'datetime' ? `<div class="extra"><input data-datetime type="datetime-local" value="${escapeHtml(this._datetime)}"></div>` : ''}
+                <div class="preview"><ha-icon icon="mdi:timer-outline"></ha-icon><span>${this.preview()}</span></div>
+            </div>`;
+        const prioritySection = isOverride ? `
+            <div class="section">
+                <div class="label">Priorità <span class="hint">(1 = più alta)</span></div>
+                <div class="extra"><input data-priority type="number" min="1" max="999" step="1" value="${escapeHtml(this._priority)}"></div>
+            </div>` : '';
 
         this.shadowRoot.innerHTML = `
             <style>
                 ${BASE_STYLE}
-                :host { --mia-accent: var(--mia-manual-color); position: fixed; inset: 0; z-index: 9999; font-family: var(--paper-font-body1_-_font-family, var(--ha-font-family-body, Roboto, sans-serif)); }
+                :host { --mia-accent: ${mode.accent}; position: fixed; inset: 0; z-index: 9999; font-family: var(--paper-font-body1_-_font-family, var(--ha-font-family-body, Roboto, sans-serif)); }
                 .backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, .5); animation: fade .15s ease-out; }
                 .sheet {
                     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
@@ -247,9 +308,11 @@ class MiaConfigWidgetDialog extends HTMLElement {
                 @keyframes pop { from { opacity: 0; transform: translate(-50%, -48%) scale(.97); } }
                 @keyframes slide { from { transform: translate(-50%, 100%); } }
                 h2 { margin: 0; font-size: 20px; font-weight: 500; display: flex; align-items: center; gap: 10px; }
-                h2 ha-icon { color: var(--mia-manual-color); --mdc-icon-size: 24px; }
+                h2 ha-icon { color: var(--mia-accent); --mdc-icon-size: 24px; }
+                .subtitle { margin: 4px 0 0 34px; font-size: 13px; color: var(--mia-muted); }
                 .section { margin-top: 20px; }
                 .label { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--mia-muted); margin-bottom: 10px; }
+                .hint { text-transform: none; letter-spacing: 0; }
                 .extra { margin-top: 10px; }
                 .extra input {
                     width: 100%; height: 44px; padding: 0 12px; font: inherit; border-radius: 10px;
@@ -264,28 +327,25 @@ class MiaConfigWidgetDialog extends HTMLElement {
                 .btn { padding: 10px 18px; border-radius: 999px; font-weight: 500; }
                 .btn.text { color: var(--mia-muted); }
                 .btn.auto { color: var(--mia-auto-color); display: inline-flex; align-items: center; gap: 6px; }
-                .btn.primary { background: var(--mia-manual-color); color: var(--text-primary-color, #fff); }
+                .btn.primary { background: var(--mia-accent); color: var(--text-primary-color, #fff); }
             </style>
             <div class="backdrop" data-close></div>
             <div class="sheet" role="dialog" aria-modal="true">
-                <h2><ha-icon icon="mdi:hand-back-right"></ha-icon>${escapeHtml(o.title)}</h2>
+                <h2><ha-icon icon="${mode.icon}"></ha-icon>${escapeHtml(o.title)}</h2>
+                ${o.subtitle ? `<div class="subtitle">${escapeHtml(o.subtitle)}</div>` : ''}
                 <div class="section">
                     <div class="label">Valore</div>
                     ${renderValueControl(o.type, this._value, o)}
                 </div>
-                <div class="section">
-                    <div class="label">Per quanto tempo</div>
-                    <div class="chips">${chips}</div>
-                    ${this._duration === 'time' ? `<div class="extra"><input data-time type="time" value="${escapeHtml(this._time)}"></div>` : ''}
-                    ${this._duration === 'datetime' ? `<div class="extra"><input data-datetime type="datetime-local" value="${escapeHtml(this._datetime)}"></div>` : ''}
-                    <div class="preview"><ha-icon icon="mdi:timer-outline"></ha-icon><span>${this.untilPreview()}</span></div>
-                </div>
+                ${startSection}
+                ${durationSection}
+                ${prioritySection}
                 ${this._error ? `<div class="error">${escapeHtml(this._error)}</div>` : ''}
                 <div class="actions">
-                    ${o.manual ? `<button class="btn auto" data-auto><ha-icon icon="mdi:autorenew"></ha-icon>Torna in Auto</button>` : ''}
+                    ${o.mode === 'manual' && o.manual ? `<button class="btn auto" data-auto><ha-icon icon="mdi:autorenew"></ha-icon>Torna in Auto</button>` : ''}
                     <span class="spacer"></span>
                     <button class="btn text" data-close>Annulla</button>
-                    <button class="btn primary" data-apply ${this._busy ? 'disabled' : ''}>Forza</button>
+                    <button class="btn primary" data-apply ${this._busy ? 'disabled' : ''}>${mode.apply}</button>
                 </div>
             </div>
         `;
@@ -294,11 +354,20 @@ class MiaConfigWidgetDialog extends HTMLElement {
 
     bindEvents() {
         const root = this.shadowRoot;
+        const refreshPreview = () => {
+            const el = root.querySelector('.preview span');
+            if (el) el.innerHTML = this.preview();
+        };
         root.querySelectorAll('[data-close]').forEach(el => el.addEventListener('click', () => this.close()));
         root.querySelectorAll('[data-duration]').forEach(el => el.addEventListener('click', () => {
             this._duration = el.dataset.duration;
             this.render();
             root.querySelector('[data-time], [data-datetime]')?.focus();
+        }));
+        root.querySelectorAll('[data-start]').forEach(el => el.addEventListener('click', () => {
+            this._start = el.dataset.start;
+            this.render();
+            root.querySelector('[data-start-time]')?.focus();
         }));
         root.querySelectorAll('[data-pick]').forEach(el => el.addEventListener('click', () => {
             this._value = el.dataset.pick === 'on';
@@ -316,24 +385,33 @@ class MiaConfigWidgetDialog extends HTMLElement {
         }));
         root.querySelector('[data-number]')?.addEventListener('input', (ev) => { this._value = ev.target.value; });
         root.querySelector('[data-text]')?.addEventListener('input', (ev) => { this._value = ev.target.value; });
-        root.querySelector('[data-time]')?.addEventListener('input', (ev) => {
-            this._time = ev.target.value;
-            root.querySelector('.preview span').innerHTML = this.untilPreview();
-        });
-        root.querySelector('[data-datetime]')?.addEventListener('input', (ev) => {
-            this._datetime = ev.target.value;
-            root.querySelector('.preview span').innerHTML = this.untilPreview();
-        });
+        root.querySelector('[data-priority]')?.addEventListener('input', (ev) => { this._priority = ev.target.value; });
+        root.querySelector('[data-start-time]')?.addEventListener('input', (ev) => { this._startTime = ev.target.value; refreshPreview(); });
+        root.querySelector('[data-time]')?.addEventListener('input', (ev) => { this._time = ev.target.value; refreshPreview(); });
+        root.querySelector('[data-datetime]')?.addEventListener('input', (ev) => { this._datetime = ev.target.value; refreshPreview(); });
         root.querySelector('[data-auto]')?.addEventListener('click', async () => {
             await this.run(() => this._o.onAuto());
         });
-        root.querySelector('[data-apply]')?.addEventListener('click', async () => {
-            const until = this.computeUntil();
-            if (until === undefined) return this.fail('Scegli quando terminare la forzatura');
-            if (until && until.getTime() <= Date.now()) return this.fail('La fine deve essere nel futuro');
-            if (this._value === '' || this._value === undefined || this._value === null) return this.fail('Scegli un valore');
-            await this.run(() => this._o.onApply(this._value, until));
-        });
+        root.querySelector('[data-apply]')?.addEventListener('click', () => this.apply());
+    }
+
+    async apply() {
+        const o = this._o;
+        if (this._value === '' || this._value === undefined || this._value === null) return this.fail('Scegli un valore');
+        if (o.mode === 'value') return this.run(() => o.onApply(this._value));
+
+        const until = this.computeUntil();
+        if (until === undefined) return this.fail('Scegli quando terminare');
+        if (o.mode === 'override') {
+            const from = this.computeStart();
+            if (from === undefined) return this.fail("Scegli l'orario di inizio");
+            if (until <= from) return this.fail("La fine deve essere dopo l'inizio");
+            const priority = Number(this._priority);
+            if (!Number.isInteger(priority) || priority < 1 || priority > 999) return this.fail('La priorità deve essere un numero intero tra 1 e 999');
+            return this.run(() => o.onApply(this._value, until, { from, priority }));
+        }
+        if (until && until.getTime() <= Date.now()) return this.fail('La fine deve essere nel futuro');
+        return this.run(() => o.onApply(this._value, until));
     }
 
     clamp(value) {
@@ -533,25 +611,42 @@ class MiaConfigWidget extends HTMLElement {
 
     // ----- Azioni -----
 
-    async setManual(value, until) {
+    requireSetupName() {
         const setupName = this.getSetupName();
         if (!setupName) throw new Error("L'entità non espone setup_name: specificarlo nella configurazione");
-        const type = this.getControlType();
-        const setupValue = type === 'boolean' && typeof value === 'boolean' ? this.booleanValue(value) : String(value);
+        return setupName;
+    }
+
+    // Valore da salvare: i booleani del popup diventano on/off, 1/0 o true/false come il valore corrente
+    toSetupValue(value) {
+        return this.getControlType() === 'boolean' && typeof value === 'boolean' ? this.booleanValue(value) : String(value);
+    }
+
+    async setManual(value, until) {
         await this._hass.callService('mia_config', 'set_manual_override', {
             entity_id: this._config.entity,
-            setup_name: setupName,
-            setup_value: setupValue,
+            setup_name: this.requireSetupName(),
+            setup_value: this.toSetupValue(value),
             ...(until ? { valid_to: toLocalIso(until) } : {})
         });
     }
 
+    // Override a tempo (configurazione a tempo con priorità utente)
+    async addOverride(value, from, until, priority) {
+        await this._hass.callService('mia_config', 'set_time_config', {
+            entity_id: this._config.entity,
+            setup_name: this.requireSetupName(),
+            setup_value: this.toSetupValue(value),
+            valid_from: toLocalIso(from),
+            valid_to: toLocalIso(until),
+            priority
+        });
+    }
+
     async setAuto() {
-        const setupName = this.getSetupName();
-        if (!setupName) throw new Error("L'entità non espone setup_name: specificarlo nella configurazione");
         await this._hass.callService('mia_config', 'clear_manual_override', {
             entity_id: this._config.entity,
-            setup_name: setupName
+            setup_name: this.requireSetupName()
         });
     }
 
@@ -569,12 +664,29 @@ class MiaConfigWidget extends HTMLElement {
         this.render();
     }
 
-    openDialog(value) {
+    // Apre un popup per un'entità senza bisogno di un widget in dashboard (usato da card principale e scorciatoie).
+    // mode: manual | override | value. options: { subtitle, priority, onSave(value) per value, onDone() }
+    static async openFor(hass, entityId, mode = 'manual', options = {}) {
+        const widget = document.createElement('mia-config-widget');
+        widget.setConfig({ entity: entityId, layout: 'row', ...(options.config || {}) });
+        widget._hass = hass;
+        if (['auto', 'select'].includes(widget._control)) await widget.loadValidValues();
+        widget.openDialog(options.value, mode, options);
+    }
+
+    openDialog(value, mode = 'manual', options = {}) {
         const type = this.getControlType();
         const next = this.getNextChange();
+        const done = async (action) => {
+            await action();
+            options.onDone?.();
+        };
         const dialog = document.createElement('mia-config-widget-dialog');
         dialog.open({
-            title: this.getName(),
+            mode,
+            title: options.title || this.getName(),
+            subtitle: options.subtitle,
+            priority: options.priority ?? this._config.priority ?? 1,
             type,
             value: value ?? (type === 'boolean' ? isTruthy(this.getCurrentValue()) : this.getCurrentValue()),
             values: this._values,
@@ -586,8 +698,12 @@ class MiaConfigWidget extends HTMLElement {
             manual: this.isManualActive(),
             currentUntil: this.getManualUntil(),
             nextChangeAt: next?.at || null,
-            onApply: (v, until) => this.setManual(v, until),
-            onAuto: () => this.setAuto()
+            onApply: (v, until, extra) => done(() => {
+                if (mode === 'value') return options.onSave(this.toSetupValue(v));
+                if (mode === 'override') return this.addOverride(v, extra.from, until, extra.priority);
+                return this.setManual(v, until);
+            }),
+            onAuto: () => done(() => this.setAuto())
         });
     }
 
@@ -929,7 +1045,7 @@ class MiaConfigWidgetEditor extends HTMLElement {
         if (!this._hass || !this._config) return;
         if (!this._form) {
             this._form = document.createElement('ha-form');
-            this._form.computeLabel = (schema) => EDITOR_LABELS[schema.name] ?? schema.name;
+            this._form.computeLabel = (schema) => this.labels[schema.name] ?? schema.name;
             this._form.addEventListener('value-changed', (ev) => {
                 ev.stopPropagation();
                 const config = { ...ev.detail.value };
@@ -937,7 +1053,7 @@ class MiaConfigWidgetEditor extends HTMLElement {
                 Object.keys(config).forEach(key => {
                     if (config[key] === '' || config[key] === undefined || config[key] === null) delete config[key];
                 });
-                if (config.control === 'auto') delete config.control;
+                this.stripDefaults(config);
                 this._config = config;
                 this.render();
                 this.dispatchEvent(new CustomEvent('config-changed', { detail: { config }, bubbles: true, composed: true }));
@@ -946,7 +1062,340 @@ class MiaConfigWidgetEditor extends HTMLElement {
         }
         this._form.hass = this._hass;
         this._form.schema = this.getSchema();
-        this._form.data = { control: 'auto', layout: 'row', ...this._config };
+        this._form.data = { ...this.defaults, ...this._config };
+    }
+
+    get labels() {
+        return EDITOR_LABELS;
+    }
+
+    get defaults() {
+        return { control: 'auto', layout: 'row' };
+    }
+
+    // Toglie dallo YAML i valori uguali al predefinito
+    stripDefaults(config) {
+        if (config.control === 'auto') delete config.control;
+    }
+}
+
+// ---------- Scorciatoie override ----------
+
+// Calcola inizio e fine di una scorciatoia: from/until come HH:MM, duration in minuti (predefinita 60)
+const shortcutWindow = (shortcut) => {
+    const from = shortcut.from ? nextOccurrence(String(shortcut.from)) : new Date();
+    const until = shortcut.until
+        ? nextOccurrence(String(shortcut.until), from)
+        : new Date(from.getTime() + (Number(shortcut.duration) || 60) * 60000);
+    return { from, until };
+};
+
+const describeShortcut = (shortcut) => {
+    const { from, until } = shortcutWindow(shortcut);
+    const length = formatDuration(Math.round((until - from) / 60000));
+    if (shortcut.from) return `dalle ${String(shortcut.from)} · ${length}`;
+    if (shortcut.until) return `fino alle ${String(shortcut.until)}`;
+    return length;
+};
+
+class MiaConfigShortcuts extends HTMLElement {
+    static getConfigElement() {
+        return document.createElement('mia-config-shortcuts-editor');
+    }
+
+    static getStubConfig(hass) {
+        return { entity: MiaConfigWidget.getStubConfig(hass).entity, shortcuts: [] };
+    }
+
+    constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+    }
+
+    setConfig(config) {
+        if (!config || !config.entity) {
+            throw new Error('Devi specificare entity nella configurazione della card');
+        }
+        if (config.shortcuts !== undefined && !Array.isArray(config.shortcuts)) {
+            throw new Error('shortcuts deve essere una lista');
+        }
+        (config.shortcuts || []).forEach((shortcut, index) => {
+            if (!shortcut || shortcut.value === undefined || shortcut.value === null || shortcut.value === '') {
+                throw new Error(`La scorciatoia ${index + 1} non ha un valore (value)`);
+            }
+        });
+        this._config = config;
+        // Il widget interno fornisce valori validi, tipo di controllo, etichette e chiamate ai servizi
+        this._helper = document.createElement('mia-config-widget');
+        this._helper.setConfig({ entity: config.entity, control: config.control, setup_name: config.setup_name, unit: config.unit });
+        this._overrides = [];
+        this._flash = null;
+        this._error = null;
+        this._entityState = undefined;
+        this.render();
+    }
+
+    set hass(hass) {
+        this._hass = hass;
+        this._helper._hass = hass;
+        if (!this._helper._valuesLoaded) {
+            this._helper.loadValidValues().then(() => this.render());
+        }
+        const entityState = hass.states[this._config.entity];
+        if (entityState === this._entityState) return;
+        this._entityState = entityState;
+        this.loadOverrides();
+        this.render();
+    }
+
+    connectedCallback() {
+        this._timer = setInterval(() => this.render(), 30000);
+    }
+
+    disconnectedCallback() {
+        clearInterval(this._timer);
+    }
+
+    getCardSize() {
+        return 3 + Math.ceil((this._config?.shortcuts?.length || 0) / 2);
+    }
+
+    getGridOptions() {
+        return { columns: 6, min_columns: 4 };
+    }
+
+    // Override a tempo attivi o futuri per questa configurazione (esclusa la forzatura manuale)
+    async loadOverrides() {
+        if (this._config.show_active === false) return;
+        const setupName = this._helper.getSetupName();
+        if (!setupName || !this._hass) return;
+        try {
+            const result = await this._hass.callWS({
+                type: 'call_service',
+                domain: 'mia_config',
+                service: 'get_configurations',
+                service_data: { entity_id: this._config.entity },
+                return_response: true
+            });
+            const configs = result.response?.[setupName] || [];
+            const now = Date.now();
+            this._overrides = configs
+                .filter(cfg => cfg.type === 'time' && cfg.enabled && Number(cfg.priority) !== MANUAL_OVERRIDE_PRIORITY)
+                .map(cfg => ({ ...cfg, from: parseDate(cfg.valid_from_date), until: parseDate(cfg.valid_to_date) }))
+                .filter(cfg => cfg.from && cfg.until && cfg.until.getTime() > now)
+                .sort((a, b) => a.from - b.from);
+            this.render();
+        } catch (error) {
+            console.warn('Mia Config: impossibile caricare gli override', error);
+        }
+    }
+
+    async run(action, flashKey) {
+        this._error = null;
+        try {
+            await action();
+            this._flash = flashKey;
+            setTimeout(() => { this._flash = null; this.render(); }, 1500);
+            // Lo stato del sensore si aggiorna dopo il refresh del coordinator: ricarica anche la lista
+            setTimeout(() => this.loadOverrides(), 800);
+        } catch (error) {
+            this._error = error.message || 'Operazione non riuscita';
+        }
+        this.render();
+    }
+
+    applyShortcut(index) {
+        const shortcut = this._config.shortcuts[index];
+        const { from, until } = shortcutWindow(shortcut);
+        const priority = Number(shortcut.priority ?? this._config.priority ?? 1);
+        this.run(() => this._helper.addOverride(shortcut.value, from, until, priority), `s${index}`);
+    }
+
+    openCustom() {
+        MiaConfigWidget.openFor(this._hass, this._config.entity, 'override', {
+            config: { control: this._config.control, setup_name: this._config.setup_name, unit: this._config.unit,
+                      min: this._config.min, max: this._config.max, step: this._config.step, durations: this._config.durations },
+            title: this.getName(),
+            subtitle: 'Nuovo override a tempo',
+            priority: this._config.priority ?? 1,
+            onDone: () => setTimeout(() => this.loadOverrides(), 800)
+        });
+    }
+
+    deleteOverride(id) {
+        this.run(() => this._hass.callService('mia_config', 'delete_single_config', {
+            entity_id: this._config.entity,
+            config_type: 'time',
+            config_id: Number(id)
+        }), null);
+    }
+
+    getName() {
+        return this._config.name || this._helper.getName();
+    }
+
+    overrideWhen(cfg) {
+        const now = Date.now();
+        if (cfg.from.getTime() <= now) return `attivo · ${untilText(cfg.until)}`;
+        return `${whenText(cfg.from).replace(/^alle/, 'dalle')} → ${formatTime(cfg.until)}`;
+    }
+
+    render() {
+        if (!this._hass || !this._config) return;
+        const helper = this._helper;
+        const entity = helper.getEntity();
+        if (!entity) {
+            this.shadowRoot.innerHTML = `<ha-card style="padding:16px;color:var(--error-color)">Entità non trovata: ${escapeHtml(this._config.entity)}</ha-card>`;
+            return;
+        }
+        const type = helper.getControlType();
+        const manual = helper.isManualActive();
+        const current = helper.getCurrentValue();
+        const shortcuts = this._config.shortcuts || [];
+        const now = Date.now();
+
+        const buttons = shortcuts.map((shortcut, index) => {
+            const done = this._flash === `s${index}`;
+            return `
+                <button class="shortcut ${done ? 'done' : ''}" data-shortcut="${index}">
+                    <ha-icon icon="${escapeHtml(done ? 'mdi:check' : (shortcut.icon || 'mdi:clock-plus-outline'))}"></ha-icon>
+                    <span class="s-text">
+                        <span class="s-name">${escapeHtml(shortcut.name || helper.displayValue(String(shortcut.value), type))}</span>
+                        <span class="s-sub">${escapeHtml(describeShortcut(shortcut))}</span>
+                    </span>
+                </button>`;
+        }).join('');
+
+        const active = this._config.show_active === false ? '' : this._overrides.slice(0, 5).map(cfg => `
+            <div class="ov ${cfg.from.getTime() <= now ? 'running' : ''}">
+                <span class="dot"></span>
+                <span class="ov-text">
+                    <b>${escapeHtml(helper.displayValue(cfg.value, type))}</b>
+                    <span class="ov-when">${escapeHtml(this.overrideWhen(cfg))}</span>
+                </span>
+                <span class="prio" title="Priorità">P${escapeHtml(cfg.priority)}</span>
+                <button class="del" data-delete="${escapeHtml(cfg.id)}" title="Elimina override"><ha-icon icon="mdi:close"></ha-icon></button>
+            </div>`).join('');
+
+        this.shadowRoot.innerHTML = `
+            <style>
+                ${BASE_STYLE}
+                :host { height: 100%; min-width: 0; }
+                ha-card { --mia-accent: var(--mia-auto-color); height: 100%; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+                .head { display: flex; align-items: center; gap: 12px; }
+                .badge { flex: none; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+                         background: color-mix(in srgb, var(--mia-accent) 15%, transparent); color: var(--mia-accent); }
+                .badge.manual { background: color-mix(in srgb, var(--mia-manual-color) 15%, transparent); color: var(--mia-manual-color); }
+                .title { flex: 1; min-width: 0; }
+                .name { font-weight: 500; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .status { font-size: 12px; color: var(--mia-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .status.manual { color: var(--mia-manual-color); }
+                .value { font-size: 20px; font-weight: 500; white-space: nowrap; }
+                .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+                .shortcut {
+                    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; text-align: left; min-width: 0;
+                    background: color-mix(in srgb, var(--mia-accent) 10%, transparent); border: 1px solid color-mix(in srgb, var(--mia-accent) 25%, transparent);
+                    transition: transform .1s, background .2s;
+                }
+                .shortcut:active { transform: scale(.97); }
+                .shortcut:hover { background: color-mix(in srgb, var(--mia-accent) 18%, transparent); }
+                .shortcut ha-icon { color: var(--mia-accent); flex: none; }
+                .shortcut.done { background: color-mix(in srgb, var(--success-color, #43a047) 20%, transparent); border-color: var(--success-color, #43a047); }
+                .shortcut.done ha-icon { color: var(--success-color, #43a047); }
+                .s-text { display: flex; flex-direction: column; min-width: 0; }
+                .s-name { font-weight: 500; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .s-sub { font-size: 12px; color: var(--mia-muted); }
+                .custom { justify-content: center; border-style: dashed; background: transparent; color: var(--mia-accent); font-weight: 500; }
+                .empty { font-size: 13px; color: var(--mia-muted); }
+                .list { display: flex; flex-direction: column; gap: 4px; }
+                .list-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--mia-muted); margin-top: 2px; }
+                .ov { display: flex; align-items: center; gap: 10px; padding: 6px 4px 6px 8px; border-radius: 10px; font-size: 13px; }
+                .ov:hover { background: color-mix(in srgb, var(--mia-muted) 8%, transparent); }
+                .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; border: 2px solid var(--mia-accent); }
+                .ov.running .dot { background: var(--mia-accent); }
+                .ov-text { flex: 1; min-width: 0; display: flex; gap: 8px; align-items: baseline; overflow: hidden; white-space: nowrap; }
+                .ov-text b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+                .ov-when { color: var(--mia-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+                .prio { font-size: 11px; color: var(--mia-muted); border: 1px solid var(--divider-color); border-radius: 6px; padding: 0 5px; }
+                .del { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--mia-muted); }
+                .del:hover { color: var(--error-color, #db4437); background: color-mix(in srgb, var(--error-color, #db4437) 12%, transparent); }
+                .del ha-icon { --mdc-icon-size: 16px; }
+                .error { color: var(--error-color, #db4437); font-size: 12px; }
+            </style>
+            <ha-card>
+                <div class="head">
+                    <div class="badge ${manual ? 'manual' : ''}"><ha-icon icon="${escapeHtml(this._config.icon || helper.getIcon(type))}"></ha-icon></div>
+                    <div class="title">
+                        <div class="name">${escapeHtml(this.getName())}</div>
+                        <div class="status ${manual ? 'manual' : ''}">${helper.statusText(true)}</div>
+                    </div>
+                    <div class="value">${escapeHtml(helper.displayValue(current, type))}</div>
+                </div>
+                <div class="grid">
+                    ${buttons}
+                    ${this._config.show_custom === false ? '' : `<button class="shortcut custom" data-custom><ha-icon icon="mdi:plus"></ha-icon>Personalizzato</button>`}
+                </div>
+                ${!shortcuts.length && this._config.show_custom === false ? `<div class="empty">Aggiungi delle scorciatoie nell'editor della card</div>` : ''}
+                ${active ? `<div class="list"><div class="list-title">Override</div>${active}</div>` : ''}
+                ${this._error ? `<div class="error">${escapeHtml(this._error)}</div>` : ''}
+            </ha-card>
+        `;
+        this.shadowRoot.querySelectorAll('[data-shortcut]').forEach(el =>
+            el.addEventListener('click', () => this.applyShortcut(Number(el.dataset.shortcut))));
+        this.shadowRoot.querySelector('[data-custom]')?.addEventListener('click', () => this.openCustom());
+        this.shadowRoot.querySelectorAll('[data-delete]').forEach(el =>
+            el.addEventListener('click', () => this.deleteOverride(el.dataset.delete)));
+    }
+}
+
+const SHORTCUTS_LABELS = {
+    entity: 'Entità Mia Config',
+    name: 'Nome',
+    icon: 'Icona',
+    priority: 'Priorità degli override (1 = più alta)',
+    show_custom: 'Mostra "Personalizzato"',
+    show_active: 'Mostra gli override attivi',
+    shortcuts: 'Scorciatoie',
+    setup_name: 'Nome configurazione (se l\'entità non espone setup_name)'
+};
+
+class MiaConfigShortcutsEditor extends MiaConfigWidgetEditor {
+    getSchema() {
+        return [
+            { name: 'entity', required: true, selector: { entity: { filter: { domain: 'sensor', integration: 'mia_config' } } } },
+            {
+                type: 'grid',
+                name: '',
+                schema: [
+                    { name: 'name', selector: { text: {} } },
+                    { name: 'icon', selector: { icon: {} } }
+                ]
+            },
+            { name: 'priority', selector: { number: { mode: 'box', min: 1, max: 999, step: 1 } } },
+            {
+                type: 'grid',
+                name: '',
+                schema: [
+                    { name: 'show_custom', selector: { boolean: {} } },
+                    { name: 'show_active', selector: { boolean: {} } }
+                ]
+            },
+            { name: 'shortcuts', selector: { object: {} } },
+            { name: 'setup_name', selector: { text: {} } }
+        ];
+    }
+
+    get labels() {
+        return SHORTCUTS_LABELS;
+    }
+
+    get defaults() {
+        return { show_custom: true, show_active: true, priority: 1, shortcuts: [] };
+    }
+
+    stripDefaults(config) {
+        if (config.show_custom === true) delete config.show_custom;
+        if (config.show_active === true) delete config.show_active;
     }
 }
 
@@ -966,6 +1415,8 @@ if (!customElements.get('mia-config-widget')) {
     customElements.define('mia-config-widget', MiaConfigWidget);
     customElements.define('mia-config-widget-editor', MiaConfigWidgetEditor);
     customElements.define('mia-config-widget-dialog', MiaConfigWidgetDialog);
+    customElements.define('mia-config-shortcuts', MiaConfigShortcuts);
+    customElements.define('mia-config-shortcuts-editor', MiaConfigShortcutsEditor);
     customElements.define('mia-config-binary-card', MiaConfigBinaryCard);
     customElements.define('mia-config-select-card', MiaConfigSelectCard);
     customElements.define('mia-config-number-card', MiaConfigNumberCard);
@@ -975,6 +1426,11 @@ if (!customElements.get('mia-config-widget')) {
         type: 'mia-config-widget',
         name: 'Mia Config Widget',
         description: 'Forzatura manuale Auto/Manuale di una configurazione (riga, riquadro o card completa)',
+        preview: true
+    }, {
+        type: 'mia-config-shortcuts',
+        name: 'Mia Config Scorciatoie',
+        description: 'Pulsanti rapidi per aggiungere override a tempo a una configurazione',
         preview: true
     });
 }

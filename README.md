@@ -121,6 +121,41 @@ Con `control: auto` il tipo si deduce da solo: interruttore se i **Valori Validi
 
 La forzatura usa una priorità riservata (`0`), più alta di qualsiasi priorità selezionabile (che parte da 1), e alla scadenza si torna automaticamente in Auto. Opzionale: `setup_name`, se l'entità non espone l'attributo.
 
+### Scorciatoie override
+
+Il widget `custom:mia-config-shortcuts` (**Mia Config Scorciatoie** nel selettore card) aggiunge override a tempo con un tocco, da qualunque dashboard. Mostra anche gli override attivi o programmati, con ✕ per eliminarli; **Personalizzato** apre lo stesso popup della card principale (valore, inizio, durata, priorità).
+
+```yaml
+type: custom:mia-config-shortcuts
+entity: sensor.mia_config_profilo_temperatura
+name: Profilo temperatura
+priority: 1                 # priorità predefinita degli override (1 = più alta)
+shortcuts:
+  - name: Comfort
+    value: sera
+    duration: 120           # minuti da adesso
+    icon: mdi:sofa
+  - name: Eco
+    value: eco
+    until: "23:30"          # fino alle 23:30 (domani se già passate)
+  - name: Notte presto
+    value: notte
+    from: "21:00"           # dalle 21:00 ...
+    duration: 180           # ... per 3 ore
+    priority: 2             # priorità di questa scorciatoia
+show_custom: true           # pulsante "Personalizzato"
+show_active: true           # elenco override attivi
+```
+
+### Popup dalla card principale
+
+Nella dashboard della card principale ogni configurazione ha:
+- **🖐️ Manuale**: forzatura manuale con durata (arancione quando è attiva);
+- **➕ Override**: nuovo override a tempo con valore, inizio, durata e priorità;
+- **✏️ Valore**: solo per le configurazioni che hanno unicamente il valore standard, modifica il valore da popup (con i Valori Validi, se definiti).
+
+I popup sono gli stessi dei widget. Il form completo (filtri per orari e giorni, condizionali) resta nel tab **Configura**.
+
 Per maggiori dettagli vedi [UI_GUIDE.md](UI_GUIDE.md)
 
 ## Utilizzo
