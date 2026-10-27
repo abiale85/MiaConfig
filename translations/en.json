@@ -164,6 +164,34 @@
           "description": "Priority level (1 = highest, 99 = lowest)."
         }
       }
+    },
+    "set_manual_override": {
+      "name": "Set Manual Override",
+      "description": "Manually forces a value as a timed override with dedicated priority until cleared or expired.",
+      "fields": {
+        "setup_name": {
+          "name": "Configuration Name",
+          "description": "Name of the configuration to force."
+        },
+        "setup_value": {
+          "name": "Forced Value",
+          "description": "Value to apply while in manual mode."
+        },
+        "valid_to_date": {
+          "name": "Manual End Time",
+          "description": "End date/time for the override; then it automatically returns to auto mode."
+        }
+      }
+    },
+    "clear_manual_override": {
+      "name": "Clear Manual Override",
+      "description": "Removes manual forcing and restores automatic behavior.",
+      "fields": {
+        "setup_name": {
+          "name": "Configuration Name",
+          "description": "Name of the configuration to return to auto mode."
+        }
+      }
     }
   },
   "sensor": {
