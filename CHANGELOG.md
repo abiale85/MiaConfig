@@ -1,5 +1,11 @@
 # 📋 Changelog - Mia Config
 
+## v2.3.9-beta.11 - November 1, 2026 📈 Storico nei widget
+
+### ✨ Miglioramenti
+- L'icona a sinistra dei widget apre lo storico dell'entità nel popup standard di Home Assistant.
+- Il click sul nome o sul valore continua ad aprire il popup per modificare il parametro.
+
 ## v2.3.9 - October 27, 2026 🛠️ Widget Auto/Manuale
 
 ### ✨ Nuove funzionalità

@@ -576,6 +576,14 @@ class MiaConfigWidget extends HTMLElement {
         return at && at.getTime() > Date.now() ? { at, value: attrs.next_value } : null;
     }
 
+    openHistory() {
+        this.dispatchEvent(new CustomEvent('hass-more-info', {
+            detail: { entityId: this._config.entity },
+            bubbles: true,
+            composed: true
+        }));
+    }
+
     // In modalità auto il tipo si deduce da valori validi e valore corrente
     getControlType() {
         if (this._control !== 'auto') return this._control;
@@ -878,10 +886,10 @@ class MiaConfigWidget extends HTMLElement {
 
     iconBadge(type, manual) {
         return `
-            <div class="icon-badge">
+            <button class="icon-badge" data-action="history" title="Mostra storico" aria-label="Mostra storico">
                 <ha-icon icon="${escapeHtml(this.getIcon(type))}"></ha-icon>
                 ${manual ? '<span class="mode"><ha-icon icon="mdi:hand-back-right"></ha-icon></span>' : ''}
-            </div>`;
+            </button>`;
     }
 
     errorLine() {
@@ -968,6 +976,7 @@ class MiaConfigWidget extends HTMLElement {
             ev.stopPropagation();
             const action = el.dataset.action;
             if (action === 'dialog') this.openDialog();
+            else if (action === 'history') this.openHistory();
             else if (action === 'auto') { if (this.isManualActive()) this.run(() => this.setAuto()); }
             else if (action === 'toggle') this.pickValue(!isTruthy(this.getCurrentValue()));
         }));
@@ -1270,6 +1279,14 @@ class MiaConfigShortcuts extends HTMLElement {
         return this._config.name || this._helper.getName();
     }
 
+    openHistory() {
+        this.dispatchEvent(new CustomEvent('hass-more-info', {
+            detail: { entityId: this._config.entity },
+            bubbles: true,
+            composed: true
+        }));
+    }
+
     overrideWhen(cfg) {
         const now = Date.now();
         if (cfg.from.getTime() <= now) return `attivo · ${untilText(cfg.until)}`;
@@ -1319,7 +1336,7 @@ class MiaConfigShortcuts extends HTMLElement {
                 :host { height: 100%; min-width: 0; }
                 ha-card { --mia-accent: var(--mia-auto-color); height: 100%; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
                 .head { display: flex; align-items: center; gap: 12px; }
-                .badge { flex: none; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+                .badge { flex: none; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer;
                          background: color-mix(in srgb, var(--mia-accent) 15%, transparent); color: var(--mia-accent); }
                 .badge.manual { background: color-mix(in srgb, var(--mia-manual-color) 15%, transparent); color: var(--mia-manual-color); }
                 .title { flex: 1; min-width: 0; }
@@ -1360,7 +1377,7 @@ class MiaConfigShortcuts extends HTMLElement {
             </style>
             <ha-card>
                 <div class="head">
-                    <div class="badge ${manual ? 'manual' : ''}"><ha-icon icon="${escapeHtml(this._config.icon || helper.getIcon(type))}"></ha-icon></div>
+                    <button class="badge ${manual ? 'manual' : ''}" data-history title="Mostra storico" aria-label="Mostra storico"><ha-icon icon="${escapeHtml(this._config.icon || helper.getIcon(type))}"></ha-icon></button>
                     <div class="title">
                         <div class="name">${escapeHtml(this.getName())}</div>
                         <div class="status ${manual ? 'manual' : ''}">${helper.statusText(true)}</div>
@@ -1379,6 +1396,7 @@ class MiaConfigShortcuts extends HTMLElement {
         this.shadowRoot.querySelectorAll('[data-shortcut]').forEach(el =>
             el.addEventListener('click', () => this.applyShortcut(Number(el.dataset.shortcut))));
         this.shadowRoot.querySelector('[data-custom]')?.addEventListener('click', () => this.openCustom());
+        this.shadowRoot.querySelector('[data-history]')?.addEventListener('click', () => this.openHistory());
         this.shadowRoot.querySelectorAll('[data-delete]').forEach(el =>
             el.addEventListener('click', () => this.deleteOverride(el.dataset.delete)));
     }
