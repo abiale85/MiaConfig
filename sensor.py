@@ -127,19 +127,22 @@ async def async_setup_entry(
         next_update_seconds = None
         earliest_change = None
         
+        now_dt = dt_util.now()
         for setup_name, pred_data in predictive_data.items():
-            next_changes = pred_data.get('next_changes', [])
-            if next_changes and len(next_changes) > 0:
-                # Prendi il primo cambio (il più vicino)
-                seconds_until = next_changes[0].get('seconds_until', None)
-                if seconds_until is None:
-                    minutes_until = next_changes[0].get('minutes_until', None)
-                    if minutes_until is not None:
-                        seconds_until = minutes_until * 60
+            # seconds_until è relativo al momento del calcolo: con dati in cache è
+            # obsoleto, quindi ricalcola dal timestamp assoluto del primo evento futuro
+            for change in pred_data.get('next_changes', []):
+                seconds_until = None
+                event_time = dt_util.parse_datetime(change['timestamp']) if change.get('timestamp') else None
+                if event_time is not None:
+                    seconds_until = (event_time - now_dt).total_seconds()
+                elif pred_data.get('last_recalc') is not None and change.get('seconds_until') is not None:
+                    seconds_until = change['seconds_until'] - (current_time - pred_data['last_recalc'])
 
                 if seconds_until is not None and seconds_until > 0:
                     if earliest_change is None or seconds_until < earliest_change:
                         earliest_change = seconds_until
+                    break
         
         if earliest_change is not None:
             # Applica limiti: min 5s, max 24h

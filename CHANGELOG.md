@@ -21,6 +21,7 @@
 - Multi-istanza nella card principale: l'`entity_id` configurato nello YAML veniva ignorato (azzerato al primo aggiornamento); ora la card resta sull'istanza scelta, mostra un selettore se ce ne sono più di una, filtra la dashboard per istanza e più card nella stessa pagina non si scambiano più comandi.
 - Multi-istanza in widget e assistente: nome del database nei nomi predefiniti e selettore di istanza nell'assistente.
 - Modifica di una configurazione standard: il valore si sceglie tra i Valori Validi, se definiti.
+- Cambi programmati in ritardo: con più configurazioni il prossimo aggiornamento del sensore veniva calcolato da tempi residui in cache ormai superati, spostando il cambio anche di un'ora; ora il tempo mancante si ricalcola dall'orario esatto dell'evento.
 
 ### 🧹 Pulizia
 - Rimosse le modifiche non previste della 2.3.8 (tabella `configurazioni_manuali`, servizi duplicati, modifiche alla card principale).
