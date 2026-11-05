@@ -48,6 +48,7 @@ class MiaConfigCard extends HTMLElement {
             // Assicura che setupEventListeners sia chiamato dopo render
             // per garantire che tutte le funzioni window siano disponibili
             this.setupEventListeners();
+            this.handleFocusParams();
         } else if (firstLoad && this.content) {
             // Prima volta che _hass diventa disponibile e content già esiste
             // Carica dashboard se è il tab attivo
@@ -112,8 +113,50 @@ class MiaConfigCard extends HTMLElement {
         this.loadDashboard();
     }
     
+    // Apre la scheda Configura con il gruppo della configurazione espanso (link "configurazione completa" dei widget)
+    async focusSetup(setupName, entityId) {
+        if (!this.content || !setupName) return;
+        window._miaConfigCardInstance = this;
+        const entryId = entityId ? this._hass?.states?.[entityId]?.attributes?.entry_id : null;
+        const instance = entryId ? this.getInstances().find(i => i.entry_id === entryId) : null;
+        if (instance && instance.entry_id !== this.getSelectedEntryId()) this.switchInstance(instance.entity_id);
+
+        const tabs = this.content.querySelectorAll('.dc-tab');
+        tabs.forEach(t => t.classList.toggle('active', t.getAttribute('onclick')?.includes("'config'")));
+        this.content.querySelectorAll('.dc-tab-content').forEach(c => c.classList.toggle('active', c.id === 'dc-tab-config'));
+        const section = this.content.querySelector('#dc-section-db-config');
+        if (section) section.style.display = 'block';
+        this.configViewMode = 'name';
+        this.content.querySelectorAll('.dc-view-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === 'name'));
+
+        await this.loadConfigurations();
+        this.loadStandardConfigsForSelect();
+        this.loadConfigsForValidValues();
+
+        const groupId = `config-group-${setupName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        const content = this.content.querySelector(`#${groupId}-content`);
+        if (!content) return this.showToast(`Configurazione "${setupName}" non trovata`, true);
+        content.classList.add('expanded');
+        this.content.querySelector(`#${groupId}-toggle`)?.classList.add('expanded');
+        content.closest('.dc-config-group')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // Parametri ?mia_config_setup=...&mia_config_entity=... aggiunti dai widget quando aprono questa dashboard
+    handleFocusParams() {
+        const params = new URLSearchParams(window.location.search);
+        const setupName = params.get('mia_config_setup');
+        if (!setupName) return;
+        const entityId = params.get('mia_config_entity');
+        params.delete('mia_config_setup');
+        params.delete('mia_config_entity');
+        const query = params.toString();
+        history.replaceState(history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+        this.focusSetup(setupName, entityId);
+    }
+
     connectedCallback() {
         window._miaConfigCardInstance = this;
+        if (this.content) this.handleFocusParams();
     }
 
     disconnectedCallback() {

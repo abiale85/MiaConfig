@@ -56,6 +56,64 @@ const whenText = (date) => {
 // "fino alle 22:10", "fino a domani alle 00:22", "fino al 28/10 alle 10:00"
 const untilText = (date) => `fino ${whenText(date).replace(/^domani/, 'a domani').replace(/^il /, 'al ')}`;
 
+// Apre il popup "more-info" di Home Assistant direttamente sulla vista Storico
+const openEntityHistory = (source, entityId) => {
+    const target = source?.isConnected ? source : document.querySelector('home-assistant');
+    target?.dispatchEvent(new CustomEvent('hass-more-info', {
+        detail: { entityId, view: 'history' },
+        bubbles: true,
+        composed: true
+    }));
+};
+
+// Navigazione interna del frontend senza ricaricare la pagina
+const navigateTo = (path) => {
+    history.pushState(null, '', path);
+    window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: false } }));
+};
+
+const MAIN_CARD_TYPE = 'custom:mia-config-card';
+
+// Cerca nelle dashboard la vista che contiene la card principale e ne restituisce il percorso
+const findMainCardPath = async (hass) => {
+    const containsCard = (node) => {
+        if (!node || typeof node !== 'object') return false;
+        if (Array.isArray(node)) return node.some(containsCard);
+        if (node.type === MAIN_CARD_TYPE) return true;
+        return Object.values(node).some(containsCard);
+    };
+    let dashboards = [];
+    try {
+        dashboards = await hass.callWS({ type: 'lovelace/dashboards/list' });
+    } catch (e) { /* solo la dashboard predefinita */ }
+    const paths = [null, ...dashboards.filter(d => d.mode !== 'yaml' || d.url_path).map(d => d.url_path)];
+    for (const urlPath of paths) {
+        let config;
+        try {
+            config = await hass.callWS({ type: 'lovelace/config', ...(urlPath ? { url_path: urlPath } : {}) });
+        } catch (e) { continue; }
+        const views = config?.views || [];
+        const index = views.findIndex(containsCard);
+        if (index >= 0) return `/${urlPath || 'lovelace'}/${views[index].path || index}`;
+    }
+    return null;
+};
+
+// Apre la card principale sulla scheda Configura con il gruppo della configurazione espanso.
+// Se la card è nella pagina corrente la usa direttamente, altrimenti naviga alla sua dashboard.
+const openFullConfig = async (hass, entityId, setupName, path) => {
+    const card = window._miaConfigCardInstance;
+    if (!path && card?.isConnected && typeof card.focusSetup === 'function') {
+        card.focusSetup(setupName, entityId);
+        return true;
+    }
+    const target = path || await findMainCardPath(hass);
+    if (!target) return false;
+    const params = new URLSearchParams({ mia_config_setup: setupName, mia_config_entity: entityId });
+    navigateTo(`${target}${target.includes('?') ? '&' : '?'}${params}`);
+    return true;
+};
+
 const formatDuration = (minutes) => {
     if (minutes < 60) return `${minutes} min`;
     const hours = Math.floor(minutes / 60);
@@ -194,7 +252,8 @@ class MiaConfigWidgetDialog extends HTMLElement {
     }
 
     // opts: { mode, title, subtitle, note, type, value, values, min, max, step, unit, durations, manual, currentUntil,
-    //         nextChangeAt, priority, presetFrom, presetUntil, onApply(value, until, { from, priority }), onAuto }
+    //         nextChangeAt, priority, presetFrom, presetUntil, onApply(value, until, { from, priority }), onAuto,
+    //         onOpenConfig() -> Promise<boolean> per il link alla configurazione completa }
     // presetFrom/presetUntil (Date, presetUntil anche null = senza scadenza) precompilano inizio e fine.
     open(opts) {
         this._o = { mode: 'manual', durations: DEFAULT_DURATIONS, ...opts };
@@ -355,6 +414,11 @@ class MiaConfigWidgetDialog extends HTMLElement {
                 .btn.text { color: var(--mia-muted); }
                 .btn.auto { color: var(--mia-auto-color); display: inline-flex; align-items: center; gap: 6px; }
                 .btn.primary { background: var(--mia-accent); color: var(--text-primary-color, #fff); }
+                .config-link {
+                    display: inline-flex; align-items: center; gap: 6px; margin-top: 16px; padding: 0;
+                    font-size: 13px; font-weight: 500; color: var(--primary-color); text-decoration: underline; text-underline-offset: 2px;
+                }
+                .config-link ha-icon { --mdc-icon-size: 16px; }
             </style>
             <div class="backdrop" data-close></div>
             <div class="sheet" role="dialog" aria-modal="true">
@@ -368,6 +432,7 @@ class MiaConfigWidgetDialog extends HTMLElement {
                 ${startSection}
                 ${durationSection}
                 ${prioritySection}
+                ${o.onOpenConfig ? `<button class="config-link" data-open-config><ha-icon icon="mdi:cog-outline"></ha-icon>Apri configurazione completa</button>` : ''}
                 ${this._error ? `<div class="error">${escapeHtml(this._error)}</div>` : ''}
                 <div class="actions">
                     ${o.mode === 'manual' && o.manual ? `<button class="btn auto" data-auto><ha-icon icon="mdi:autorenew"></ha-icon>Torna in Auto</button>` : ''}
@@ -421,6 +486,14 @@ class MiaConfigWidgetDialog extends HTMLElement {
             await this.run(() => this._o.onAuto());
         });
         root.querySelector('[data-apply]')?.addEventListener('click', () => this.apply());
+        root.querySelector('[data-open-config]')?.addEventListener('click', async () => {
+            try {
+                if (await this._o.onOpenConfig()) return this.close();
+                this.fail('Card principale Mia Config non trovata in nessuna dashboard');
+            } catch (error) {
+                this.fail(error.message || 'Impossibile aprire la configurazione');
+            }
+        });
     }
 
     async apply() {
@@ -577,11 +650,7 @@ class MiaConfigWidget extends HTMLElement {
     }
 
     openHistory() {
-        this.dispatchEvent(new CustomEvent('hass-more-info', {
-            detail: { entityId: this._config.entity },
-            bubbles: true,
-            composed: true
-        }));
+        openEntityHistory(this, this._config.entity);
     }
 
     // In modalità auto il tipo si deduce da valori validi e valore corrente
@@ -747,7 +816,10 @@ class MiaConfigWidget extends HTMLElement {
                 if (mode === 'override') return this.addOverride(v, extra.from, until, extra.priority);
                 return this.setManual(v, until);
             }),
-            onAuto: () => done(() => this.setAuto())
+            onAuto: () => done(() => this.setAuto()),
+            onOpenConfig: options.onOpenConfig || (this.getSetupName()
+                ? () => openFullConfig(this._hass, this._config.entity, this.getSetupName(), this._config.config_path)
+                : null)
         });
     }
 
@@ -812,7 +884,7 @@ class MiaConfigWidget extends HTMLElement {
                 .dim { opacity: .75; }
                 .error { color: var(--error-color, #db4437); font-size: 12px; padding: 0 16px 10px; }
                 .icon-badge {
-                    position: relative; flex: none; width: 40px; height: 40px; border-radius: 50%;
+                    position: relative; flex: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer;
                     display: flex; align-items: center; justify-content: center;
                     background: color-mix(in srgb, var(--mia-accent) 15%, transparent); color: var(--mia-accent);
                 }
@@ -827,11 +899,6 @@ class MiaConfigWidget extends HTMLElement {
                 .status { font-size: 12px; color: var(--mia-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
                 .manual .status { color: var(--mia-manual-color); }
                 .info { min-width: 0; flex: 1; cursor: pointer; }
-                .auto-btn {
-                    flex: none; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-                    color: var(--mia-auto-color); background: color-mix(in srgb, var(--mia-auto-color) 12%, transparent);
-                }
-                .auto-btn ha-icon { --mdc-icon-size: 18px; }
 
                 /* --- row: grande come una riga entità --- */
                 .row { display: flex; align-items: center; gap: 12px; padding: 8px 12px 8px 8px; min-height: 56px; }
@@ -861,7 +928,6 @@ class MiaConfigWidget extends HTMLElement {
                 .tile .text { flex: 1; min-width: 0; }
                 .tile .value { font-size: 20px; font-weight: 500; line-height: 1.3; color: var(--primary-text-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
                 .tile .bottom { display: flex; align-items: center; gap: 8px; margin-top: auto; min-height: 28px; }
-                .tile .auto-btn { width: 28px; height: 28px; }
                 .tile .status { flex: 1; }
 
                 /* --- card completa --- */
@@ -909,7 +975,6 @@ class MiaConfigWidget extends HTMLElement {
                         <div class="name">${escapeHtml(this.getName())}</div>
                         <div class="status">${this.statusText(true)}</div>
                     </div>
-                    ${manual ? '<button class="auto-btn" data-action="auto" title="Torna in Auto"><ha-icon icon="mdi:autorenew"></ha-icon></button>' : ''}
                     ${control}
                 </div>
                 ${this.errorLine()}
@@ -930,7 +995,6 @@ class MiaConfigWidget extends HTMLElement {
                     </div>
                     <div class="bottom">
                         <div class="status">${this.statusText(true)}</div>
-                        ${manual ? '<button class="auto-btn" data-action="auto" title="Torna in Auto"><ha-icon icon="mdi:autorenew"></ha-icon></button>' : ''}
                     </div>
                 </div>
                 ${this.errorLine()}
@@ -1013,6 +1077,7 @@ const EDITOR_LABELS = {
     name: 'Nome',
     icon: 'Icona',
     setup_name: 'Nome configurazione (se l\'entità non espone setup_name)',
+    config_path: 'Percorso della card principale (opzionale, es. /lovelace/mia-config)',
     min: 'Minimo',
     max: 'Massimo',
     step: 'Passo',
@@ -1083,6 +1148,7 @@ class MiaConfigWidgetEditor extends HTMLElement {
             });
         }
         schema.push({ name: 'setup_name', selector: { text: {} } });
+        schema.push({ name: 'config_path', selector: { text: {} } });
         return schema;
     }
 
@@ -1280,11 +1346,7 @@ class MiaConfigShortcuts extends HTMLElement {
     }
 
     openHistory() {
-        this.dispatchEvent(new CustomEvent('hass-more-info', {
-            detail: { entityId: this._config.entity },
-            bubbles: true,
-            composed: true
-        }));
+        openEntityHistory(this, this._config.entity);
     }
 
     overrideWhen(cfg) {

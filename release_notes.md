@@ -1,3 +1,10 @@
+## v2.3.9-beta.12 - 5 Novembre 2026 🔗 Popup e storico
+
+### ✨ Miglioramenti
+- L'icona a sinistra del widget apre direttamente la vista **Storico** del popup di Home Assistant.
+- Il pulsante "Torna in Auto" non compare più nei widget riga e riquadro: si trova solo nel popup.
+- Nel popup nuovo link **Apri configurazione completa**: apre la card principale sulla scheda Configura con il gruppo dell'entità espanso (la dashboard con la card viene trovata automaticamente; opzione `config_path` per indicarla a mano).
+
 ## v2.3.9-beta.11 - 1 Novembre 2026 📈 Storico nei widget
 
 ### ✨ Miglioramenti
