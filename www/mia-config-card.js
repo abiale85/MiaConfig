@@ -1,6 +1,16 @@
 // Version 2.1.0-beta.7 - Restored v2.0.0 working implementation - 20260107
 
 class MiaConfigCard extends HTMLElement {
+    // Sensore di una configurazione Mia Config: riconosciuto dagli attributi esposti dall'integrazione,
+    // non dal prefisso dell'entity_id (che l'utente può rinominare)
+    static isConfigSensor(state) {
+        return !!state
+            && state.entity_id.startsWith('sensor.')
+            && state.attributes?.integration === 'mia_config'
+            && state.attributes.setup_name !== undefined
+            && state.attributes.total_configs === undefined;
+    }
+
     constructor() {
         super();
         // Salva riferimento all'istanza nell'elemento stesso per multi-instance support
@@ -2002,21 +2012,18 @@ class MiaConfigCard extends HTMLElement {
             const selectedEntry = this.getSelectedEntryId();
             const sensors = Object.keys(this._hass.states)
                 .filter(id => {
-                    if (!id.startsWith('sensor.mia_config_')) return false;
+                    // Sensori di configurazione riconosciuti dagli attributi, non dall'entity_id
+                    // (rinominabile dall'utente): esclude sensore principale e forzature entità
+                    if (!MiaConfigCard.isConfigSensor(this._hass.states[id])) return false;
                     // Solo i sensori dell'istanza selezionata
                     if (selectedEntry && this._hass.states[id]?.attributes?.entry_id !== selectedEntry) return false;
-                    // Escludi solo aggregatori noti
-                    if (id === 'sensor.miahomeconfig' || id === 'sensor.mia_config_main') return false;
-                    const entity = this._hass.states[id];
-                    // Escludi sensori che sono chiaramente aggregatori (hanno total_configs negli attributi)
-                    if (entity?.attributes?.total_configs !== undefined) return false;
                     return true;
                 })
                 .map(id => ({
                     id,
                     entity: this._hass.states[id],
                     // Il nome viene da setup_name: con più istanze l'entity_id può avere un suffisso (_2)
-                    name: (this._hass.states[id].attributes.setup_name || id.replace('sensor.mia_config_', '')).replace(/_/g, ' ')
+                    name: this._hass.states[id].attributes.setup_name.replace(/_/g, ' ')
                 }));
             
             if (sensors.length === 0) {

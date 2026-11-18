@@ -193,6 +193,76 @@
         }
       }
     },
+    "set_entity_override": {
+      "name": "Temporarily override an entity",
+      "description": "Sets the value of any entity (switch, number, select, thermostat, cover...) and restores the original one when it expires.",
+      "fields": {
+        "entity_id": {
+          "name": "Entity",
+          "description": "Entity to override."
+        },
+        "value": {
+          "name": "Value",
+          "description": "Value to set: on/off, a number, an option, a temperature, a 0-100 position or open/closed."
+        },
+        "valid_to": {
+          "name": "Until",
+          "description": "Date and time when the original value is restored."
+        },
+        "duration": {
+          "name": "Duration",
+          "description": "Alternative to 'Until': how long to keep the value."
+        },
+        "enforce": {
+          "name": "Keep enforced",
+          "description": "If someone changes the value during the override, Mia Config sets it back immediately."
+        },
+        "restore_to": {
+          "name": "At the end restore",
+          "description": "original = value before the override; last_manual = last value set by others during the override (if any)."
+        },
+        "instance": {
+          "name": "Instance",
+          "description": "Mia Config sensor of the instance that stores the override (optional)."
+        }
+      }
+    },
+    "clear_entity_override": {
+      "name": "End entity override",
+      "description": "Immediately ends the temporary override of an entity.",
+      "fields": {
+        "entity_id": {
+          "name": "Entity",
+          "description": "Overridden entity."
+        },
+        "restore": {
+          "name": "Restore",
+          "description": "Restores the original value (default). When off, the current value is kept."
+        }
+      }
+    },
+    "get_entity_override_history": {
+      "name": "Entity override history",
+      "description": "Returns the temporary entity overrides, most recent first.",
+      "fields": {
+        "entity_id": {
+          "name": "Entity",
+          "description": "Only overrides of this entity (optional)."
+        },
+        "instance": {
+          "name": "Instance",
+          "description": "Only this Mia Config instance (optional)."
+        },
+        "limit": {
+          "name": "Limit",
+          "description": "Maximum number of results."
+        },
+        "offset": {
+          "name": "Offset",
+          "description": "Results to skip (pagination)."
+        }
+      }
+    },
     "interpret_request": {
       "name": "Interpret request",
       "description": "Interprets a natural-language request with AI Task and returns a proposal without applying it.",

@@ -126,6 +126,51 @@ Con `control: auto` il tipo si deduce da solo: interruttore se i **Valori Validi
 
 La forzatura usa una priorità riservata (`0`), più alta di qualsiasi priorità selezionabile (che parte da 1), e alla scadenza si torna automaticamente in Auto. Opzionale: `setup_name`, se l'entità non espone l'attributo.
 
+Altre opzioni: `show_values: true` mostra i valori invece delle loro descrizioni. Nella vista a sezioni, se allarghi il formato `row` a 2 o più righe, il valore va su una seconda riga a tutta larghezza.
+
+### Forzatura temporanea di entità qualsiasi
+
+Il widget `custom:mia-config-entity-widget` (**Mia Config Forzatura entità** nel selettore card) funziona come il widget Auto/Manuale, ma su un'entità **qualsiasi** di Home Assistant: scegli un valore e per quanto tempo mantenerlo, alla scadenza Mia Config rimette il valore che c'era prima. Stessi formati `row`, `tile` e `card` (la card mostra anche le ultime forzature).
+
+```yaml
+type: custom:mia-config-entity-widget
+entity: climate.soggiorno
+layout: row                # row | tile | card
+name: Termostato           # opzionale
+icon: mdi:thermostat       # opzionale
+enforce: false             # opzionale, predefinito del popup: rimetti il valore se qualcuno lo cambia
+restore_to: original       # opzionale, predefinito del popup: original | last_manual
+```
+
+| Dominio | Cosa viene forzato |
+|---|---|
+| `switch`, `light`, `fan`, `input_boolean`, `automation`, `siren`, `humidifier`, `remote` | acceso/spento (per le luci viene ripristinata anche la luminosità) |
+| `input_number`, `number` | valore numerico |
+| `input_select`, `select` | opzione |
+| `input_text`, `text` | testo |
+| `climate`, `water_heater` | temperatura impostata |
+| `cover`, `valve` | posizione 0-100 se supportata, altrimenti aperta/chiusa |
+| `lock` | bloccata/sbloccata |
+
+- Se forzi di nuovo un'entità già forzata, alla scadenza torna comunque il valore **originale** di partenza.
+- **Se qualcuno cambia il valore durante la forzatura** (a mano, da un'automazione o dal dispositivo) puoi scegliere nel popup se **lasciare la modifica** oppure **rimettere il valore forzato** per tutto il periodo (`enforce`). I cambi fatti da Mia Config stessa vengono riconosciuti dal `context` della chiamata e non contano.
+- **Alla fine torna a** (`restore_to`): il **valore originale** di prima della forzatura (`original`) oppure l'**ultimo valore manuale** impostato durante la forzatura (`last_manual`; se nessuno l'ha cambiato torna l'originale). Vale anche con il mantenimento attivo: la modifica viene annullata subito ma ricordata per la fine.
+- Forzature attive e storico sono salvati nel database dell'istanza (tabella `forzature_entita`, inclusa nei backup): dopo un riavvio di Home Assistant i ripristini vengono ripianificati e quelli scaduti nel frattempo vengono eseguiti subito.
+- Se l'entità non risponde al momento del ripristino (es. dispositivo offline), Mia Config riprova ogni minuto per un'ora.
+- Il sensore `sensor.forzature_entita_<istanza>` riporta il numero di forzature attive e, nell'attributo `overrides`, l'elenco con valore, valore originale e scadenza.
+- Servizi: `mia_config.set_entity_override` (`entity_id`, `value`, `valid_to` oppure `duration`, `enforce`, `restore_to`), `mia_config.clear_entity_override` (`entity_id`, `restore`), `mia_config.get_entity_override_history`.
+
+```yaml
+# Esempio in un'automazione: riscaldamento a 23 °C per 2 ore
+action: mia_config.set_entity_override
+data:
+  entity_id: climate.soggiorno
+  value: "23"
+  duration: "02:00:00"
+  enforce: true              # se qualcuno lo cambia, rimetti 23
+  restore_to: original       # alla fine torna al valore di prima
+```
+
 ### Scorciatoie override
 
 Il widget `custom:mia-config-shortcuts` (**Mia Config Scorciatoie** nel selettore card) aggiunge override a tempo con un tocco, da qualunque dashboard. Mostra anche gli override attivi o programmati, con ✕ per eliminarli; **Personalizzato** apre lo stesso popup della card principale (valore, inizio, durata, priorità).
@@ -706,6 +751,32 @@ CREATE TABLE IF NOT EXISTS configurazioni_valori_validi (
   description TEXT,
   sort_order INTEGER DEFAULT 0,
   UNIQUE(setup_name, value)
+)
+```
+
+### Tabella `forzature_entita`
+Forzature temporanee di entità Home Assistant: righe attive (`active = 1`) e storico.
+```sql
+CREATE TABLE IF NOT EXISTS forzature_entita (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  entity_id TEXT NOT NULL,
+  attribute TEXT,              -- NULL = stato; altrimenti temperature / current_position
+  value TEXT NOT NULL,         -- valore forzato
+  original_value TEXT,         -- valore da ripristinare
+  original_extra TEXT,         -- JSON con dettagli del ripristino (es. luminosità)
+  started_at TEXT NOT NULL,
+  valid_to TEXT,               -- NULL = senza scadenza
+  ended_at TEXT,
+  end_reason TEXT,             -- expired | cancelled | released | replaced | restore_failed
+  restore_attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  enforce INTEGER NOT NULL DEFAULT 0,          -- 1 = rimette il valore se cambiato da altri
+  restore_to TEXT NOT NULL DEFAULT 'original', -- original | last_manual
+  last_manual_value TEXT,      -- ultimo valore impostato da altri durante la forzatura
+  last_manual_extra TEXT,
+  last_manual_at TEXT,
+  restored_value TEXT          -- valore effettivamente rimesso alla fine
 )
 ```
 

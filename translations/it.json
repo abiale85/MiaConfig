@@ -193,6 +193,76 @@
         }
       }
     },
+    "set_entity_override": {
+      "name": "Forza temporaneamente un'entità",
+      "description": "Imposta il valore di un'entità qualsiasi (interruttore, numero, select, termostato, tapparella...) e rimette quello originale alla scadenza.",
+      "fields": {
+        "entity_id": {
+          "name": "Entità",
+          "description": "Entità da forzare."
+        },
+        "value": {
+          "name": "Valore",
+          "description": "Valore da impostare: on/off, un numero, un'opzione, una temperatura, una posizione 0-100 o open/closed."
+        },
+        "valid_to": {
+          "name": "Fino a",
+          "description": "Data e ora in cui ripristinare il valore originale."
+        },
+        "duration": {
+          "name": "Durata",
+          "description": "In alternativa a 'Fino a': per quanto tempo mantenere il valore."
+        },
+        "enforce": {
+          "name": "Mantieni forzato",
+          "description": "Se qualcuno cambia il valore durante la forzatura, Mia Config lo rimette subito."
+        },
+        "restore_to": {
+          "name": "Alla fine torna a",
+          "description": "original = valore prima della forzatura; last_manual = ultimo valore impostato da altri durante la forzatura (se c'è)."
+        },
+        "instance": {
+          "name": "Istanza",
+          "description": "Sensore Mia Config dell'istanza in cui salvare la forzatura (opzionale)."
+        }
+      }
+    },
+    "clear_entity_override": {
+      "name": "Termina forzatura entità",
+      "description": "Termina subito la forzatura temporanea di un'entità.",
+      "fields": {
+        "entity_id": {
+          "name": "Entità",
+          "description": "Entità forzata."
+        },
+        "restore": {
+          "name": "Ripristina",
+          "description": "Rimette il valore originale (predefinito). Se disattivato lascia il valore attuale."
+        }
+      }
+    },
+    "get_entity_override_history": {
+      "name": "Storico forzature entità",
+      "description": "Restituisce le forzature temporanee di entità, dalle più recenti.",
+      "fields": {
+        "entity_id": {
+          "name": "Entità",
+          "description": "Solo le forzature di questa entità (opzionale)."
+        },
+        "instance": {
+          "name": "Istanza",
+          "description": "Solo questa istanza Mia Config (opzionale)."
+        },
+        "limit": {
+          "name": "Limite",
+          "description": "Numero massimo di risultati."
+        },
+        "offset": {
+          "name": "Offset",
+          "description": "Risultati da saltare (paginazione)."
+        }
+      }
+    },
     "interpret_request": {
       "name": "Interpreta richiesta",
       "description": "Interpreta una richiesta a parole con AI Task e restituisce una proposta senza applicarla.",

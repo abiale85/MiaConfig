@@ -14,7 +14,7 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.loader import async_get_integration
 from homeassistant.helpers.event import async_track_time_interval
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 from homeassistant.components.http import HomeAssistantView
@@ -32,6 +32,7 @@ from .const import (
 )
 from .database import ConfigDatabase
 from .assistant import async_interpret_request
+from .entity_override import EntityOverrideManager, RESTORE_OPTIONS, RESTORE_ORIGINAL, SUPPORTED_DOMAINS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -177,7 +178,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "entry_id": entry.entry_id
     }
     hass.data[DOMAIN][entry.entry_id] = entry_data
-    
+
+    # Forzature temporanee di entità qualsiasi: ricarica quelle attive e ne pianifica il ripristino
+    entity_overrides = EntityOverrideManager(hass, db, entry.entry_id)
+    try:
+        await entity_overrides.async_load()
+    except Exception as err:
+        _LOGGER.error("Errore caricamento forzature entità: %s", err)
+    entry_data["entity_overrides"] = entity_overrides
+
     # Mantieni anche riferimenti globali per retrocompatibilità
     hass.data[DOMAIN]["db"] = db
     hass.data[DOMAIN]["lookahead_hours"] = lookahead_hours
@@ -234,7 +243,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if cleanup_days > 0:
             await hass.async_add_executor_job(db.cleanup_expired_events, cleanup_days)
             _LOGGER.info(f"Cleanup configurazioni a tempo scadute oltre {cleanup_days} giorni completato")
-    
+
+        # Storico forzature entità: stessa conservazione dello storico configurazioni
+        try:
+            removed = await hass.async_add_executor_job(entity_overrides.cleanup_history, retention_days)
+            if removed:
+                _LOGGER.info(f"Rimosse {removed} forzature entità concluse da oltre {retention_days} giorni")
+        except Exception as err:
+            _LOGGER.warning("Errore cleanup storico forzature entità: %s", err)
+
     # Pianifica cleanup ogni 24 ore
     entry.async_on_unload(
         async_track_time_interval(hass, daily_cleanup, timedelta(days=1))
@@ -260,6 +277,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         # Chiudi SOLO il database specifico di questa istanza
         entry_data = hass.data[DOMAIN].get(entry.entry_id)
+        if entry_data and "entity_overrides" in entry_data:
+            # Ferma solo i timer: le forzature restano nel database e vengono ricaricate
+            entry_data["entity_overrides"].async_unload()
         if entry_data and "db" in entry_data:
             await hass.async_add_executor_job(entry_data["db"].close)
             _LOGGER.info(f"Closed database for entry {entry.entry_id}")
@@ -367,6 +387,33 @@ def get_db_from_entity_id(hass: HomeAssistant, entity_id: str = None) -> ConfigD
     
     # Fallback al database globale (per retrocompatibilità)
     return hass.data[DOMAIN]["db"]
+
+
+def _entity_override_managers(hass: HomeAssistant) -> list[EntityOverrideManager]:
+    """Gestori delle forzature entità, uno per istanza."""
+    return [
+        data["entity_overrides"] for data in hass.data.get(DOMAIN, {}).values()
+        if isinstance(data, dict) and "entity_overrides" in data
+    ]
+
+
+def _entity_override_manager_for_db(hass: HomeAssistant, db: ConfigDatabase) -> EntityOverrideManager | None:
+    for data in hass.data.get(DOMAIN, {}).values():
+        if isinstance(data, dict) and data.get("db") is db and "entity_overrides" in data:
+            return data["entity_overrides"]
+    return None
+
+
+def _entity_override_manager(hass: HomeAssistant, target: str | None, instance: str | None = None) -> EntityOverrideManager:
+    """Gestore da usare: quello con una forzatura attiva sull'entità, poi l'istanza indicata, poi quella di default."""
+    managers = _entity_override_managers(hass)
+    if not managers:
+        raise HomeAssistantError("Nessuna istanza Mia Config caricata")
+    if target:
+        for manager in managers:
+            if manager.has_active(target):
+                return manager
+    return _entity_override_manager_for_db(hass, get_db_from_entity_id(hass, instance)) or managers[0]
 
 
 async def async_setup_services(hass: HomeAssistant) -> None:
@@ -1052,6 +1099,84 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN, "simulate_schedule", handle_simulate_schedule, schema=simulate_schedule_schema, supports_response=SupportsResponse.OPTIONAL
     )
+
+    # ----- Forzature temporanee di entità qualsiasi -----
+
+    def _local_datetime(value: datetime | None) -> datetime | None:
+        """Le date senza fuso si intendono nel fuso di Home Assistant."""
+        if value is None:
+            return None
+        return value.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE) if value.tzinfo is None else value
+
+    async def handle_set_entity_override(call: ServiceCall) -> ServiceResponse:
+        """Imposta temporaneamente il valore di un'entità e ne pianifica il ripristino."""
+        target = call.data["entity_id"]
+        valid_to = _local_datetime(call.data.get("valid_to"))
+        if call.data.get("duration") is not None:
+            valid_to = dt_util.now() + call.data["duration"]
+        manager = _entity_override_manager(hass, target, call.data.get("instance"))
+        row = await manager.async_set(
+            target, call.data["value"], valid_to,
+            enforce=call.data["enforce"], restore_to=call.data["restore_to"],
+        )
+        keys = ("id", "entity_id", "attribute", "value", "original_value", "started_at", "valid_to", "enforce", "restore_to")
+        return {"override": {key: row[key] for key in keys}}
+
+    async def handle_clear_entity_override(call: ServiceCall) -> None:
+        """Termina una forzatura entità, ripristinando (di default) il valore originale."""
+        target = call.data["entity_id"]
+        await _entity_override_manager(hass, target).async_clear(target, call.data["restore"])
+
+    async def handle_get_entity_override_history(call: ServiceCall) -> ServiceResponse:
+        """Storico delle forzature entità (più recenti per prime)."""
+        target = call.data.get("entity_id")
+        instance = call.data.get("instance")
+        managers = [_entity_override_manager(hass, None, instance)] if instance else _entity_override_managers(hass)
+        limit = call.data["limit"]
+        rows = []
+        for manager in managers:
+            rows += await manager.async_history(target, limit, call.data["offset"])
+        rows.sort(key=lambda row: row["started_at"], reverse=True)
+        return {"history": rows[:limit]}
+
+    def _supported_entity(value):
+        value = cv.entity_id(value)
+        if value.split(".", 1)[0] not in SUPPORTED_DOMAINS:
+            raise vol.Invalid(f"Dominio non supportato: {value}. Supportati: {', '.join(sorted(SUPPORTED_DOMAINS))}")
+        return value
+
+    hass.services.async_register(
+        DOMAIN, "set_entity_override", handle_set_entity_override,
+        schema=vol.Schema({
+            vol.Required("entity_id"): _supported_entity,
+            vol.Required("value"): cv.string,
+            vol.Exclusive("valid_to", "end"): cv.datetime,
+            vol.Exclusive("duration", "end"): cv.positive_time_period,
+            # Rimette il valore forzato se qualcuno lo cambia durante la forzatura
+            vol.Optional("enforce", default=False): cv.boolean,
+            # Alla fine: valore originale oppure ultimo valore impostato da altri durante la forzatura
+            vol.Optional("restore_to", default=RESTORE_ORIGINAL): vol.In(RESTORE_OPTIONS),
+            vol.Optional("instance"): cv.entity_id,
+        }),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN, "clear_entity_override", handle_clear_entity_override,
+        schema=vol.Schema({
+            vol.Required("entity_id"): cv.entity_id,
+            vol.Optional("restore", default=True): cv.boolean,
+        }),
+    )
+    hass.services.async_register(
+        DOMAIN, "get_entity_override_history", handle_get_entity_override_history,
+        schema=vol.Schema({
+            vol.Optional("entity_id"): cv.entity_id,
+            vol.Optional("instance"): cv.entity_id,
+            vol.Optional("limit", default=50): vol.All(vol.Coerce(int), vol.Range(min=1, max=500)),
+            vol.Optional("offset", default=0): vol.All(vol.Coerce(int), vol.Range(min=0)),
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )
     
     def get_backup_dir() -> Path:
         """Cartella di lavoro per i backup."""
@@ -1171,7 +1296,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             
             # Invalida tutte le cache dopo il ripristino per riflettere i nuovi dati
             db._invalidate_caches()
-            
+
+            # Le forzature entità del backup sostituiscono quelle in corso
+            manager = _entity_override_manager_for_db(hass, db)
+            if manager:
+                await manager.async_load()
+
             _LOGGER.info("Database ripristinato da: %s", backup_file)
             return {
                 "success": True,

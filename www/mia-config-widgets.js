@@ -129,6 +129,15 @@ const formatRemaining = (date) => {
     return days === 1 ? '1 giorno' : `${days} giorni`;
 };
 
+// Tempo trascorso da un istante passato: "5 min", "2 h 10 min", "3 giorni"
+const formatElapsed = (date) => {
+    const minutes = Math.max(0, Math.round((Date.now() - date.getTime()) / 60000));
+    if (minutes < 1) return 'meno di 1 min';
+    if (minutes < 60 * 24) return formatDuration(minutes);
+    const days = Math.floor(minutes / (60 * 24));
+    return days === 1 ? '1 giorno' : `${days} giorni`;
+};
+
 // Prossima occorrenza di un orario HH:MM dopo un istante (predefinito: adesso)
 const nextOccurrence = (hhmm, after = new Date()) => {
     const [h, m] = hhmm.split(':').map(Number);
@@ -203,7 +212,8 @@ const BASE_STYLE = `
 `;
 
 // Controllo valore condiviso tra card e popup. onSelect è identificato da data-value / data-step.
-function renderValueControl(type, value, { values = [], min, max, unit } = {}) {
+// showValues: mostra il valore invece della descrizione (che resta come suggerimento al passaggio del mouse)
+function renderValueControl(type, value, { values = [], min, max, unit, showValues = false } = {}) {
     if (type === 'boolean') {
         const on = isTruthy(value);
         const labels = booleanLabels(values);
@@ -217,7 +227,7 @@ function renderValueControl(type, value, { values = [], min, max, unit } = {}) {
         if (!values.length) return `<div class="unit">Nessun valore valido definito</div>`;
         return `<div class="chips">${values.map(item => `
             <button class="chip ${String(item.value) === String(value) ? 'selected' : ''}" data-pick-value="${escapeHtml(item.value)}" title="${escapeHtml(item.description || '')}">
-                ${escapeHtml(item.description ? `${item.description}` : item.value)}
+                ${escapeHtml(!showValues && item.description ? item.description : item.value)}
             </button>`).join('')}</div>`;
     }
     if (type === 'number') {
@@ -233,6 +243,16 @@ function renderValueControl(type, value, { values = [], min, max, unit } = {}) {
 }
 
 // ---------- Popup forzatura ----------
+
+const DEFAULT_TEXTS = {
+    auto: 'Auto',
+    manual: 'Manuale',
+    statusAuto: 'Gestito automaticamente',
+    statusManual: 'Forzato manualmente',
+    back: 'Torna in Auto',
+    backAt: 'Torna in Auto',
+    forever: 'Resta in manuale finché non torni in Auto'
+};
 
 // Popup condiviso da widget, scorciatoie e card principale. Modalità:
 // - manual:   forzatura manuale (valore + durata, anche senza scadenza)
@@ -278,6 +298,9 @@ class MiaConfigWidgetDialog extends HTMLElement {
             this._fixedStart = o.presetFrom;
         }
         this._priority = o.priority ?? 1;
+        // Forzatura di entità: mantenimento e valore finale
+        this._enforce = !!o.entityOptions?.enforce;
+        this._restoreTo = o.entityOptions?.restoreTo || 'original';
         this._error = null;
         this._busy = false;
         document.body.appendChild(this);
@@ -323,9 +346,16 @@ class MiaConfigWidgetDialog extends HTMLElement {
             return `${from} <b>${end}</b> (${length})`;
         }
         if (until === undefined) return 'Scegli quando terminare';
-        if (until === null) return 'Resta in manuale finché non torni in Auto';
+        if (until === null) return this.texts.forever;
         if (until.getTime() <= Date.now()) return 'La fine deve essere nel futuro';
-        return `Torna in Auto <b>${whenText(until)}</b> (tra ${formatRemaining(until)})`;
+        if (this._o.entityOptions && this._restoreTo === 'last_manual') {
+            return `<b>${whenText(until)}</b> (tra ${formatRemaining(until)}) torna all'ultimo valore manuale, se nessuno lo cambia a ${escapeHtml(this._o.entityOptions.originalText)}`;
+        }
+        return `${this.texts.backAt} <b>${whenText(until)}</b> (tra ${formatRemaining(until)})`;
+    }
+
+    get texts() {
+        return { ...DEFAULT_TEXTS, ...(this._o.texts || {}) };
     }
 
     render() {
@@ -364,6 +394,22 @@ class MiaConfigWidgetDialog extends HTMLElement {
                 ${this._duration === 'datetime' ? `<div class="extra"><input data-datetime type="datetime-local" value="${escapeHtml(this._datetime)}"></div>` : ''}
                 <div class="preview"><ha-icon icon="mdi:timer-outline"></ha-icon><span>${this.preview()}</span></div>
             </div>`;
+        const entityOptions = o.entityOptions && o.mode === 'manual' ? `
+            <div class="section">
+                <div class="label">Se qualcuno lo cambia durante la forzatura</div>
+                <div class="chips">
+                    ${chip('data-enforce', this._enforce ? '1' : '0', '0', 'Lascia la modifica', 'mdi:lock-open-variant-outline')}
+                    ${chip('data-enforce', this._enforce ? '1' : '0', '1', 'Rimetti il valore forzato', 'mdi:lock-outline')}
+                </div>
+            </div>
+            <div class="section">
+                <div class="label">Alla fine torna a</div>
+                <div class="chips">
+                    ${chip('data-restore', this._restoreTo, 'original', `Valore originale (${escapeHtml(o.entityOptions.originalText)})`, 'mdi:history')}
+                    ${chip('data-restore', this._restoreTo, 'last_manual', 'Ultimo valore manuale', 'mdi:account-edit-outline')}
+                </div>
+                ${o.entityOptions.lastManualText ? `<div class="preview"><ha-icon icon="mdi:account-edit-outline"></ha-icon><span>Ultimo valore manuale: <b>${escapeHtml(o.entityOptions.lastManualText)}</b></span></div>` : ''}
+            </div>` : '';
         const prioritySection = isOverride ? `
             <div class="section">
                 <div class="label">Priorità <span class="hint">(1 = più alta)</span></div>
@@ -431,11 +477,12 @@ class MiaConfigWidgetDialog extends HTMLElement {
                 </div>
                 ${startSection}
                 ${durationSection}
+                ${entityOptions}
                 ${prioritySection}
                 ${o.onOpenConfig ? `<button class="config-link" data-open-config><ha-icon icon="mdi:cog-outline"></ha-icon>Apri configurazione completa</button>` : ''}
                 ${this._error ? `<div class="error">${escapeHtml(this._error)}</div>` : ''}
                 <div class="actions">
-                    ${o.mode === 'manual' && o.manual ? `<button class="btn auto" data-auto><ha-icon icon="mdi:autorenew"></ha-icon>Torna in Auto</button>` : ''}
+                    ${o.mode === 'manual' && o.manual ? `<button class="btn auto" data-auto><ha-icon icon="mdi:autorenew"></ha-icon>${escapeHtml(this.texts.back)}</button>` : ''}
                     <span class="spacer"></span>
                     <button class="btn text" data-close>Annulla</button>
                     <button class="btn primary" data-apply ${this._busy ? 'disabled' : ''}>${mode.apply}</button>
@@ -456,6 +503,14 @@ class MiaConfigWidgetDialog extends HTMLElement {
             this._duration = el.dataset.duration;
             this.render();
             root.querySelector('[data-time], [data-datetime]')?.focus();
+        }));
+        root.querySelectorAll('[data-enforce]').forEach(el => el.addEventListener('click', () => {
+            this._enforce = el.dataset.enforce === '1';
+            this.render();
+        }));
+        root.querySelectorAll('[data-restore]').forEach(el => el.addEventListener('click', () => {
+            this._restoreTo = el.dataset.restore;
+            this.render();
         }));
         root.querySelectorAll('[data-start]').forEach(el => el.addEventListener('click', () => {
             this._start = el.dataset.start;
@@ -512,7 +567,8 @@ class MiaConfigWidgetDialog extends HTMLElement {
             return this.run(() => o.onApply(this._value, until, { from, priority }));
         }
         if (until && until.getTime() <= Date.now()) return this.fail('La fine deve essere nel futuro');
-        return this.run(() => o.onApply(this._value, until));
+        const extra = o.entityOptions ? { enforce: this._enforce, restore_to: this._restoreTo } : undefined;
+        return this.run(() => o.onApply(this._value, until, extra));
     }
 
     clamp(value) {
@@ -554,6 +610,7 @@ class MiaConfigWidget extends HTMLElement {
     static getStubConfig(hass) {
         const entity = Object.keys(hass.states).find(entityId =>
             entityId.startsWith('sensor.') && hass.states[entityId].attributes?.integration === 'mia_config'
+                && hass.states[entityId].attributes.setup_name !== undefined
         );
         return { entity: entity || '', layout: 'row' };
     }
@@ -649,6 +706,12 @@ class MiaConfigWidget extends HTMLElement {
         return at && at.getTime() > Date.now() ? { at, value: attrs.next_value } : null;
     }
 
+    // Da quanto tempo l'entità ha il valore corrente ("da 2 h 10 min"), dal last_changed di Home Assistant
+    sinceText() {
+        const changed = parseDate(this.getEntity()?.last_changed);
+        return changed ? `da ${formatElapsed(changed)}` : '';
+    }
+
     openHistory() {
         openEntityHistory(this, this._config.entity);
     }
@@ -676,14 +739,26 @@ class MiaConfigWidget extends HTMLElement {
         return db && getInstances(this._hass).length > 1 ? `${name} · ${db}` : name;
     }
 
+    // Limiti e unità del controllo numerico
+    getRange() {
+        const { min, max, step, unit } = this._config;
+        return { min, max, step, unit };
+    }
+
+    // Testi di modalità automatica/manuale (il widget entità li sostituisce)
+    get texts() {
+        return DEFAULT_TEXTS;
+    }
+
     displayValue(value, type) {
         if (type === 'boolean') {
             const labels = booleanLabels(this._values);
             return isTruthy(value) ? labels.on : labels.off;
         }
-        const match = this._values.find(item => String(item.value) === String(value));
+        const match = this._config.show_values ? null : this._values.find(item => String(item.value) === String(value));
         const text = match?.description || value;
-        return this._config.unit && type === 'number' ? `${text} ${this._config.unit}` : text;
+        const unit = this.getRange().unit;
+        return unit && type === 'number' ? `${text} ${unit}` : text;
     }
 
     // Mantiene il "vocabolario" del valore corrente (on/off oppure true/false)
@@ -803,18 +878,18 @@ class MiaConfigWidget extends HTMLElement {
             type,
             value: value ?? (type === 'boolean' ? isTruthy(this.getCurrentValue()) : this.getCurrentValue()),
             values: this._values,
-            min: this._config.min,
-            max: this._config.max,
-            step: this._config.step,
-            unit: this._config.unit,
+            showValues: !!this._config.show_values,
+            ...this.getRange(),
+            texts: this.texts,
             durations: Array.isArray(this._config.durations) ? this._config.durations : DEFAULT_DURATIONS,
             manual: this.isManualActive(),
             currentUntil: this.getManualUntil(),
             nextChangeAt: next?.at || null,
+            ...this.dialogExtras(),
             onApply: (v, until, extra) => done(() => {
                 if (mode === 'value') return options.onSave(this.toSetupValue(v));
                 if (mode === 'override') return this.addOverride(v, extra.from, until, extra.priority);
-                return this.setManual(v, until);
+                return this.setManual(v, until, extra);
             }),
             onAuto: () => done(() => this.setAuto()),
             onOpenConfig: options.onOpenConfig || (this.getSetupName()
@@ -911,10 +986,23 @@ class MiaConfigWidget extends HTMLElement {
                     background: var(--mia-outline-auto); transition: all .2s;
                 }
                 .switch.on::after { left: 23px; }
-                .manual .switch { border-style: solid; border-color: var(--mia-manual-color); }
-                .manual .switch.on { background: var(--mia-manual-color); }
+                /* In manuale l'interruttore usa i colori classici (blu acceso, grigio spento) per leggere bene il valore */
+                .manual .switch { border: 2px solid transparent; background: var(--switch-unchecked-track-color, #9e9e9e); }
+                .manual .switch.on { background: var(--switch-checked-track-color, var(--primary-color, #03a9f4)); }
+                .manual .switch::after { background: var(--switch-unchecked-button-color, #fafafa); box-shadow: 0 1px 2px rgba(0, 0, 0, .3); }
                 .manual .switch.on::after { background: #fff; }
-                .manual .switch:not(.on)::after { background: var(--mia-manual-color); }
+                .row-wrap { display: flex; flex-direction: column; height: 100%; }
+                .row-wrap.tall { padding-bottom: 10px; }
+                .row-wrap.tall .row { flex: none; }
+                .value-block {
+                    flex: 1; min-height: 0; margin: 0 12px; padding: 6px 12px; border-radius: 12px;
+                    font-size: 14px; font-weight: 500; line-height: 1.35; text-align: left; color: var(--primary-text-color);
+                    border: 2px dashed var(--mia-outline-auto); white-space: normal; overflow-wrap: anywhere; overflow: hidden;
+                    display: flex; align-items: center; gap: 10px;
+                }
+                .value-block .value-text { flex: 1; min-width: 0; max-height: 100%; overflow: hidden; }
+                .since { flex: none; font-size: 12px; font-weight: 400; color: var(--mia-muted); white-space: nowrap; }
+                .manual .value-block { border-style: solid; border-color: var(--mia-manual-color); background: color-mix(in srgb, var(--mia-manual-color) 15%, transparent); }
                 .value-pill {
                     flex: none; max-width: 45%; padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 500;
                     border: 2px dashed var(--mia-outline-auto); color: var(--primary-text-color);
@@ -958,24 +1046,51 @@ class MiaConfigWidget extends HTMLElement {
             </button>`;
     }
 
+    // Opzioni aggiuntive del popup (il widget entità aggiunge mantenimento e valore finale)
+    dialogExtras() {
+        return {};
+    }
+
+    // Contenuto aggiuntivo in fondo alla card completa (il widget entità mostra lo storico)
+    renderCardExtra() {
+        return '';
+    }
+
     errorLine() {
         return this._error ? `<div class="error">${escapeHtml(this._error)}</div>` : '';
     }
 
+    // Righe assegnate nella vista a sezioni (ridimensionamento del widget)
+    isTallRow() {
+        const rows = this._config.grid_options?.rows ?? this._config.layout_options?.grid_rows;
+        return Number(rows) >= 2;
+    }
+
     renderRow(type, manual) {
         const current = this.getCurrentValue();
+        const text = escapeHtml(this.displayValue(current, type));
+        const tall = this.isTallRow();
         const control = type === 'boolean'
             ? `<button class="switch ${isTruthy(current) ? 'on' : ''}" data-action="toggle" aria-label="Cambia valore"></button>`
-            : `<button class="value-pill" data-action="dialog">${escapeHtml(this.displayValue(current, type))}</button>`;
+            : tall ? '' : `<button class="value-pill" data-action="dialog" title="${text}">${text}</button>`;
+        // Riga alta: il valore va su una seconda riga a tutta larghezza (utile per valori lunghi)
+        // Con lo spazio della riga alta si mostra anche da quanto tempo c'è il valore
+        const since = tall ? escapeHtml(this.sinceText()) : '';
+        const valueLine = tall
+            ? `<button class="value-block" data-action="dialog" title="${text}"><span class="value-text">${text}</span>${since ? `<span class="since">${since}</span>` : ''}</button>`
+            : '';
         return `
             <ha-card class="${manual ? 'manual' : 'auto outlined'} ${this._busy ? 'busy' : ''}">
-                <div class="row">
-                    ${this.iconBadge(type, manual)}
-                    <div class="info" data-action="dialog">
-                        <div class="name">${escapeHtml(this.getName())}</div>
-                        <div class="status">${this.statusText(true)}</div>
+                <div class="row-wrap ${tall ? 'tall' : ''}">
+                    <div class="row">
+                        ${this.iconBadge(type, manual)}
+                        <div class="info" data-action="dialog">
+                            <div class="name">${escapeHtml(this.getName())}</div>
+                            <div class="status">${this.statusText(true)}</div>
+                        </div>
+                        ${control}
                     </div>
-                    ${control}
+                    ${valueLine}
                 </div>
                 ${this.errorLine()}
             </ha-card>`;
@@ -995,6 +1110,7 @@ class MiaConfigWidget extends HTMLElement {
                     </div>
                     <div class="bottom">
                         <div class="status">${this.statusText(true)}</div>
+                        <span class="since">${escapeHtml(this.sinceText())}</span>
                     </div>
                 </div>
                 ${this.errorLine()}
@@ -1005,6 +1121,7 @@ class MiaConfigWidget extends HTMLElement {
         const current = this.getCurrentValue();
         const match = this._values.find(item => String(item.value) === String(current));
         const until = this.getManualUntil();
+        const showValues = !!this._config.show_values;
         return `
             <ha-card class="${manual ? 'manual' : 'auto'} ${this._busy ? 'busy' : ''}">
                 <div class="card">
@@ -1012,23 +1129,25 @@ class MiaConfigWidget extends HTMLElement {
                         ${this.iconBadge(type, manual)}
                         <div class="info" data-action="dialog">
                             <div class="name">${escapeHtml(this.getName())}</div>
-                            <div class="status">${manual ? 'Forzato manualmente' : 'Gestito automaticamente'}</div>
+                            <div class="status">${escapeHtml(manual ? this.texts.statusManual : this.texts.statusAuto)}</div>
                         </div>
                     </div>
                     <div class="big">
                         ${escapeHtml(this.displayValue(current, type))}
-                        ${type === 'select' && match?.description ? `<small>${escapeHtml(match.value)}</small>` : ''}
+                        ${type === 'select' && match?.description ? `<small>${escapeHtml(showValues ? match.description : match.value)}</small>` : ''}
+                        ${this.sinceText() ? `<small>Valore attuale ${escapeHtml(this.sinceText())}</small>` : ''}
                     </div>
                     <div class="segmented">
-                        <button class="${manual ? '' : 'active a'}" data-action="auto"><ha-icon icon="mdi:autorenew"></ha-icon>Auto</button>
-                        <button class="${manual ? 'active m' : ''}" data-action="dialog"><ha-icon icon="mdi:hand-back-right"></ha-icon>Manuale</button>
+                        <button class="${manual ? '' : 'active a'}" data-action="auto"><ha-icon icon="mdi:autorenew"></ha-icon>${escapeHtml(this.texts.auto)}</button>
+                        <button class="${manual ? 'active m' : ''}" data-action="dialog"><ha-icon icon="mdi:hand-back-right"></ha-icon>${escapeHtml(this.texts.manual)}</button>
                     </div>
-                    <div class="controls">${renderValueControl(type, type === 'boolean' ? isTruthy(current) : current, { values: this._values, min: this._config.min, max: this._config.max, unit: this._config.unit })}</div>
+                    <div class="controls">${renderValueControl(type, type === 'boolean' ? isTruthy(current) : current, { values: this._values, ...this.getRange(), showValues })}</div>
                     <div class="statusbar">
                         <ha-icon icon="${manual ? 'mdi:timer-outline' : 'mdi:calendar-clock'}"></ha-icon>
                         <span class="status">${this.statusText()}</span>
                         ${manual ? `<button data-action="dialog">${until ? 'Modifica' : 'Scadenza'}</button>` : ''}
                     </div>
+                    ${this.renderCardExtra()}
                 </div>
                 ${this.errorLine()}
             </ha-card>`;
@@ -1054,10 +1173,10 @@ class MiaConfigWidget extends HTMLElement {
             this.pickValue(el.dataset.pickValue);
         }));
         root.querySelectorAll('.controls [data-step]').forEach(el => el.addEventListener('click', () => {
-            const step = Number(this._config.step) || 1;
-            let next = (Number(this.getCurrentValue()) || 0) + Number(el.dataset.step) * step;
-            if (this._config.min !== undefined) next = Math.max(Number(this._config.min), next);
-            if (this._config.max !== undefined) next = Math.min(Number(this._config.max), next);
+            const { min, max, step } = this.getRange();
+            let next = (Number(this.getCurrentValue()) || 0) + Number(el.dataset.step) * (Number(step) || 1);
+            if (min !== undefined) next = Math.max(Number(min), next);
+            if (max !== undefined) next = Math.min(Number(max), next);
             this.pickValue(Math.round(next * 1000) / 1000);
         }));
         root.querySelector('.controls [data-number]')?.addEventListener('change', (ev) => this.pickValue(ev.target.value));
@@ -1081,7 +1200,8 @@ const EDITOR_LABELS = {
     min: 'Minimo',
     max: 'Massimo',
     step: 'Passo',
-    unit: 'Unità'
+    unit: 'Unità',
+    show_values: 'Mostra i valori invece delle descrizioni'
 };
 
 class MiaConfigWidgetEditor extends HTMLElement {
@@ -1135,6 +1255,9 @@ class MiaConfigWidgetEditor extends HTMLElement {
                 }
             }
         ];
+        if (['auto', 'select'].includes(this._config.control || 'auto')) {
+            schema.push({ name: 'show_values', selector: { boolean: {} } });
+        }
         if (['auto', 'number'].includes(this._config.control || 'auto')) {
             schema.push({
                 type: 'grid',
@@ -1187,6 +1310,7 @@ class MiaConfigWidgetEditor extends HTMLElement {
     // Toglie dallo YAML i valori uguali al predefinito
     stripDefaults(config) {
         if (config.control === 'auto') delete config.control;
+        if (config.show_values === false) delete config.show_values;
     }
 }
 
@@ -1786,6 +1910,387 @@ class MiaConfigAssistantEditor extends MiaConfigWidgetEditor {
     stripDefaults() {}
 }
 
+// ---------- Forzatura temporanea di entità qualsiasi ----------
+
+// Domini gestiti dal servizio set_entity_override (vedi entity_override.py)
+const ENTITY_TOGGLE_DOMAINS = ['switch', 'light', 'fan', 'input_boolean', 'automation', 'siren', 'humidifier', 'remote'];
+const ENTITY_DOMAINS = [
+    ...ENTITY_TOGGLE_DOMAINS, 'input_number', 'number', 'input_select', 'select', 'input_text', 'text',
+    'climate', 'water_heater', 'cover', 'valve', 'lock'
+];
+const ENTITY_ICONS = {
+    switch: 'mdi:toggle-switch-outline', light: 'mdi:lightbulb-outline', fan: 'mdi:fan', input_boolean: 'mdi:toggle-switch-outline',
+    automation: 'mdi:robot-outline', siren: 'mdi:bullhorn-outline', humidifier: 'mdi:air-humidifier', remote: 'mdi:remote',
+    input_number: 'mdi:numeric', number: 'mdi:numeric', input_select: 'mdi:format-list-bulleted', select: 'mdi:format-list-bulleted',
+    input_text: 'mdi:form-textbox', text: 'mdi:form-textbox', climate: 'mdi:thermostat', water_heater: 'mdi:water-boiler',
+    cover: 'mdi:window-shutter', valve: 'mdi:valve', lock: 'mdi:lock-outline'
+};
+const ENTITY_END_REASONS = {
+    expired: 'scaduto', cancelled: 'annullato', released: 'valore mantenuto',
+    replaced: 'sostituito', restore_failed: 'ripristino non riuscito'
+};
+
+// Sensori "Forzature entità" (uno per istanza Mia Config)
+const getEntityOverrideStates = (hass) => Object.values(hass?.states || {})
+    .filter(state => state.attributes?.mia_config_entity_overrides);
+
+const sameItems = (a = [], b = []) => a.length === b.length && a.every((item, i) => item === b[i]);
+
+// Stesso widget delle configurazioni, ma agisce su un'entità qualsiasi di Home Assistant:
+// "Temporaneo" imposta un valore per un certo tempo, alla scadenza Mia Config rimette quello originale.
+class MiaConfigEntityWidget extends MiaConfigWidget {
+    static getConfigElement() {
+        return document.createElement('mia-config-entity-widget-editor');
+    }
+
+    static getStubConfig(hass) {
+        const entity = Object.keys(hass.states).find(id => ENTITY_TOGGLE_DOMAINS.includes(id.split('.')[0]))
+            || Object.keys(hass.states).find(id => ENTITY_DOMAINS.includes(id.split('.')[0]));
+        return { entity: entity || '', layout: 'row' };
+    }
+
+    setConfig(config) {
+        const domain = String(config?.entity || '').split('.')[0];
+        if (config?.entity && !ENTITY_DOMAINS.includes(domain)) {
+            throw new Error(`Dominio non supportato: ${domain} (supportati: ${ENTITY_DOMAINS.join(', ')})`);
+        }
+        this._history = null;
+        this._historyKey = null;
+        super.setConfig({ ...config, control: 'auto' });
+        // Config cambiata dall'editor: opzioni e forzature vanno ricalcolate subito
+        if (this._hass) {
+            this._entityState = this._hass.states[this._config.entity];
+            this._overrideStates = getEntityOverrideStates(this._hass);
+            this._values = this.computeValues();
+            this.render();
+            this.loadHistory();
+        }
+    }
+
+    set hass(hass) {
+        this._hass = hass;
+        const entityState = hass.states[this._config.entity];
+        const overrideStates = getEntityOverrideStates(hass);
+        if (entityState === this._entityState && sameItems(overrideStates, this._overrideStates)) return;
+        this._entityState = entityState;
+        this._overrideStates = overrideStates;
+        this._values = this.computeValues();
+        this.render();
+        this.loadHistory();
+    }
+
+    get domain() {
+        return this._config.entity.split('.')[0];
+    }
+
+    // Attributo modificato invece dello stato: temperatura impostata o posizione
+    get attribute() {
+        if (['climate', 'water_heater'].includes(this.domain)) return 'temperature';
+        if (['cover', 'valve'].includes(this.domain) && this.getEntity()?.attributes?.current_position !== undefined) return 'current_position';
+        return null;
+    }
+
+    getOverride() {
+        for (const state of this._overrideStates || []) {
+            const found = (state.attributes.overrides || []).find(item => item.entity_id === this._config.entity);
+            if (found) return found;
+        }
+        return null;
+    }
+
+    getSetupName() {
+        return null;
+    }
+
+    getCurrentValue() {
+        const entity = this.getEntity();
+        if (!entity) return 'unknown';
+        if (this.attribute) return entity.attributes[this.attribute] ?? 'unknown';
+        if (['cover', 'valve'].includes(this.domain)) return { opening: 'open', closing: 'closed' }[entity.state] || entity.state;
+        if (this.domain === 'lock') return { locking: 'locked', unlocking: 'unlocked' }[entity.state] || entity.state;
+        return entity.state;
+    }
+
+    isManualActive() {
+        return !!this.getOverride();
+    }
+
+    getManualUntil() {
+        return parseDate(this.getOverride()?.valid_to);
+    }
+
+    getNextChange() {
+        return null;
+    }
+
+    getControlType() {
+        const domain = this.domain;
+        if (ENTITY_TOGGLE_DOMAINS.includes(domain)) return 'boolean';
+        if (['input_number', 'number', 'climate', 'water_heater'].includes(domain) || this.attribute) return 'number';
+        if (['input_text', 'text'].includes(domain)) return 'text';
+        return 'select';
+    }
+
+    // Etichetta tradotta da Home Assistant per uno stato (es. "Aperta" per open)
+    formatState(value) {
+        const entity = this.getEntity();
+        try {
+            const text = entity && this._hass.formatEntityState?.(entity, value);
+            return text && text !== value ? text : undefined;
+        } catch (e) {
+            return undefined;
+        }
+    }
+
+    computeValues() {
+        const entity = this.getEntity();
+        if (!entity || this.getControlType() !== 'select') return [];
+        const options = ['input_select', 'select'].includes(this.domain) ? entity.attributes.options || []
+            : this.domain === 'lock' ? ['locked', 'unlocked']
+            : ['open', 'closed'];
+        return options.map(value => ({ value, description: this.formatState(value) }));
+    }
+
+    async loadValidValues() {
+        this._valuesLoaded = true;
+    }
+
+    getRange() {
+        const attrs = this.getEntity()?.attributes || {};
+        const domain = this.domain;
+        if (['input_number', 'number'].includes(domain)) {
+            return { min: attrs.min, max: attrs.max, step: attrs.step, unit: attrs.unit_of_measurement };
+        }
+        if (['climate', 'water_heater'].includes(domain)) {
+            const unit = this._hass?.config?.unit_system?.temperature || '°C';
+            return { min: attrs.min_temp, max: attrs.max_temp, step: attrs.target_temp_step || (unit === '°F' ? 1 : 0.5), unit };
+        }
+        if (this.attribute === 'current_position') return { min: 0, max: 100, step: 1, unit: '%' };
+        return {};
+    }
+
+    getName() {
+        return this._config.name || this.getEntity()?.attributes?.friendly_name || this._config.entity;
+    }
+
+    getIcon() {
+        return this._config.icon || this.getEntity()?.attributes?.icon || ENTITY_ICONS[this.domain] || 'mdi:pencil';
+    }
+
+    // Valore che verrà rimesso alla scadenza (calcolato dal backend: originale o ultimo manuale),
+    // oppure quello attuale per una nuova forzatura
+    originalText() {
+        const override = this.getOverride();
+        const value = override ? (override.restore_value ?? override.original_value) : this.getCurrentValue();
+        return this.displayValue(value, this.getControlType());
+    }
+
+    // Opzioni della forzatura in corso, altrimenti i predefiniti del widget
+    overrideOptions() {
+        const override = this.getOverride();
+        return {
+            enforce: override ? !!override.enforce : !!this._config.enforce,
+            restore_to: override?.restore_to || this._config.restore_to || 'original'
+        };
+    }
+
+    dialogExtras() {
+        const override = this.getOverride();
+        const type = this.getControlType();
+        const options = this.overrideOptions();
+        return {
+            entityOptions: {
+                enforce: options.enforce,
+                restoreTo: options.restore_to,
+                originalText: this.displayValue(override ? override.original_value : this.getCurrentValue(), type),
+                lastManualText: override?.last_manual_value != null ? this.displayValue(override.last_manual_value, type) : null
+            }
+        };
+    }
+
+    get texts() {
+        return {
+            auto: 'Normale',
+            manual: 'Temporaneo',
+            statusAuto: 'Valore normale',
+            statusManual: 'Valore temporaneo',
+            back: 'Ripristina ora',
+            backAt: `Torna a ${this.originalText()}`,
+            forever: `Resta così finché non lo ripristini (poi torna a ${this.originalText()})`
+        };
+    }
+
+    statusText(compact = false) {
+        const override = this.getOverride();
+        if (!override) return compact ? 'Normale' : 'Nessuna forzatura attiva';
+        const original = escapeHtml(this.originalText());
+        const until = this.getManualUntil();
+        if (override.restore_attempts && until && until.getTime() <= Date.now()) {
+            return `Ripristino a ${original} non riuscito, nuovo tentativo a breve`;
+        }
+        // Cambiato da altri e non mantenuto: il valore attuale è diverso da quello forzato
+        const changed = !override.enforce && override.last_manual_value != null
+            && String(this.getCurrentValue()) !== String(override.value);
+        const notes = [
+            override.enforce ? 'mantenuto forzato' : '',
+            changed ? `cambiato a mano in ${escapeHtml(this.displayValue(override.last_manual_value, this.getControlType()))}` : ''
+        ].filter(Boolean).join(' · ');
+        if (compact) {
+            const lead = changed ? 'Cambiato a mano · ' : '';
+            if (!until) return `${lead}Senza scadenza · poi ${original}`;
+            const text = untilText(until);
+            return `${lead}${changed ? text : `${text.charAt(0).toUpperCase()}${text.slice(1)}`} → ${original}`;
+        }
+        const tail = `${notes ? ` · ${notes}` : ''}`;
+        if (!until) return `Temporaneo senza scadenza <span class="dim">· poi torna a ${original}${tail}</span>`;
+        return `Temporaneo ${untilText(until)}, poi torna a ${original} <span class="dim">· ancora ${formatRemaining(until)}${tail}</span>`;
+    }
+
+    sinceText() {
+        const override = this.getOverride();
+        if (override) {
+            const started = parseDate(override.started_at);
+            return started ? `da ${formatElapsed(started)}` : '';
+        }
+        // last_changed riguarda lo stato: per temperatura e posizione non è significativo
+        return this.attribute ? '' : super.sinceText();
+    }
+
+    // options: { enforce, restore_to } dal popup; senza (cambio rapido dal widget) restano quelle attuali
+    async setManual(value, until, options) {
+        const { enforce, restore_to } = options || this.overrideOptions();
+        await this._hass.callService('mia_config', 'set_entity_override', {
+            entity_id: this._config.entity,
+            value: String(this.toSetupValue(value)),
+            enforce,
+            restore_to,
+            ...(until ? { valid_to: toLocalIso(until) } : {})
+        });
+    }
+
+    async setAuto() {
+        await this._hass.callService('mia_config', 'clear_entity_override', {
+            entity_id: this._config.entity,
+            restore: true
+        });
+    }
+
+    // Storico delle ultime forzature (solo card completa), ricaricato quando inizia o finisce una forzatura
+    async loadHistory() {
+        if (this._layout !== 'card' || !this._hass || !getEntityOverrideStates(this._hass).length) return;
+        const key = String(this.getOverride()?.id ?? 'none');
+        if (key === this._historyKey) return;
+        this._historyKey = key;
+        try {
+            const response = await this._hass.callWS({
+                type: 'call_service',
+                domain: 'mia_config',
+                service: 'get_entity_override_history',
+                service_data: { entity_id: this._config.entity, limit: 5 },
+                return_response: true
+            });
+            this._history = response.response?.history || [];
+        } catch (error) {
+            this._history = null;
+        }
+        this.render();
+    }
+
+    renderCardExtra() {
+        const rows = (this._history || []).filter(row => !row.active);
+        if (!rows.length) return '';
+        const type = this.getControlType();
+        const items = rows.map(row => {
+            const start = parseDate(row.started_at);
+            const end = parseDate(row.ended_at);
+            const length = start && end ? formatDuration(Math.max(1, Math.round((end - start) / 60000))) : '';
+            return `
+                <li>
+                    <span class="when">${start ? formatTime(start) : ''}</span>
+                    <span class="what">${escapeHtml(this.displayValue(row.value, type))}${length ? ` · ${length}` : ''}</span>
+                    <span class="why ${row.end_reason === 'restore_failed' ? 'bad' : ''}">${escapeHtml(ENTITY_END_REASONS[row.end_reason] || row.end_reason || '')}${row.restored_value != null ? ` → ${escapeHtml(this.displayValue(row.restored_value, type))}` : ''}</span>
+                </li>`;
+        }).join('');
+        return `
+            <style>
+                .history .label { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--mia-muted); margin-bottom: 6px; }
+                .history ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+                .history li { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+                .history .when { flex: none; color: var(--mia-muted); min-width: 72px; }
+                .history .what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .history .why { flex: none; color: var(--mia-muted); }
+                .history .why.bad { color: var(--error-color, #db4437); }
+            </style>
+            <div class="history">
+                <div class="label">Ultime forzature</div>
+                <ul>${items}</ul>
+            </div>`;
+    }
+}
+
+const ENTITY_WIDGET_LABELS = {
+    ...EDITOR_LABELS,
+    entity: 'Entità da forzare temporaneamente',
+    enforce: 'Predefinito: rimetti il valore forzato se qualcuno lo cambia',
+    restore_to: 'Predefinito: alla fine torna a'
+};
+
+class MiaConfigEntityWidgetEditor extends MiaConfigWidgetEditor {
+    getSchema() {
+        return [
+            { name: 'entity', required: true, selector: { entity: { filter: { domain: ENTITY_DOMAINS } } } },
+            {
+                name: 'layout',
+                selector: {
+                    select: {
+                        mode: 'box',
+                        options: [
+                            { value: 'row', label: 'Riga (come un\'entità)' },
+                            { value: 'tile', label: 'Riquadro' },
+                            { value: 'card', label: 'Card completa' }
+                        ]
+                    }
+                }
+            },
+            {
+                type: 'grid',
+                name: '',
+                schema: [
+                    { name: 'name', selector: { text: {} } },
+                    { name: 'icon', selector: { icon: {} } }
+                ]
+            },
+            { name: 'enforce', selector: { boolean: {} } },
+            {
+                name: 'restore_to',
+                selector: {
+                    select: {
+                        mode: 'dropdown',
+                        options: [
+                            { value: 'original', label: 'Valore originale (prima della forzatura)' },
+                            { value: 'last_manual', label: 'Ultimo valore manuale (se cambiato durante la forzatura)' }
+                        ]
+                    }
+                }
+            }
+        ];
+    }
+
+    get labels() {
+        return ENTITY_WIDGET_LABELS;
+    }
+
+    get defaults() {
+        return { layout: 'row', enforce: false, restore_to: 'original' };
+    }
+
+    stripDefaults(config) {
+        delete config.control;
+        if (config.enforce === false) delete config.enforce;
+        if (config.restore_to === 'original') delete config.restore_to;
+    }
+}
+
 // Alias delle beta 2.3.9-beta.1/2: restano funzionanti ma non compaiono nel selettore card
 class MiaConfigBinaryCard extends MiaConfigWidget {
     static forcedControl = 'boolean';
@@ -1806,6 +2311,8 @@ if (!customElements.get('mia-config-widget')) {
     customElements.define('mia-config-shortcuts-editor', MiaConfigShortcutsEditor);
     customElements.define('mia-config-assistant', MiaConfigAssistant);
     customElements.define('mia-config-assistant-editor', MiaConfigAssistantEditor);
+    customElements.define('mia-config-entity-widget', MiaConfigEntityWidget);
+    customElements.define('mia-config-entity-widget-editor', MiaConfigEntityWidgetEditor);
     customElements.define('mia-config-binary-card', MiaConfigBinaryCard);
     customElements.define('mia-config-select-card', MiaConfigSelectCard);
     customElements.define('mia-config-number-card', MiaConfigNumberCard);
@@ -1815,6 +2322,11 @@ if (!customElements.get('mia-config-widget')) {
         type: 'mia-config-widget',
         name: 'Mia Config Widget',
         description: 'Forzatura manuale Auto/Manuale di una configurazione (riga, riquadro o card completa)',
+        preview: true
+    }, {
+        type: 'mia-config-entity-widget',
+        name: 'Mia Config Forzatura entità',
+        description: "Imposta temporaneamente il valore di un'entità qualsiasi: alla scadenza Mia Config rimette quello originale",
         preview: true
     }, {
         type: 'mia-config-shortcuts',

@@ -1,5 +1,21 @@
 # 📋 Changelog - Mia Config
 
+## v2.3.9-beta.13 - November 19, 2026 🎛️ Forzatura temporanea di entità
+
+### ✨ Nuove funzionalità
+- Nuovo widget `mia-config-entity-widget` (**Mia Config Forzatura entità**): imposta temporaneamente il valore di un'entità qualsiasi di Home Assistant (interruttori, luci, input_number/select/text, termostati, tapparelle, serrature...) e alla scadenza Mia Config rimette quello originale. Stessi formati riga, riquadro e card; la card mostra le ultime forzature.
+- Forzature attive e storico salvati nella nuova tabella `forzature_entita` del database dell'istanza (inclusa nei backup): dopo un riavvio i ripristini vengono ripianificati e quelli scaduti nel frattempo eseguiti subito; se l'entità non risponde si riprova ogni minuto per un'ora.
+- Forzando di nuovo un'entità già forzata, alla scadenza torna comunque il valore originale di partenza.
+- Se qualcuno cambia il valore durante la forzatura si può scegliere se lasciare la modifica o rimettere il valore forzato per tutto il periodo (`enforce`), e se alla fine tornare al valore originale o all'ultimo valore manuale (`restore_to`). I cambi fatti da Mia Config stessa sono riconosciuti dal `context` e ignorati.
+- Nuovi servizi `set_entity_override` (con `valid_to` o `duration`), `clear_entity_override` e `get_entity_override_history`; nuovo sensore `sensor.forzature_entita_<istanza>` con l'elenco delle forzature attive.
+
+### ✨ Miglioramenti
+- Card principale e widget riconoscono i sensori di configurazione dagli attributi (`integration`, `setup_name`) invece che dal prefisso `sensor.mia_config_` dell'entity_id: funzionano anche con entità rinominate e non scambiano per configurazioni altri sensori dell'integrazione.
+- Widget riga ingrandito in altezza (vista a sezioni, 2+ righe): il valore va su una seconda riga a tutta larghezza e i valori lunghi vanno a capo invece di essere troncati.
+- Nuova opzione `show_values` (editor: "Mostra i valori invece delle descrizioni"): widget e popup mostrano i valori validi invece delle loro descrizioni, che restano come suggerimento al passaggio del mouse.
+- Quando lo spazio lo permette (riga alta, riquadro, card completa) il widget mostra anche da quanto tempo c'è il valore corrente (es. "da 2 h 10 min").
+- Interruttore acceso/spento in manuale con i colori classici (blu acceso, grigio spento) invece del giallo del bordo: il valore corrente si legge meglio.
+
 ## v2.3.9-beta.12 - November 5, 2026 🔗 Popup e storico
 
 ### ✨ Miglioramenti
@@ -38,6 +54,29 @@
 
 ### 🧹 Pulizia
 - Rimosse le modifiche non previste della 2.3.8 (tabella `configurazioni_manuali`, servizi duplicati, modifiche alla card principale).
+
+## v2.3.7 - October 13, 2026 🐛 Backup senza chiamate bloccanti
+
+### 🐛 Fix
+- Risolto il warning `Detected blocking call to scandir ... inside the event loop`: tutte le operazioni su file dei backup (servizi e endpoint di download/upload) girano nell'executor.
+- Validazione dei percorsi di backup con `Path.is_relative_to` (risposta 400 per percorsi fuori dalla cartella backup).
+- Cache prossimi cambiamenti invalidata se il timestamp è nel futuro (clock skew) o se tutti gli eventi sono già passati.
+- `manifest.json` allineato: la v2.3.6 era stata pubblicata con versione `2.3.5`.
+
+## v2.3.5 - January 22, 2026 🔧 Sistema di refresh
+
+### 🐛 Fix
+- Refresh schedulato 2 secondi **dopo** l'evento invece di 10 secondi prima, così si legge sempre il valore nuovo.
+- Precisione ai secondi (`seconds_until`): gli eventi a meno di 60 s non vengono più persi.
+- Cache `event_times` validata e rigenerata automaticamente; intervallo minimo di refresh ridotto da 30 s a 5 s.
+
+### ✨ Nuove funzionalità
+- Servizio `mia_config.force_refresh` (con `entity_id` opzionale) per forzare l'aggiornamento e invalidare le cache.
+
+## v2.3.4 - January 2026 🐛 Vista settimanale
+
+### 🐛 Fix
+- Buchi bianchi nella vista settimanale per le configurazioni a tempo: il confronto ora usa solo la data, non l'ora.
 
 ## v2.3.3 - January 17, 2026 🐛 Weekly View Time Config Gap Fix
 

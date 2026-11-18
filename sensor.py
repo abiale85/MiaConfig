@@ -198,6 +198,11 @@ async def async_setup_entry(
     main_sensor = MiaConfigMainSensor(coordinator, db_name, db, entry)
     async_add_entities([main_sensor], True)
     _LOGGER.info(f"Created main sensor for instance: {db_name}")
+
+    # Sensore delle forzature temporanee di entità (usato dai widget e dalle automazioni)
+    overrides_manager = hass.data[DOMAIN].get(entry.entry_id, {}).get("entity_overrides")
+    if overrides_manager is not None:
+        async_add_entities([EntityOverridesSensor(overrides_manager, db_name, entry)])
     
     async def async_update_sensors():
         """Update sensors based on coordinator data."""
@@ -294,6 +299,41 @@ class MiaConfigMainSensor(CoordinatorEntity, SensorEntity):
     def icon(self) -> str:
         """Icona del sensore."""
         return "mdi:cog-outline"
+
+
+class EntityOverridesSensor(SensorEntity):
+    """Forzature temporanee di entità attive: lo stato è il numero, l'elenco è negli attributi.
+
+    Il frontend lo riconosce dall'attributo mia_config_entity_overrides; non avendo setup_name
+    né total_configs non viene scambiato per una configurazione o per il sensore principale.
+    """
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+    _attr_icon = "mdi:clock-edit-outline"
+
+    def __init__(self, manager, db_name: str, entry: ConfigEntry) -> None:
+        self._manager = manager
+        self._db_name = db_name
+        self._entry = entry
+        self._attr_name = f"Forzature entità {db_name}"
+        self._attr_unique_id = f"mia_config_entity_overrides_{entry.entry_id}"
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(self._manager.add_listener(self.async_write_ha_state))
+
+    @property
+    def native_value(self) -> int:
+        return len(self._manager.active)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "mia_config_entity_overrides": True,
+            "db_name": self._db_name,
+            "entry_id": self._entry.entry_id,
+            "overrides": self._manager.active,
+        }
 
 
 class DynamicConfigSensor(CoordinatorEntity, SensorEntity):

@@ -678,3 +678,134 @@ delete_all_backups:
       selector:
         entity:
           integration: mia_config
+set_entity_override:
+  name: Forza temporaneamente un'entità
+  description: Imposta il valore di un'entità qualsiasi e rimette quello originale alla scadenza. Forzature e storico sono salvati nel database di Mia Config e sopravvivono ai riavvii.
+  fields:
+    entity_id:
+      name: Entità
+      description: Entità da forzare
+      required: true
+      example: "climate.soggiorno"
+      selector:
+        entity:
+          domain:
+            - switch
+            - light
+            - fan
+            - input_boolean
+            - automation
+            - siren
+            - humidifier
+            - remote
+            - input_number
+            - number
+            - input_select
+            - select
+            - input_text
+            - text
+            - climate
+            - water_heater
+            - cover
+            - valve
+            - lock
+    value:
+      name: Valore
+      description: "on/off, un numero, un'opzione, una temperatura (termostati), una posizione 0-100 o open/closed (tapparelle), locked/unlocked (serrature)"
+      required: true
+      example: "23"
+      selector:
+        text:
+    valid_to:
+      name: Fino a
+      description: Data e ora in cui ripristinare il valore originale (in alternativa alla durata; senza entrambi resta finché non viene terminata)
+      required: false
+      selector:
+        datetime:
+    duration:
+      name: Durata
+      description: Per quanto tempo mantenere il valore (in alternativa a "Fino a")
+      required: false
+      example: "01:00:00"
+      selector:
+        duration:
+    enforce:
+      name: Mantieni forzato
+      description: Se qualcuno cambia il valore durante la forzatura (a mano o da un'automazione), Mia Config lo rimette subito
+      required: false
+      default: false
+      selector:
+        boolean:
+    restore_to:
+      name: Alla fine torna a
+      description: Valore originale (quello prima della forzatura) oppure l'ultimo valore impostato da altri durante la forzatura, se c'è
+      required: false
+      default: original
+      selector:
+        select:
+          options:
+            - label: Valore originale
+              value: original
+            - label: Ultimo valore manuale
+              value: last_manual
+    instance:
+      name: Istanza
+      description: Sensore Mia Config dell'istanza in cui salvare la forzatura (opzionale)
+      required: false
+      selector:
+        entity:
+          integration: mia_config
+
+clear_entity_override:
+  name: Termina forzatura entità
+  description: Termina subito la forzatura temporanea di un'entità
+  fields:
+    entity_id:
+      name: Entità
+      description: Entità forzata
+      required: true
+      selector:
+        entity:
+    restore:
+      name: Ripristina
+      description: Rimette il valore originale; se disattivato lascia il valore attuale
+      required: false
+      default: true
+      selector:
+        boolean:
+
+get_entity_override_history:
+  name: Storico forzature entità
+  description: Restituisce le forzature temporanee di entità, dalle più recenti
+  fields:
+    entity_id:
+      name: Entità
+      description: Solo le forzature di questa entità (opzionale)
+      required: false
+      selector:
+        entity:
+    instance:
+      name: Istanza
+      description: Solo questa istanza Mia Config (opzionale)
+      required: false
+      selector:
+        entity:
+          integration: mia_config
+    limit:
+      name: Limite
+      description: Numero massimo di risultati
+      required: false
+      default: 50
+      selector:
+        number:
+          min: 1
+          max: 500
+    offset:
+      name: Offset
+      description: Risultati da saltare (paginazione)
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 100000

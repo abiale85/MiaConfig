@@ -1,3 +1,19 @@
+## v2.3.9-beta.13 - 19 Novembre 2026 🎛️ Forzatura temporanea di entità
+
+### ✨ Nuove funzionalità
+- Nuovo widget `mia-config-entity-widget` (**Mia Config Forzatura entità**): imposta temporaneamente il valore di un'entità qualsiasi di Home Assistant (interruttori, luci, input_number/select/text, termostati, tapparelle, serrature...) e alla scadenza Mia Config rimette quello originale. Stessi formati riga, riquadro e card; la card mostra le ultime forzature.
+- Forzature attive e storico salvati nella nuova tabella `forzature_entita` del database dell'istanza (inclusa nei backup): dopo un riavvio i ripristini vengono ripianificati e quelli scaduti nel frattempo eseguiti subito; se l'entità non risponde si riprova ogni minuto per un'ora.
+- Forzando di nuovo un'entità già forzata, alla scadenza torna comunque il valore originale di partenza.
+- Se qualcuno cambia il valore durante la forzatura si può scegliere se lasciare la modifica o rimettere il valore forzato per tutto il periodo (`enforce`), e se alla fine tornare al valore originale o all'ultimo valore manuale (`restore_to`). I cambi fatti da Mia Config stessa sono riconosciuti dal `context` e ignorati.
+- Nuovi servizi `set_entity_override` (con `valid_to` o `duration`), `clear_entity_override` e `get_entity_override_history`; nuovo sensore `sensor.forzature_entita_<istanza>` con l'elenco delle forzature attive.
+
+### ✨ Miglioramenti
+- Card principale e widget riconoscono i sensori di configurazione dagli attributi (`integration`, `setup_name`) invece che dal prefisso `sensor.mia_config_` dell'entity_id: funzionano anche con entità rinominate e non scambiano per configurazioni altri sensori dell'integrazione.
+- Widget riga ingrandito in altezza (vista a sezioni, 2+ righe): il valore va su una seconda riga a tutta larghezza e i valori lunghi vanno a capo invece di essere troncati.
+- Nuova opzione `show_values` (editor: "Mostra i valori invece delle descrizioni"): widget e popup mostrano i valori validi invece delle loro descrizioni, che restano come suggerimento al passaggio del mouse.
+- Quando lo spazio lo permette (riga alta, riquadro, card completa) il widget mostra anche da quanto tempo c'è il valore corrente (es. "da 2 h 10 min").
+- Interruttore acceso/spento in manuale con i colori classici (blu acceso, grigio spento) invece del giallo del bordo: il valore corrente si legge meglio.
+
 ## v2.3.9-beta.12 - 5 Novembre 2026 🔗 Popup e storico
 
 ### ✨ Miglioramenti
@@ -35,6 +51,29 @@
 
 ### 🧹 Pulizia
 - Rimosse le modifiche non previste della 2.3.8 (tabella `configurazioni_manuali`, servizi duplicati, modifiche alla card principale).
+
+## v2.3.7 - 13 Ottobre 2026 🐛 Backup senza chiamate bloccanti
+
+### 🐛 Fix
+- Risolto il warning `Detected blocking call to scandir ... inside the event loop`: tutte le operazioni su file dei backup (servizi e endpoint di download/upload) girano nell'executor.
+- Validazione dei percorsi di backup con `Path.is_relative_to` (risposta 400 per percorsi fuori dalla cartella backup).
+- Cache prossimi cambiamenti invalidata se il timestamp è nel futuro (clock skew) o se tutti gli eventi sono già passati.
+- `manifest.json` allineato: la v2.3.6 era stata pubblicata con versione `2.3.5`.
+
+## v2.3.5 - 22 Gennaio 2026 🔧 Sistema di refresh
+
+### 🐛 Fix
+- Refresh schedulato 2 secondi **dopo** l'evento invece di 10 secondi prima, così si legge sempre il valore nuovo.
+- Precisione ai secondi (`seconds_until`): gli eventi a meno di 60 s non vengono più persi.
+- Cache `event_times` validata e rigenerata automaticamente; intervallo minimo di refresh ridotto da 30 s a 5 s.
+
+### ✨ Nuove funzionalità
+- Servizio `mia_config.force_refresh` (con `entity_id` opzionale) per forzare l'aggiornamento e invalidare le cache.
+
+## v2.3.4 - Gennaio 2026 🐛 Vista settimanale
+
+### 🐛 Fix
+- Buchi bianchi nella vista settimanale per le configurazioni a tempo: il confronto ora usa solo la data, non l'ora.
 
 ## v2.3.3 - 17 Gennaio 2026 🐛 Fix Buchi Vista Settimanale
 
@@ -99,66 +138,3 @@
 ### 📦 Versioni
 - integrazione: 2.1.2
 - card: 2.1.0-beta.7.2
-
-## ✅ All Modal Issues Fixed + Multi-Instance Support + All Syntax Fixes + Layout Improvements
-
-**This version fixes all 3 reported modal problems, adds complete multi-instance support, fixes all JavaScript syntax errors, and improves the add configuration modal layout:**
-
-### 🐛 Issues Resolved:
-1. **Edit Modal** - Now appears in foreground (was opening in background)
-2. **Collapse in Group By Override** - Toggle now works correctly with enhanced debug logging
-3. **Weekly View Popup** - Detail popup now appears when clicking bars (escapeHtml function added)
-4. **JavaScript Syntax Errors** - Fixed all syntax issues:
-   - Duplicate catch block in dcEditConfig function
-   - Incorrect variable usage in dcShowWeeklyEventModal/dcToggleOverrideGroup (instance used before definition)
-   - Missing try block in dcShowWeeklyEventModal function
-   - Missing segment data extraction in dcShowWeeklyEventModal
-   - Undefined addModal variable in dcEditConfig
-   - Missing escapeHtml function in dcShowWeeklyEventModal
-5. **Add Config Modal Layout** - Improved user experience:
-   - Checkboxes now properly aligned with titles
-   - Date fields (start/end) on same row
-   - Priority field moved to header next to type selector
-   - Added responsive design for mobile devices
-
-### 🔧 Root Cause & Fix:
-- **Problem**: Modal-specific IDs (#dc-edit-modal, #dc-weekly-event-modal) were defined outside .mia-config-card scope, so they didn't inherit the .active display rule
-- **Solution**: Added explicit CSS rules for all modal IDs:
-  ```
-  #dc-add-config-modal.active, #dc-edit-modal.active, #dc-weekly-event-modal.active {
-      display: flex !important;
-  }
-  ```
-- **JavaScript**: Complete multi-instance support using `cardElement._instance` instead of global variables
-- **Collapse Fix**: dcToggleOverrideGroup now uses CSS classes on specific group elements and includes enhanced debug logging
-- **Weekly Modal Fix**: Added missing escapeHtml function to dcShowWeeklyEventModal for safe HTML rendering
-- **Layout Improvements**:
-  - Checkboxes use flex layout for proper alignment
-  - Date fields combined in single row with flex
-  - Priority moved to modal header for better UX
-  - Added responsive CSS for mobile devices
-
-### 🎯 Multi-Instance Support:
-- **Before**: Used `window._miaConfigCardInstance` (breaks with multiple cards)
-- **After**: Functions accept `cardElement` parameter and use `cardElement._instance`
-- **Compatible**: Works with single or multiple MiaConfig cards on same page
-
-### 🐛 Current Debug Focus:
-- **Enhanced Logging**: dcToggleOverrideGroup now includes detailed debug logs
-- **Console Output**: Check browser console for element detection and state changes
-- **Troubleshooting**: Logs show available elements, search patterns, and operations performed
-
-### 🧪 How to test:
-1. **Hard-reload** (Ctrl+F5) - **IMPORTANT**: Clear browser cache!
-2. **Edit button** → Modal should appear in foreground
-3. **Collapse in group by override** → Should toggle open/close (check console for debug logs)
-4. **Weekly view bar click** → Detail popup should appear (no more escapeHtml errors)
-5. **Multiple cards** → Each card works independently
-6. **No JavaScript errors** → Console should be clean (except debug logs)
-7. **Add Config Modal** → Checkboxes aligned, dates inline, priority in header, responsive on mobile
-
-### 📦 Versions:
-- Integration: 2.1.0-beta.6
-- Card: 2.1.0-beta.6
-
-**All modals work correctly + full multi-instance support + zero syntax errors + improved UX + responsive design + enhanced debugging!** 🎉
