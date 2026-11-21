@@ -132,6 +132,8 @@ Altre opzioni: `show_values: true` mostra i valori invece delle loro descrizioni
 
 Il widget `custom:mia-config-entity-widget` (**Mia Config Forzatura entità** nel selettore card) funziona come il widget Auto/Manuale, ma su un'entità **qualsiasi** di Home Assistant: scegli un valore e per quanto tempo mantenerlo, alla scadenza Mia Config rimette il valore che c'era prima. Stessi formati `row`, `tile` e `card` (la card mostra anche le ultime forzature).
 
+> Non serve per le entità Mia Config (`sensor.mia_config_*`): per quelle usa il widget `mia-config-widget`, che ha la forzatura manuale integrata con priorità e ritorno in automatico. Widget e servizio `set_entity_override` le rifiutano.
+
 ```yaml
 type: custom:mia-config-entity-widget
 entity: climate.soggiorno

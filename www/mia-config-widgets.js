@@ -1951,6 +1951,9 @@ class MiaConfigEntityWidget extends MiaConfigWidget {
 
     setConfig(config) {
         const domain = String(config?.entity || '').split('.')[0];
+        if (config?.entity && this._hass?.states[config.entity]?.attributes?.integration === 'mia_config') {
+            throw new Error(`${config.entity} è un'entità Mia Config: usa il widget mia-config-widget, che ha la forzatura manuale integrata`);
+        }
         if (config?.entity && !ENTITY_DOMAINS.includes(domain)) {
             throw new Error(`Dominio non supportato: ${domain} (supportati: ${ENTITY_DOMAINS.join(', ')})`);
         }

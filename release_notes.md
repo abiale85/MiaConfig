@@ -1,53 +1,34 @@
-## v2.3.9-beta.13 - 19 Novembre 2026 🎛️ Forzatura temporanea di entità
+## v2.3.9 - 21 Novembre 2026 🛠️ Widget Auto/Manuale e forzatura entità
 
 ### ✨ Nuove funzionalità
-- Nuovo widget `mia-config-entity-widget` (**Mia Config Forzatura entità**): imposta temporaneamente il valore di un'entità qualsiasi di Home Assistant (interruttori, luci, input_number/select/text, termostati, tapparelle, serrature...) e alla scadenza Mia Config rimette quello originale. Stessi formati riga, riquadro e card; la card mostra le ultime forzature.
-- Forzature attive e storico salvati nella nuova tabella `forzature_entita` del database dell'istanza (inclusa nei backup): dopo un riavvio i ripristini vengono ripianificati e quelli scaduti nel frattempo eseguiti subito; se l'entità non risponde si riprova ogni minuto per un'ora.
-- Forzando di nuovo un'entità già forzata, alla scadenza torna comunque il valore originale di partenza.
-- Se qualcuno cambia il valore durante la forzatura si può scegliere se lasciare la modifica o rimettere il valore forzato per tutto il periodo (`enforce`), e se alla fine tornare al valore originale o all'ultimo valore manuale (`restore_to`). I cambi fatti da Mia Config stessa sono riconosciuti dal `context` e ignorati.
-- Nuovi servizi `set_entity_override` (con `valid_to` o `duration`), `clear_entity_override` e `get_entity_override_history`; nuovo sensore `sensor.forzature_entita_<istanza>` con l'elenco delle forzature attive.
-
-### ✨ Miglioramenti
-- Card principale e widget riconoscono i sensori di configurazione dagli attributi (`integration`, `setup_name`) invece che dal prefisso `sensor.mia_config_` dell'entity_id: funzionano anche con entità rinominate e non scambiano per configurazioni altri sensori dell'integrazione.
-- Widget riga ingrandito in altezza (vista a sezioni, 2+ righe): il valore va su una seconda riga a tutta larghezza e i valori lunghi vanno a capo invece di essere troncati.
-- Nuova opzione `show_values` (editor: "Mostra i valori invece delle descrizioni"): widget e popup mostrano i valori validi invece delle loro descrizioni, che restano come suggerimento al passaggio del mouse.
-- Quando lo spazio lo permette (riga alta, riquadro, card completa) il widget mostra anche da quanto tempo c'è il valore corrente (es. "da 2 h 10 min").
-- Interruttore acceso/spento in manuale con i colori classici (blu acceso, grigio spento) invece del giallo del bordo: il valore corrente si legge meglio.
-
-## v2.3.9-beta.12 - 5 Novembre 2026 🔗 Popup e storico
-
-### ✨ Miglioramenti
-- L'icona a sinistra del widget apre direttamente la vista **Storico** del popup di Home Assistant.
-- Il pulsante "Torna in Auto" non compare più nei widget riga e riquadro: si trova solo nel popup.
-- Nel popup nuovo link **Apri configurazione completa**: apre la card principale sulla scheda Configura con il gruppo dell'entità espanso (la dashboard con la card viene trovata automaticamente; opzione `config_path` per indicarla a mano).
-
-## v2.3.9-beta.11 - 1 Novembre 2026 📈 Storico nei widget
-
-### ✨ Miglioramenti
-- L'icona a sinistra dei widget apre lo storico dell'entità nel popup standard di Home Assistant.
-- Il click sul nome o sul valore continua ad aprire il popup per modificare il parametro.
-
-## v2.3.9 - 27 Ottobre 2026 🛠️ Widget Auto/Manuale
-
-### ✨ Nuove funzionalità
-- Widget Lovelace unico `mia-config-widget` in tre formati (riga, riquadro, card completa) con tipo di controllo dedotto automaticamente.
+- Widget Lovelace unico `mia-config-widget` in tre formati (riga, riquadro, card completa) con tipo di controllo dedotto automaticamente; editor visuale incluso.
 - Se i Valori Validi sono esattamente `0` e `1` il widget mostra un interruttore (etichette dalle descrizioni dei valori).
-- Popup di forzatura con durate rapide (30 min … 4 h), "fino alle HH:MM", "fino al prossimo cambio automatico", data e ora o senza scadenza.
+- Popup di forzatura con durate rapide (30 min … 4 h), "fino alle HH:MM", "fino al prossimo cambio automatico", data e ora o senza scadenza; link **Apri configurazione completa** verso la card principale.
+- L'icona a sinistra dei widget apre la vista **Storico** del popup di Home Assistant.
 - Il sensore espone la scadenza della forzatura manuale nell'attributo `valid_to`.
 - Nuovo widget `mia-config-shortcuts`: scorciatoie che creano override a tempo, override personalizzati da popup ed elenco degli override attivi con eliminazione.
 - Card principale: pulsanti **🖐️ Manuale**, **➕ Override** e, per le configurazioni solo standard, **✏️ Valore**, con lo stesso popup dei widget.
 - Assistente a parole: una frase viene interpretata dall'AI Task di Home Assistant (servizio `interpret_request`) e apre il popup precompilato da confermare; card `mia-config-assistant` e casella in cima alla dashboard della card principale.
-- Nuovi servizi `set_manual_override` e `clear_manual_override`.
-- Editor visuale del widget.
+- Nuovi servizi `set_manual_override` e `clear_manual_override`. La forzatura manuale è una configurazione a tempo con priorità riservata `0`, sempre vincente; schema del database invariato.
+- Nuovo widget `mia-config-entity-widget` (**Mia Config Forzatura entità**): imposta temporaneamente il valore di un'entità qualsiasi di Home Assistant (interruttori, luci, input_number/select/text, termostati, tapparelle, serrature...) e alla scadenza rimette quello originale. Opzioni `enforce` (rimetti il valore se qualcuno lo cambia) e `restore_to` (`original` / `last_manual`). Forzature e storico nella tabella `forzature_entita` (inclusa nei backup), ripianificate dopo un riavvio. Servizi `set_entity_override`, `clear_entity_override`, `get_entity_override_history` e sensore `sensor.forzature_entita_<istanza>`.
+- Le entità Mia Config non si possono forzare con la forzatura entità (widget e servizio danno un errore esplicito): per quelle si usa la forzatura manuale integrata (`mia-config-widget` / `set_manual_override`).
 - Le risorse Lovelace di card e widget sono gestite automaticamente (create, aggiornate con `?v=versione`, doppioni e file obsoleti rimossi): non serve più registrarle a mano.
-- La forzatura manuale è una configurazione a tempo con priorità riservata `0`, sempre vincente; schema del database invariato.
+
+### ✨ Miglioramenti
+- Card principale e widget riconoscono i sensori di configurazione dagli attributi (`integration`, `setup_name`) invece che dal prefisso dell'entity_id: funzionano anche con entità rinominate.
+- Widget riga più alto nella vista a sezioni (2+ righe): il valore va su una seconda riga e i valori lunghi vanno a capo.
+- Opzione `show_values`: widget e popup mostrano i valori validi invece delle descrizioni.
+- Il widget mostra da quanto tempo c'è il valore corrente (es. "da 2 h 10 min") quando lo spazio lo permette.
+- Il pulsante "Torna in Auto" è solo nel popup, non più nei widget riga e riquadro.
+- Interruttore acceso/spento in manuale con i colori classici (blu acceso, grigio spento).
 
 ### 🔧 Modifiche
 - Le priorità impostabili dall'utente partono da 1 (lo 0 è riservato alla forzatura manuale).
 - Tutti i servizi accettano `entity_id`: prima la card configurata con un'istanza specifica dava errore "extra keys not allowed" a ogni salvataggio.
-- Multi-istanza nella card principale: l'`entity_id` configurato nello YAML veniva ignorato (azzerato al primo aggiornamento); ora la card resta sull'istanza scelta, mostra un selettore se ce ne sono più di una, filtra la dashboard per istanza e più card nella stessa pagina non si scambiano più comandi.
+- Multi-istanza nella card principale: l'`entity_id` configurato nello YAML veniva ignorato; ora la card resta sull'istanza scelta, mostra un selettore se ce ne sono più di una, filtra la dashboard per istanza e più card nella stessa pagina non si scambiano più comandi.
 - Multi-istanza in widget e assistente: nome del database nei nomi predefiniti e selettore di istanza nell'assistente.
 - Modifica di una configurazione standard: il valore si sceglie tra i Valori Validi, se definiti.
+- Cambi programmati in ritardo: con più configurazioni il prossimo aggiornamento del sensore veniva calcolato da tempi residui in cache ormai superati, spostando il cambio anche di un'ora; ora il tempo mancante si ricalcola dall'orario esatto dell'evento.
 
 ### 🧹 Pulizia
 - Rimosse le modifiche non previste della 2.3.8 (tabella `configurazioni_manuali`, servizi duplicati, modifiche alla card principale).

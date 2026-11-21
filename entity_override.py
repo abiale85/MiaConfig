@@ -34,6 +34,8 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.util import dt as dt_util
 
+from .const import DOMAIN as MIA_CONFIG_DOMAIN
+
 _LOGGER = logging.getLogger(__name__)
 
 # Nuovo tentativo di ripristino se l'entità non risponde (es. dispositivo offline)
@@ -559,6 +561,11 @@ class EntityOverrideManager:
         state = self.hass.states.get(entity_id)
         if state is None:
             raise ServiceValidationError(f"Entità non trovata: {entity_id}")
+        if state.attributes.get("integration") == MIA_CONFIG_DOMAIN:
+            raise ServiceValidationError(
+                f"{entity_id} è un'entità Mia Config: per forzarla usa la forzatura manuale integrata "
+                "(servizio set_manual_override o widget mia-config-widget)"
+            )
         if valid_to is not None and valid_to <= dt_util.utcnow():
             raise ServiceValidationError("La scadenza deve essere nel futuro")
         attribute, target = resolve_target(state, value)
