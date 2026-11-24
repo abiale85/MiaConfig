@@ -138,6 +138,38 @@ const formatElapsed = (date) => {
     return days === 1 ? '1 giorno' : `${days} giorni`;
 };
 
+// Inizio reale del valore corrente: risale lo storico saltando i riavvii (stesso valore o unavailable/unknown)
+const SINCE_LOOKBACK_DAYS = 30;
+const findValueStart = async (hass, entity, changed) => {
+    try {
+        const start = new Date(Date.now() - SINCE_LOOKBACK_DAYS * 86400000);
+        const response = await hass.callWS({
+            type: 'history/history_during_period',
+            start_time: start.toISOString(),
+            end_time: new Date(changed.getTime() + 1000).toISOString(),
+            entity_ids: [entity.entity_id],
+            include_start_time_state: true,
+            significant_changes_only: false,
+            minimal_response: true,
+            no_attributes: true,
+        });
+        const rows = response?.[entity.entity_id] || [];
+        let since = changed;
+        for (let i = rows.length - 1; i >= 0; i--) {
+            const row = rows[i];
+            const state = row.s ?? row.state;
+            if (state === 'unavailable' || state === 'unknown') continue;
+            if (String(state) !== String(entity.state)) break;
+            const at = row.lc ?? row.lu;
+            const date = typeof at === 'number' ? new Date(at * 1000) : parseDate(row.last_changed ?? row.last_updated);
+            if (date && date < since) since = date;
+        }
+        return since;
+    } catch (err) {
+        return null;
+    }
+};
+
 // Prossima occorrenza di un orario HH:MM dopo un istante (predefinito: adesso)
 const nextOccurrence = (hhmm, after = new Date()) => {
     const [h, m] = hhmm.split(':').map(Number);
@@ -706,10 +738,28 @@ class MiaConfigWidget extends HTMLElement {
         return at && at.getTime() > Date.now() ? { at, value: attrs.next_value } : null;
     }
 
-    // Da quanto tempo l'entità ha il valore corrente ("da 2 h 10 min"), dal last_changed di Home Assistant
+    // Da quanto tempo l'entità ha il valore corrente ("da 2 h 10 min")
     sinceText() {
-        const changed = parseDate(this.getEntity()?.last_changed);
+        const changed = this.valueSince();
         return changed ? `da ${formatElapsed(changed)}` : '';
+    }
+
+    // last_changed si azzera al riavvio di Home Assistant: lo storico dà il vero inizio del valore corrente
+    valueSince() {
+        const entity = this.getEntity();
+        const changed = parseDate(entity?.last_changed);
+        if (!entity || !changed || !this._hass?.callWS) return changed;
+        const key = `${entity.entity_id}|${entity.state}|${entity.last_changed}`;
+        if (this._sinceKey !== key) {
+            this._sinceKey = key;
+            this._sinceDate = null;
+            findValueStart(this._hass, entity, changed).then(date => {
+                if (this._sinceKey !== key || !date || date.getTime() >= changed.getTime()) return;
+                this._sinceDate = date;
+                this.render();
+            });
+        }
+        return this._sinceDate || changed;
     }
 
     openHistory() {
@@ -986,6 +1036,9 @@ class MiaConfigWidget extends HTMLElement {
                     background: var(--mia-outline-auto); transition: all .2s;
                 }
                 .switch.on::after { left: 23px; }
+                /* In automatico, se attivo, il pallino è blu (bordo tratteggiato = nessuna forzatura) */
+                .switch.on { border-color: var(--mia-auto-color); }
+                .switch.on::after { background: var(--mia-auto-color); }
                 /* In manuale l'interruttore usa i colori classici (blu acceso, grigio spento) per leggere bene il valore */
                 .manual .switch { border: 2px solid transparent; background: var(--switch-unchecked-track-color, #9e9e9e); }
                 .manual .switch.on { background: var(--switch-checked-track-color, var(--primary-color, #03a9f4)); }

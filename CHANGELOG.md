@@ -1,5 +1,11 @@
 # 📋 Changelog - Mia Config
 
+## v2.3.10-beta.1 - November 24, 2026 🧪
+
+### 🐛 Correzioni
+- Widget: "da X" (da quanto tempo c'è il valore corrente) non si azzera più al riavvio di Home Assistant: il tempo reale si ricava dallo storico (ultimi 30 giorni), ignorando i riavvii e gli stati `unavailable`/`unknown`.
+- Widget riga: interruttore acceso in automatico con pallino e bordo blu (in manuale restano i colori classici).
+
 ## v2.3.9 - November 21, 2026 🛠️ Widget Auto/Manuale e forzatura entità
 
 ### ✨ Nuove funzionalità
