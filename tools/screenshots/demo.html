@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<script>
+    // Orologio fisso alle 19:52 di oggi: screenshot uguali a qualunque ora vengano generati
+    (() => {
+        const Real = Date;
+        const fixed = new Real(); fixed.setHours(19, 52, 0, 0);
+        const offset = fixed.getTime() - Real.now();
+        class FakeDate extends Real {
+            constructor(...args) { if (args.length) super(...args); else super(Real.now() + offset); }
+            static now() { return Real.now() + offset; }
+        }
+        window.Date = FakeDate;
+    })();
+</script>
+<script src="icons.js"></script>
+<style>
+    html {
+        /* Variabili del tema scuro predefinito di Home Assistant */
+        --primary-background-color: #111111;
+        --card-background-color: #1c1c1c;
+        --ha-card-background: #1c1c1c;
+        --primary-text-color: #e1e1e1;
+        --secondary-text-color: #9b9b9b;
+        --primary-color: #03a9f4;
+        --divider-color: rgba(225, 225, 225, .12);
+        --disabled-color: #6f6f6f;
+        --warning-color: #ffa600;
+        --error-color: #db4437;
+        --success-color: #43a047;
+        --state-icon-color: #44739e;
+        --ha-card-border-radius: 12px;
+        --mdc-icon-size: 24px;
+        color-scheme: dark;
+    }
+    body { margin: 0; padding: 20px; background: var(--primary-background-color); color: var(--primary-text-color);
+           font-family: Roboto, "Segoe UI", system-ui, sans-serif; font-size: 14px; }
+    .page { display: flex; gap: 20px; align-items: flex-start; }
+    .col { width: 460px; display: flex; flex-direction: column; gap: 8px; }
+    .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .title { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 500; color: var(--secondary-text-color); padding: 4px 4px 6px; }
+    .tall { height: 128px; }
+    .tile-cell { height: 120px; }
+    ha-card { display: block; background: var(--ha-card-background); border-radius: var(--ha-card-border-radius);
+              border: 1px solid var(--divider-color); color: var(--primary-text-color); box-sizing: border-box; }
+    button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; padding: 0; }
+</style>
+<script>
+    // Finti elementi di Home Assistant: <ha-icon> disegna l'SVG di MDI
+    customElements.define('ha-icon', class extends HTMLElement {
+        static get observedAttributes() { return ['icon']; }
+        connectedCallback() { this.draw(); }
+        attributeChangedCallback() { this.draw(); }
+        draw() {
+            if (!this.shadowRoot) this.attachShadow({ mode: 'open' });
+            const path = window.MDI_ICONS[this.getAttribute('icon')] || '';
+            this.shadowRoot.innerHTML = `<style>:host{display:inline-flex;width:var(--mdc-icon-size,24px);height:var(--mdc-icon-size,24px)}svg{width:100%;height:100%;fill:currentColor}</style><svg viewBox="0 0 24 24"><path d="${path}"/></svg>`;
+        }
+    });
+    customElements.define('ha-card', class extends HTMLElement {
+        constructor() {
+            super();
+            this.attachShadow({ mode: 'open' }).innerHTML = `<style>:host{display:block;box-sizing:border-box;background:var(--ha-card-background);
+                border-radius:var(--ha-card-border-radius);border:1px solid var(--divider-color);color:var(--primary-text-color)}</style><slot></slot>`;
+        }
+    });
+    window.customCards = [];
+
+    const now = Date.now();
+    const at = (minutes) => new Date(now + minutes * 60000).toISOString();
+    const todayAt = (h, m) => { const d = new Date(); d.setHours(h, m, 0, 0); if (d.getTime() < now) d.setDate(d.getDate() + 1); return d.toISOString(); };
+
+    const cfg = (id, state, attrs, changedMin) => ({
+        entity_id: id, state, last_changed: at(-changedMin), last_updated: at(-changedMin),
+        attributes: { integration: 'mia_config', db_name: 'casa', ...attrs }
+    });
+
+    const states = {
+        'sensor.mia_config_casa': cfg('sensor.mia_config_casa', '4', { total_configs: 4, friendly_name: 'Mia Config casa' }, 600),
+        'sensor.accensione_automatica': cfg('sensor.accensione_automatica', '1', {
+            setup_name: 'accensione_automatica', friendly_name: 'Accensione automatica', icon: 'mdi:fire',
+            source: 'schedule', priority: 10, next_change_at: todayAt(21, 0), next_value: '0'
+        }, 95),
+        'sensor.spegnimento_automatico': cfg('sensor.spegnimento_automatico', '0', {
+            setup_name: 'spegnimento_automatico', friendly_name: 'Spegnimento automatico', icon: 'mdi:fire-off',
+            source: 'time', priority: 0, valid_to: at(85)
+        }, 20),
+        'sensor.profilo_temperatura': cfg('sensor.profilo_temperatura', 'sera', {
+            setup_name: 'profilo_temperatura', friendly_name: 'Profilo temperatura', icon: 'mdi:home-thermometer-outline',
+            source: 'schedule', priority: 20, next_change_at: todayAt(22, 30), next_value: 'notte'
+        }, 157),
+        'sensor.temperatura_comfort': cfg('sensor.temperatura_comfort', '21.5', {
+            setup_name: 'temperatura_comfort', friendly_name: 'Temperatura comfort', icon: 'mdi:thermometer',
+            source: 'standard', priority: 99
+        }, 60 * 26),
+        'sensor.modalita_casa': cfg('sensor.modalita_casa', 'vacanza', {
+            setup_name: 'modalita_casa', friendly_name: 'Modalità casa', icon: 'mdi:home-account',
+            source: 'time', priority: 0, valid_to: todayAt(23, 0)
+        }, 45),
+        'climate.soggiorno': { entity_id: 'climate.soggiorno', state: 'heat', last_changed: at(-30), last_updated: at(-30),
+            attributes: { friendly_name: 'Termostato soggiorno', temperature: 23, min_temp: 7, max_temp: 30, target_temp_step: 0.5, temperature_unit: '°C', hvac_modes: ['off', 'heat'] } },
+        'light.cucina': { entity_id: 'light.cucina', state: 'off', last_changed: at(-75), last_updated: at(-75),
+            attributes: { friendly_name: 'Luce cucina' } },
+        'sensor.forzature_entita_casa': { entity_id: 'sensor.forzature_entita_casa', state: '1', last_changed: at(-30), last_updated: at(-30),
+            attributes: { mia_config_entity_overrides: true, db_name: 'casa', overrides: [{
+                id: 7, entity_id: 'climate.soggiorno', value: '23', original_value: '20', started_at: at(-30), valid_to: at(90),
+                enforce: true, restore_to: 'original'
+            }] } }
+    };
+
+    const validValues = {
+        accensione_automatica: [{ value: '0', description: 'Spento' }, { value: '1', description: 'Acceso' }],
+        spegnimento_automatico: [{ value: '0', description: 'Spento' }, { value: '1', description: 'Acceso' }],
+        profilo_temperatura: [
+            { value: 'mattina', description: 'Mattina (20 °C)' }, { value: 'giorno', description: 'Giorno (19 °C)' },
+            { value: 'sera', description: 'Sera (21 °C)' }, { value: 'notte', description: 'Notte (18 °C)' }, { value: 'eco', description: 'Eco (17 °C)' }],
+        modalita_casa: [{ value: 'normale', description: 'Normale' }, { value: 'vacanza', description: 'Vacanza' }, { value: 'ospiti', description: 'Ospiti' }]
+    };
+
+    const hass = {
+        states, services: { ai_task: { generate_data: {} } }, language: 'it', locale: { language: 'it' },
+        themes: { darkMode: true },
+        callService: async () => ({}),
+        callWS: async (msg) => {
+            if (msg.type === 'history/history_during_period') return {};
+            if (msg.type !== 'call_service') return {};
+            const data = msg.service_data || {};
+            if (msg.service === 'get_valid_values') return { response: { valid_values: validValues[data.setup_name] || [] } };
+            if (msg.service === 'get_configurations') return { response: { profilo_temperatura: [
+                { id: 11, type: 'time', enabled: true, priority: 1, value: 'eco', valid_from_date: todayAt(22, 0), valid_to_date: todayAt(23, 30) },
+                { id: 12, type: 'time', enabled: true, priority: 2, value: 'mattina', valid_from_date: at(-10), valid_to_date: at(70) }
+            ] } };
+            if (msg.service === 'get_entity_override_history') return { response: { history: [
+                { id: 6, active: false, value: '22', original_value: '20', started_at: at(-60 * 20), ended_at: at(-60 * 18), end_reason: 'expired', restored_value: '20' },
+                { id: 5, active: false, value: '24', original_value: '20', started_at: at(-60 * 46), ended_at: at(-60 * 45), end_reason: 'cancelled', restored_value: '20' }
+            ] } };
+            return { response: {} };
+        }
+    };
+    window.demoHass = hass;
+</script>
+<script src="../../www/mia-config-widgets.js"></script>
+</head>
+<body>
+<div class="page" id="page"></div>
+<script>
+    const view = new URLSearchParams(location.search).get('view') || 'widgets';
+    const page = document.getElementById('page');
+
+    const add = (parent, tag, config, cls) => {
+        const wrap = document.createElement('div');
+        if (cls) wrap.className = cls;
+        const el = document.createElement(tag);
+        el.setConfig(config);
+        el.hass = demoHass;
+        wrap.appendChild(el);
+        parent.appendChild(wrap);
+        return el;
+    };
+    const col = (title, icon) => {
+        const c = document.createElement('div');
+        c.className = 'col';
+        if (title) c.innerHTML = `<div class="title"><ha-icon icon="${icon}"></ha-icon>${title}</div>`;
+        page.appendChild(c);
+        return c;
+    };
+
+    if (view === 'widgets') {
+        const a = col('Riscaldamento', 'mdi:radiator');
+        add(a, 'mia-config-widget', { entity: 'sensor.accensione_automatica', layout: 'row' });
+        add(a, 'mia-config-widget', { entity: 'sensor.spegnimento_automatico', layout: 'row' });
+        add(a, 'mia-config-widget', { entity: 'sensor.profilo_temperatura', layout: 'row', grid_options: { rows: 2 } }, 'tall');
+        const pair = document.createElement('div');
+        pair.className = 'pair';
+        a.appendChild(pair);
+        add(pair, 'mia-config-widget', { entity: 'sensor.temperatura_comfort', layout: 'tile', name: 'Temperatura', unit: '°C' }, 'tile-cell');
+        add(pair, 'mia-config-widget', { entity: 'sensor.modalita_casa', layout: 'tile' }, 'tile-cell');
+        const b = col('Profilo', 'mdi:tune-variant');
+        add(b, 'mia-config-widget', { entity: 'sensor.profilo_temperatura', layout: 'card' });
+    } else if (view === 'entity') {
+        const a = col('Forzatura entità', 'mdi:timer-cog-outline');
+        add(a, 'mia-config-entity-widget', { entity: 'climate.soggiorno', layout: 'row' });
+        add(a, 'mia-config-entity-widget', { entity: 'light.cucina', layout: 'row' });
+        add(a, 'mia-config-entity-widget', { entity: 'climate.soggiorno', layout: 'card' });
+        const b = col('Scorciatoie', 'mdi:lightning-bolt-outline');
+        add(b, 'mia-config-shortcuts', {
+            entity: 'sensor.profilo_temperatura', name: 'Profilo temperatura', priority: 1,
+            shortcuts: [
+                { name: 'Comfort', value: 'sera', duration: 120, icon: 'mdi:sofa' },
+                { name: 'Eco', value: 'eco', until: '23:30', icon: 'mdi:leaf' },
+                { name: 'Notte presto', value: 'notte', from: '21:00', duration: 180, icon: 'mdi:weather-night' }
+            ]
+        });
+        add(b, 'mia-config-assistant', { entity: 'sensor.mia_config_casa', name: 'Chiedi a Mia Config' });
+    } else if (view === 'dialog') {
+        const a = col('Riscaldamento', 'mdi:radiator');
+        const w = add(a, 'mia-config-widget', { entity: 'sensor.profilo_temperatura', layout: 'row' });
+        setTimeout(() => w.openDialog('eco'), 300);
+    }
+</script>
+</body>
+</html>
