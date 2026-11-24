@@ -18,6 +18,8 @@ Un componente custom per Home Assistant che gestisce configurazioni dinamiche co
 >
 > Elenco completo nel [CHANGELOG](CHANGELOG.md).
 
+![Widget Auto/Manuale: righe, riquadri e card completa](images/widget.png)
+
 ## Caratteristiche
 
 - **Multi-Istanza**: Supporto per configurazioni separate per più case/ambienti
@@ -120,6 +122,8 @@ Un solo widget, `custom:mia-config-widget` (**Mia Config Widget** nel selettore 
 
 Quando forzi un valore si apre un popup **Per quanto tempo**: 30 min, 1 h, 2 h, 4 h, *fino al prossimo cambio automatico*, *fino alle HH:MM* (basta l'orario: se è già passato vale per domani), *data e ora* oppure *senza scadenza*. Se sei già in Manuale e cambi valore, la scadenza resta quella di prima.
 
+<img src="images/widget-popup.png" alt="Popup di forzatura con valore e durata" width="600">
+
 ```yaml
 type: custom:mia-config-widget
 entity: sensor.mia_config_temperatura_clima
@@ -143,6 +147,8 @@ Altre opzioni: `show_values: true` mostra i valori invece delle loro descrizioni
 ### Forzatura temporanea di entità qualsiasi
 
 Il widget `custom:mia-config-entity-widget` (**Mia Config Forzatura entità** nel selettore card) funziona come il widget Auto/Manuale, ma su un'entità **qualsiasi** di Home Assistant: scegli un valore e per quanto tempo mantenerlo, alla scadenza Mia Config rimette il valore che c'era prima. Stessi formati `row`, `tile` e `card` (la card mostra anche le ultime forzature).
+
+![Forzatura di un termostato, scorciatoie override e assistente](images/widget-entita-scorciatoie.png)
 
 > Non serve per le entità Mia Config (`sensor.mia_config_*`): per quelle usa il widget `mia-config-widget`, che ha la forzatura manuale integrata con priorità e ritorno in automatico. Widget e servizio `set_entity_override` le rifiutano.
 

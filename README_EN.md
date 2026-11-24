@@ -18,6 +18,8 @@ A custom component for Home Assistant that manages dynamic configurations with v
 >
 > Full list in the [CHANGELOG](CHANGELOG.md).
 
+![Auto/Manual widget: rows, tiles and full card](images/widget.png)
+
 ## Features
 
 - **Multi-Instance**: Support for separate configurations for multiple homes/environments
@@ -156,6 +158,8 @@ Lovelace resources for the card and all widgets are managed by the integration (
 
 Forcing a value opens a **For how long** popup: 30 min, 1 h, 2 h, 4 h, *until the next automatic change*, *until HH:MM* (tomorrow if already past), *date and time* or *no expiry*.
 
+<img src="images/widget-popup.png" alt="Override popup with value and duration" width="600">
+
 ```yaml
 type: custom:mia-config-widget
 entity: sensor.mia_config_temperatura_clima
@@ -176,6 +180,8 @@ With `control: auto` the type is detected: a switch if the **Valid Values** are 
 ### Temporary override of any entity
 
 `custom:mia-config-entity-widget` (**Mia Config Forzatura entità** in the card picker) works like the Auto/Manual widget, but on **any** Home Assistant entity: pick a value and how long to keep it; on expiry Mia Config restores the previous value. Same `row`, `tile` and `card` layouts (the card also lists recent overrides). Mia Config's own sensors are rejected: use `mia-config-widget` for those.
+
+![Thermostat override, override shortcuts and assistant](images/widget-entita-scorciatoie.png)
 
 ```yaml
 type: custom:mia-config-entity-widget
@@ -491,8 +497,8 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 ## Screenshots
 
 ![Dashboard](images/dashboard.png)
-![Weekly View](images/weekly_view.png)
-![Configuration Management](images/config_management.png)
+![Weekly View](images/settimanale.png)
+![History](images/storico.png)
 
 ---
 
