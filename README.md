@@ -9,6 +9,15 @@
 
 Un componente custom per Home Assistant che gestisce configurazioni dinamiche con valori che cambiano automaticamente in base a regole temporali e orarie con sistema avanzato di priorità.
 
+> ### 🆕 Novità 2.3.9 — Widget per la dashboard
+> - **[Widget Auto/Manuale](#widget-automanuale)** (`mia-config-widget`): forza a mano un valore da qualunque dashboard per un tempo a scelta (30 min, fino alle 22:00, fino al prossimo cambio automatico…), poi torna da solo in automatico. Formati riga, riquadro e card completa.
+> - **[Forzatura temporanea di entità qualsiasi](#forzatura-temporanea-di-entità-qualsiasi)** (`mia-config-entity-widget`): accendi una luce, alza il termostato o apri una tapparella per un certo tempo; alla scadenza Mia Config rimette il valore di prima, anche dopo un riavvio.
+> - **[Scorciatoie override](#scorciatoie-override)** (`mia-config-shortcuts`): override a tempo con un tocco.
+> - **[Assistente a parole](#assistente-a-parole-ai-task)** (`mia-config-assistant`): scrivi *"riscaldamento acceso fino alle 22"* e l'AI di Home Assistant prepara il popup da confermare.
+> - **Risorse Lovelace automatiche**: card e widget si registrano da soli, niente da configurare a mano.
+>
+> Elenco completo nel [CHANGELOG](CHANGELOG.md).
+
 ## Caratteristiche
 
 - **Multi-Istanza**: Supporto per configurazioni separate per più case/ambienti
@@ -22,6 +31,9 @@ Un componente custom per Home Assistant che gestisce configurazioni dinamiche co
 - **Lookahead Settimanale**: Finestra predittiva di default 7 giorni (configurabile dalle opzioni)
 - **Servizi Completi**: API per gestire le configurazioni tramite automazioni o script
 - **Interfaccia UI Completa**: Card Lovelace con dashboard, vista settimanale, gestione e storico
+- **Widget per la dashboard**: forzatura manuale Auto/Manuale con scadenza, scorciatoie override e assistente a parole, utilizzabili in qualunque dashboard
+- **Forzatura temporanea di qualsiasi entità**: imposta un valore per un certo tempo e alla scadenza torna quello di prima (con mantenimento opzionale se qualcuno lo cambia)
+- **Assistente AI**: richieste in linguaggio naturale tramite AI Task di Home Assistant, sempre con conferma
 - **Database Isolato**: Ogni istanza ha il proprio database SQLite separato
 - **Storico Completo**: Cronologia modifiche con paginazione e ripristino
 
@@ -41,7 +53,7 @@ Un componente custom per Home Assistant che gestisce configurazioni dinamiche co
 4. Aggiungi: `https://github.com/abiale85/MiaConfig` (Categoria: Integration)
 5. Cerca "Mia Config"
 6. Clicca su "Installa"
-5. Riavvia Home Assistant
+7. Riavvia Home Assistant
 
 ## Configurazione
 
@@ -102,8 +114,8 @@ Un solo widget, `custom:mia-config-widget` (**Mia Config Widget** nel selettore 
 
 | `layout` | Aspetto |
 |---|---|
-| `row` (predefinito) | Grande come una riga entità. In **Auto** ha il contorno tratteggiato grigio; in **Manuale** il contorno è arancione pieno, con il pulsante per tornare in Auto |
-| `tile` | Riquadro compatto con valore e stato |
+| `row` (predefinito) | Grande come una riga entità. In **Auto** ha il contorno tratteggiato grigio; in **Manuale** il contorno è arancione pieno. Per tornare in Auto si apre il popup toccando la riga |
+| `tile` | Riquadro compatto con valore, stato e da quanto tempo c'è il valore |
 | `card` | Card completa: selettore Auto/Manuale, controlli del valore sempre visibili, scadenza |
 
 Quando forzi un valore si apre un popup **Per quanto tempo**: 30 min, 1 h, 2 h, 4 h, *fino al prossimo cambio automatico*, *fino alle HH:MM* (basta l'orario: se è già passato vale per domani), *data e ora* oppure *senza scadenza*. Se sei già in Manuale e cambi valore, la scadenza resta quella di prima.
@@ -126,7 +138,7 @@ Con `control: auto` il tipo si deduce da solo: interruttore se i **Valori Validi
 
 La forzatura usa una priorità riservata (`0`), più alta di qualsiasi priorità selezionabile (che parte da 1), e alla scadenza si torna automaticamente in Auto. Opzionale: `setup_name`, se l'entità non espone l'attributo.
 
-Altre opzioni: `show_values: true` mostra i valori invece delle loro descrizioni. Nella vista a sezioni, se allarghi il formato `row` a 2 o più righe, il valore va su una seconda riga a tutta larghezza.
+Altre opzioni: `show_values: true` mostra i valori invece delle loro descrizioni. Nella vista a sezioni, se allarghi il formato `row` a 2 o più righe, il valore va su una seconda riga a tutta larghezza insieme a da quanto tempo è attivo (es. *da 2 h 37 min*, ricavato dallo storico, quindi non si azzera ai riavvii). L'icona a sinistra apre lo storico dell'entità.
 
 ### Forzatura temporanea di entità qualsiasi
 

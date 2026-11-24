@@ -9,6 +9,15 @@
 
 A custom component for Home Assistant that manages dynamic configurations with values that automatically change based on temporal and time rules with an advanced priority system.
 
+> ### 🆕 New in 2.3.9 — Dashboard widgets
+> - **[Auto/Manual widget](#automanual-widget)** (`mia-config-widget`): manually force a value from any dashboard for a chosen time (30 min, until 22:00, until the next automatic change…), then it goes back to automatic on its own. Row, tile and full card layouts.
+> - **[Temporary override of any entity](#temporary-override-of-any-entity)** (`mia-config-entity-widget`): turn on a light, raise the thermostat or open a cover for a while; when it expires Mia Config restores the previous value, even across restarts.
+> - **[Override shortcuts](#override-shortcuts)** (`mia-config-shortcuts`): timed overrides with one tap.
+> - **[Natural-language assistant](#natural-language-assistant-ai-task)** (`mia-config-assistant`): type *"heating on until 22"* and Home Assistant's AI fills in the popup for you to confirm.
+> - **Automatic Lovelace resources**: card and widgets register themselves, nothing to set up by hand.
+>
+> Full list in the [CHANGELOG](CHANGELOG.md).
+
 ## Features
 
 - **Multi-Instance**: Support for separate configurations for multiple homes/environments
@@ -22,6 +31,9 @@ A custom component for Home Assistant that manages dynamic configurations with v
 - **Weekly Lookahead**: Default prediction window set to 7 days (configurable via options)
 - **Complete Services**: API for managing configurations via automations or scripts
 - **Complete UI Interface**: Lovelace card with dashboard, weekly view, management, and history
+- **Dashboard Widgets**: Auto/Manual override with expiry, override shortcuts and a natural-language assistant, usable on any dashboard
+- **Temporary Override of Any Entity**: set a value for a while and get the previous one back on expiry (optionally re-applied if someone changes it)
+- **AI Assistant**: natural-language requests through Home Assistant AI Task, always confirmed before applying
 - **Isolated Database**: Each instance has its own separate SQLite database
 - **Complete History**: Modification history with pagination and restore
 
@@ -127,6 +139,113 @@ automation:
         data:
           temperature: "{{ states('sensor.house_temperature') | float }}"
 ```
+
+## Dashboard Widgets
+
+Lovelace resources for the card and all widgets are managed by the integration (created, versioned with `?v=`, duplicates removed): you don't need to register them by hand. All widgets are available in the card picker.
+
+### Auto/Manual widget
+
+`custom:mia-config-widget` (**Mia Config Widget** in the card picker) manually forces a value of a Mia Config sensor from any dashboard, independently of the main card.
+
+| `layout` | Look |
+|---|---|
+| `row` (default) | Same size as an entity row. In **Auto** it has a dashed grey outline (a switch that is on shows a blue dot); in **Manual** a solid orange outline. Tap the row to open the popup and go back to Auto |
+| `tile` | Compact tile with value, status and how long the value has been active |
+| `card` | Full card: Auto/Manual selector, always-visible value controls, expiry |
+
+Forcing a value opens a **For how long** popup: 30 min, 1 h, 2 h, 4 h, *until the next automatic change*, *until HH:MM* (tomorrow if already past), *date and time* or *no expiry*.
+
+```yaml
+type: custom:mia-config-widget
+entity: sensor.mia_config_temperatura_clima
+layout: row                # row | tile | card
+name: Temperature          # optional
+icon: mdi:thermometer      # optional
+control: auto              # optional: auto | boolean | select | number | text
+min: 5                     # optional, for numbers
+max: 30
+step: 0.5
+unit: °C
+durations: [15, 30, 60, 180]   # optional: quick durations in minutes
+show_values: false         # optional: show values instead of their descriptions
+```
+
+With `control: auto` the type is detected: a switch if the **Valid Values** are exactly `0` and `1`, a dropdown for other Valid Values, a switch for `true/false` or `on/off`, a number if numeric, otherwise text. The override uses a reserved priority (`0`), higher than any selectable one, and returns to Auto on expiry. In the sections view, a `row` widget resized to 2+ rows shows the value on its own line with how long it has been active (taken from the recorder history, so it survives restarts). The icon opens the entity history.
+
+### Temporary override of any entity
+
+`custom:mia-config-entity-widget` (**Mia Config Forzatura entità** in the card picker) works like the Auto/Manual widget, but on **any** Home Assistant entity: pick a value and how long to keep it; on expiry Mia Config restores the previous value. Same `row`, `tile` and `card` layouts (the card also lists recent overrides). Mia Config's own sensors are rejected: use `mia-config-widget` for those.
+
+```yaml
+type: custom:mia-config-entity-widget
+entity: climate.living_room
+layout: row
+enforce: false             # optional: re-apply the forced value if someone changes it
+restore_to: original       # optional: original | last_manual
+```
+
+| Domain | What is forced |
+|---|---|
+| `switch`, `light`, `fan`, `input_boolean`, `automation`, `siren`, `humidifier`, `remote` | on/off (lights also get their brightness back) |
+| `input_number`, `number` | numeric value |
+| `input_select`, `select` | option |
+| `input_text`, `text` | text |
+| `climate`, `water_heater` | target temperature |
+| `cover`, `valve` | position 0-100 if supported, otherwise open/closed |
+| `lock` | locked/unlocked |
+
+Active overrides and history are stored in the instance database (`forzature_entita` table, included in backups) and rescheduled after a restart; if the entity is unavailable at restore time, Mia Config retries every minute for an hour. The `sensor.forzature_entita_<instance>` sensor lists active overrides.
+
+```yaml
+# In an automation: heating at 23 °C for 2 hours
+action: mia_config.set_entity_override
+data:
+  entity_id: climate.living_room
+  value: "23"
+  duration: "02:00:00"
+  enforce: true
+  restore_to: original
+```
+
+### Override shortcuts
+
+`custom:mia-config-shortcuts` (**Mia Config Scorciatoie**) adds timed overrides with one tap and lists active or scheduled overrides with ✕ to delete them; **Custom** opens the full override popup.
+
+```yaml
+type: custom:mia-config-shortcuts
+entity: sensor.mia_config_profilo_temperatura
+priority: 1
+shortcuts:
+  - name: Comfort
+    value: sera
+    duration: 120           # minutes from now
+    icon: mdi:sofa
+  - name: Eco
+    value: eco
+    until: "23:30"
+  - name: Early night
+    value: notte
+    from: "21:00"
+    duration: 180
+    priority: 2
+show_custom: true
+show_active: true
+```
+
+### Natural-language assistant (AI Task)
+
+Type what you want, e.g. *"heating on until 22"* or *"tomorrow 18 to 20 eco profile with priority 2"*: the LLM configured in Home Assistant interprets it and opens the popup **pre-filled** for you to confirm. Nothing changes without confirmation. Requires Home Assistant 2025.7+ and an AI integration set up as **AI Task**. Available at the top of the main card dashboard and as `custom:mia-config-assistant`.
+
+```yaml
+type: custom:mia-config-assistant
+setup_name: profilo_temperatura        # optional: limit to one configuration
+ai_task_entity: ai_task.openai_ai_task # optional
+```
+
+### Main card popups
+
+On the main card dashboard every configuration has **🖐️ Manual** (timed manual override), **➕ Override** (timed override with value, start, duration and priority) and, for standard-only configurations, **✏️ Value**.
 
 ## Configuration Types
 
@@ -293,10 +412,14 @@ all_configs: [...]  # All active configurations
 - `delete_config`: Delete configuration
 - `delete_single_config`: Delete specific configuration by ID
 - `toggle_config`: Enable/disable configuration
+- `set_manual_override` / `clear_manual_override`: Timed manual override of a configuration
+- `set_entity_override` / `clear_entity_override`: Temporary override of any entity
+- `interpret_request`: Turn a natural-language request into a proposal (not applied)
 
 ### Query Services
 - `get_configurations`: Get all configurations
 - `get_history`: Get modification history
+- `get_entity_override_history`: Get entity override history
 - `get_valid_values`: Get all valid values for dropdown lists
 - `simulate_schedule`: Simulate weekly schedule
 
